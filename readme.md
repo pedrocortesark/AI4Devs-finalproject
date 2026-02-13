@@ -58,35 +58,113 @@ CAD:       rhino3dm + glTF/GLB conversion
 
 ### Prerrequisitos
 
-- Node.js >= 18.0.0
-- Python >= 3.11
-- Librerías de sistema para `rhino3dm` (opcional, si se compila desde fuente)
+- Docker (Engine) & Docker Compose
+- GNU Make (o `make` compatible). En Windows puede usarse `test.bat` o WSL.
+- Variables de entorno configuradas en `.env` (ver `.env.example`)
 
-### Instalación
+### Quick Start (Docker + Make)
+
+1. Clonar repositorio y preparar `.env`:
 
 ```bash
-# Clonar repositorio
 git clone https://github.com/sagrada-familia/parts-manager.git
 cd parts-manager
-
-# Instalar dependencias
-cd frontend && npm install
-cd ../backend && pip install -r requirements.txt
-
-# Configurar variables de entorno
 cp .env.example .env
-# Editar .env con valores reales:
-# SUPABASE_URL=https://xyz.supabase.co
-# SUPABASE_ANON_KEY=eyJ...
-# OPENAI_API_KEY=sk-...
-
-
-# Ejecutar en modo desarrollo
-npm run dev  # Frontend (puerto 3000)
-python -m uvicorn main:app --reload  # Backend (puerto 8000)
+# Edita .env con los valores reales (SUPABASE_URL, SUPABASE_KEY, SUPABASE_DATABASE_URL, OPENAI_API_KEY, etc.)
 ```
 
-**Más información**: Ver [Getting Started](./docs/00-index.md#-getting-started) en la documentación completa.
+2. Levantar servicios en contenedores (dev):
+
+```bash
+make up
+```
+
+3. Inicializar infra (crear buckets / semillas necesarias):
+
+```bash
+make init-db
+```
+
+4. Ejecutar solo backend (para desarrollo local sin Docker):
+
+```bash
+cd src/backend
+pip install -r requirements.txt
+python -m uvicorn main:app --reload
+```
+
+### Testing
+
+Ejecutar la suite de tests:
+
+**Backend:**
+```bash
+make test        # Ejecuta todos los tests backend (unit + integration)
+make test-infra  # Ejecuta tests de infraestructura / integración
+make test-storage # Ejecuta test específico de storage
+```
+
+**Frontend:**
+```bash
+make front-install # Instala dependencias npm dentro de Docker
+make test-front    # Ejecuta tests de frontend (Vitest)
+make front-dev     # Inicia servidor de desarrollo Vite
+make front-shell   # Abre shell en contenedor frontend
+```
+
+### Desarrollo Frontend
+
+Para trabajar con el frontend (React + TypeScript + Vite):
+
+1. Instalar dependencias (primera vez):
+```bash
+make front-install
+```
+
+2. Iniciar servidor de desarrollo:
+```bash
+make front-dev
+# Accede a http://localhost:5173
+```
+
+3. Ejecutar tests en modo watch:
+```bash
+make test-front
+```
+
+### Notas rápidas
+
+- **Node.js NO requerido en el host**: Todo el desarrollo frontend se ejecuta dentro de Docker.
+- Volumen anónimo `/app/node_modules` evita conflictos entre Windows y contenedor.
+- Para crear o resetear la infraestructura de storage use `make init-db`.
+- Las pruebas de integración requieren que las variables `SUPABASE_URL` y `SUPABASE_KEY` estén disponibles en el entorno donde se ejecutan.
+
+**Más información**: Ver [Documentación técnica](./docs)
+
+---
+
+## 🤖 Desarrollo Asistido por IA
+
+Este proyecto utiliza **GitHub Copilot** (Claude Sonnet 4.5) como asistente de desarrollo. 
+
+### Guías de Trabajo
+- **[AGENTS.MD](./AGENTS.md)**: Reglas globales del AI Assistant (logging, workflow, definition of done)
+- **[AI Best Practices](./.github/AI-BEST-PRACTICES.md)**: Guía de mejores prácticas para trabajo eficiente con el AI
+- **[prompts.md](./prompts.md)**: Registro completo de todos los prompts utilizados (trazabilidad)
+
+### CI/CD Pipeline
+- **[CI/CD Guide](./.github/CI-CD-GUIDE.md)**: Documentación completa del pipeline GitHub Actions
+- **[Secrets Setup](./.github/SECRETS-SETUP.md)**: ⚠️ **ACCIÓN REQUERIDA** - Configurar secrets antes de merge
+
+**Estado del CI/CD**: ⏸️ **Pending secrets configuration**  
+Para activar el pipeline, sigue las instrucciones en [SECRETS-SETUP.md](./.github/SECRETS-SETUP.md)
+
+### Memory Bank
+Sistema de estado compartido para trabajo multi-agente:
+- **[memory-bank/activeContext.md](./memory-bank/activeContext.md)**: Contexto actual y tareas activas
+- **[memory-bank/systemPatterns.md](./memory-bank/systemPatterns.md)**: Patrones arquitectónicos
+- **[memory-bank/techContext.md](./memory-bank/techContext.md)**: Stack tecnológico completo
+- **[memory-bank/decisions.md](./memory-bank/decisions.md)**: ADRs (Architecture Decision Records)
 
 ---
 

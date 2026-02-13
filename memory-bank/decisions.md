@@ -230,12 +230,100 @@ Este archivo documenta todas las decisiones importantes tomadas durante el desar
 
 ---
 
-## Plantilla para Nuevas Decisiones
-```markdown
-## [FECHA] - [TÍTULO CORTO]
-- **Contexto:** Qué problema teníamos.
-- **Decisión:** Qué elegimos (ej. usar Tailwind en lugar de CSS puro).
-- **Consecuencias:** 
+## 2026-02-09 - Adopción de Clean Architecture para Backend (T-004-BACK Refactor)
+- **Contexto:** El código de T-0004-BACK tenía toda la lógica de negocio (verificación de storage, creación de eventos) mezclada directamente en el endpoint del router. Esto viola el principio de Separation of Concerns y hace difícil:
+  - Unit testing de lógica de negocio sin levantar servidor HTTP
+  - Reutilizar lógica desde workers/CLI/otros contextos
+  - Mantener y evolucionar código a medida que crece el proyecto
+- **Decisión:** Refactorizar backend siguiendo **Clean Architecture con tres capas**:
+  1. **API Layer (`api/`)**: Solo manejo de HTTP (routing, validation, error mapping)
+  2. **Service Layer (`services/`)**: Toda la lógica de negocio y orquestación
+  3. **Constants (`constants.py`)**: Centralización de magic strings/numbers
+- **Implementación Concreta**:
+  - Creado `src/backend/services/upload_service.py` con clase `UploadService`
+  - Extraídos métodos: `verify_file_exists_in_storage()`, `create_upload_event()`, `confirm_upload()`
+  - Creado `src/backend/constants.py` con: `STORAGE_BUCKET_RAW_UPLOADS`, `EVENT_TYPE_UPLOAD_CONFIRMED`, `TABLE_EVENTS`, `ALLOWED_EXTENSION`
+  - Reducido endpoint `/confirm` a 15 líneas (coordinación HTTP solamente)
+- **Consecuencias:**
+  - ✅ **Ganamos:**
+    - **Testabilidad**: Servicios probables sin HTTP layer (unit tests aislados)
+    - **Reusabilidad**: Lógica accesible desde Celery workers, CLI tools, otros endpoints
+    - **Mantenibilidad**: Cambios de reglas de negocio no afectan routing
+    - **Escalabilidad**: Patrón replicable para todas las features futuras (T-001-BACK, etc.)
+    - **Code Review**: Funciones pequeñas, responsabilidades claras  
+  - ⚠️ **Trade-offs**:
+    - Más archivos (complejidad aparente inicial para proyecto pequeño)
+    - Requiere disciplina para no volver a mezclar lógica en routers
+  - ✅ **Validación**: 7/7 tests siguen pasando post-refactor (verificación anti-regresión exitosa)
+- **Enforcement Going Forward**: 
+  - Todo nuevo endpoint DEBE seguir este patrón
+  - Code review rechazará lógica de negocio en routers
+  - `systemPatterns.md` actualizado con ejemplos y guías
+
+---
+
+## 2026-02-09 - Mejora del Proceso de Logging con Snippets de Espanso
+- **Contexto:** Durante auditoría de codebase (prompt #048), se detectó que el prompt original fue registrado como `:audit-master` (trigger de espanso) en lugar del texto expandido completo. Esto genera pérdida de contexto en prompts.md, violando el principio de trazabilidad completa del proyecto.
+- **Root Cause:** AGENTS.md no tenía regla específica sobre cómo manejar snippets de text expansion. El AI intentó "adivinar" si era un snippet pero registró el formato incorrecto.
+- **Decisión:** Estandarizar el manejo de snippets de espanso en el workflow de logging:
+  1. **Regla en AGENTS.md**: AI DEBE registrar SIEMPRE el texto expandido completo que ve en userRequest, NUNCA solo el trigger
+  2. **Formato Estándar** para snippets:
+     ```markdown
+     **Prompt Original (Snippet expandido):**
+     > :trigger-name
+     >
+     > [Texto completo expandido del snippet]
+     ```
+  3. **Guía de Best Practices**: Crear `.github/AI-BEST-PRACTICES.md` con patrones para:
+     - Uso correcto de snippets en prompts
+     - Workflow TDD (RED → GREEN → REFACTOR)
+     - Validación de cambios
+     - Memory Bank management
+     - Auditorías periódicas
+     - Troubleshooting
+- **Implementación**:
+  - ✅ Actualizado AGENTS.md sección 1.B con nota "IMPORTANTE - Snippets de Espanso"
+  - ✅ Creado `.github/AI-BEST-PRACTICES.md` (335 líneas, 10 secciones)
+  - ✅ Actualizado README.md con sección "Desarrollo Asistido por IA" referenciando guías
+  - ✅ Corregido prompt #048 con texto expandido completo
+- **Consecuencias:**
+  - ✅ **Ganamos:**
+    - **Trazabilidad completa**: Prompts registrados con contexto completo
+    - **Onboarding mejorado**: Nuevos colaboradores/agentes pueden seguir best practices documentadas
+    - **Menos errores de proceso**: Reglas claras reducen ambigüedad
+    - **Escalabilidad del workflow**: Guía replicable para otros proyectos
+  - ⚠️ **Trade-offs**:
+    - Requiere que usuario informe al AI si detecta errores de registro
+    - Documentación adicional a mantener
+  - ✅ **Validación**: Formato de prompt #048 corregido y verificado
+- **Enforcement Going Forward**:
+  - AI verificará presencia de triggers (`:nombre`) y registrará texto completo
+  - Usuario puede usar formato de nota explícita cuando use snippets complejos
+  - Code review de prompts.md verificará que entradas tengan contexto completo
+
+---
+
+## 2026-02-14 - Exclusión de Tests Backend del Pipeline Agent
+- **Contexto:** Durante T-028-BACK (Validation Report Service), se creó `tests/unit/test_validation_report_service.py` (test de backend) en el directorio `tests/unit/` que también contiene tests de agent. El comando `make test-agent` ejecuta TODOS los tests en `tests/unit/` dentro del contenedor `agent-worker`, causando fallo de pipeline CI/CD porque ese contenedor no tiene dependencias de backend (`src/backend/services`, `src/backend/schemas`).
+- **Decisión:** **Short-term fix:** Modificar Makefile para que `make test-agent` excluya explícitamente `test_validation_report_service.py` usando `--ignore=tests/unit/test_validation_report_service.py`. **Long-term debt:** Refactorizar estructura de tests a `tests/backend/unit/` y `tests/agent/unit/` (Clean Architecture).
+- **Consecuencias:**
+  - ✅ **Ganamos:**
+    - Pipeline CI/CD funciona inmediatamente
+    - No requiere reestructuración de directorios ahora
+    - Tests de backend siguen ejecutándose en `make test` (contenedor backend)
+  - ⚠️ **Perdemos:**
+    - Deuda técnica: estructura de tests mixta (no sigue Clean Architecture)
+    - Fragilidad: cada nuevo test backend en `tests/unit/` requiere --ignore adicional
+    - Confusión: no es obvio por nombre de archivo que pertenece a capa backend
+  - 🔧 **Acción Futura (Post-MVP):**
+    - Crear `tests/backend/unit/` y `tests/backend/integration/`
+    - Crear `tests/agent/unit/` y `tests/agent/integration/`
+    - Mover tests existentes a sus directorios correctos
+    - Actualizar Makefile con `make test-backend` y `make test-agent` limpios
+    - Referencia: T-028-BACK prompts.md #105
+
+---
+
   - ✅ **Ganamos:** [beneficios]
   - ⚠️ **Perdemos:** [trade-offs]
 ```

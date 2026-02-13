@@ -1,0 +1,123 @@
+services:
+  backend:
+    build:
+      context: ./src/backend
+      target: dev
+    container_name: sf-pm-backend
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/backend:/app
+      - ./tests:/app/tests
+      - ./infra:/app/infra
+      - ./src/agent:/app/src/agent  # Mount agent module for test imports
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/sfpm_db
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sf-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: sf-pm-db
+    ports:
+      - "127.0.0.1:5432:5432"  # Only expose to localhost for security
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=sfpm_db
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - sf-network
+
+  frontend:
+    build:
+      context: ./src/frontend
+      target: dev
+    container_name: sf-pm-frontend
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src/frontend:/app
+      - /app/node_modules  # Anonymous volume to prevent host overwriting node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: bash -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - backend
+    networks:
+      - sf-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: sf-pm-redis
+    ports:
+      - "127.0.0.1:6379:6379"  # Localhost only for security
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sf-network
+
+  agent-worker:
+    build:
+      context: ./src/agent
+      target: dev
+    container_name: sf-pm-agent-worker
+    env_file:
+      - .env
+    volumes:
+      - ./src/agent:/app
+      - ./src:/app/src  # Mount src parent for test imports (src.agent.*)
+      - ./tests:/app/tests
+      - ./infra:/app/infra  # Required for supabase_client imports in tests
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - DATABASE_URL=postgresql://user:password@db:5432/sfpm_db
+      - PYTHONPATH=/app  # Ensure proper Python import paths
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    networks:
+      - sf-network
+    command: celery -A celery_app worker --loglevel=info --concurrency=2
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A celery_app inspect ping -d celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  redis_data:
+
+
+networks:
+  sf-network:
+    driver: bridge

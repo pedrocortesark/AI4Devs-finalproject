@@ -1,0 +1,17 @@
+celery==5.3.4
+redis==5.0.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+python-dotenv==1.0.1
+structlog==24.1.0
+
+# Database access
+psycopg2-binary==2.9.9
+supabase==2.10.0
+
+# .3dm file parsing (T-024-AGENT+)
+rhino3dm==8.4.0
+
+# Testing (for integration tests in agent container)
+pytest==7.4.4
+pytest-asyncio==0.23.4
