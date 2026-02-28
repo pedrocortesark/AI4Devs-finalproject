@@ -7,7 +7,7 @@ to improve maintainability and avoid magic strings.
 
 # ===== Storage Configuration =====
 STORAGE_BUCKET_RAW_UPLOADS = "raw-uploads"
-STORAGE_BUCKET_PROCESSED = "processed-files"
+STORAGE_BUCKET_PROCESSED = "processed-geometry"
 
 # ===== Event Types =====
 EVENT_TYPE_UPLOAD_CONFIRMED = "upload.confirmed"

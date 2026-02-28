@@ -79,7 +79,7 @@ def supabase_client() -> Client:
 
 
 @pytest.fixture(scope="session")
-def db_connection() -> connection:
+def db_connection():
     """
     Create a direct PostgreSQL connection to the local test database.
 
@@ -87,29 +87,29 @@ def db_connection() -> connection:
     to execute raw SQL or verify database schema directly.
     Useful for DB migration tests (e.g., T-020-DB).
 
+    Yields None when the local database is not available (e.g. when running
+    cloud-only tests with --no-deps), allowing tests that don't need the
+    local DB to proceed normally.
+
     Environment variables:
         DATABASE_URL: PostgreSQL connection string (default: from docker-compose)
-
-    Returns:
-        psycopg2.connection: Active database connection
-
-    Yields:
-        connection: Connection object for test use
-
-    Cleanup:
-        Closes connection after test session ends
     """
     database_url = os.environ.get(
         "DATABASE_URL",
         "postgresql://user:password@db:5432/sfpm_db"
     )
 
-    conn = psycopg2.connect(database_url)
-    conn.autocommit = False  # Manual transaction control
+    conn = None
+    try:
+        conn = psycopg2.connect(database_url, connect_timeout=3)
+        conn.autocommit = False
+    except Exception:
+        pass  # DB not available; yield None so callers can skip gracefully
 
     yield conn
 
-    conn.close()
+    if conn is not None:
+        conn.close()
 
 
 @pytest.fixture(scope="session")
@@ -152,17 +152,29 @@ def supabase_db_connection() -> connection:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_database_schema(db_connection: connection):
+def setup_database_schema(db_connection):
     """
-    Create essential database schema for integration tests.
+    Create test prerequisites in the local database.
 
-    This fixture runs once per test session and ensures the basic
-    tables (profiles, blocks) are available for tests that need them.
+    The blocks table, block_status ENUM, and all columns are created by the SQL
+    migrations in supabase/migrations/ — either automatically on fresh volumes
+    (via docker-entrypoint-initdb.d) or on demand via `make migrate-local`.
+
+    This fixture only creates what the migrations do NOT provide:
+    - profiles table (planned for a future US, needed as FK reference in schema tests)
+    - 1 test profile row (seed data for tests that INSERT blocks with created_by)
+
+    Skips silently when local DB is not available (cloud-only test runs).
     """
+    if db_connection is None:
+        yield  # DB not available; cloud-only tests (supabase_client) can still run
+        return
+
     cursor = db_connection.cursor()
 
     try:
-        # Create profiles table
+        # profiles is a future-US table not yet in migrations.
+        # Schema tests that INSERT blocks with created_by/updated_by FKs need it.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS profiles (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -176,39 +188,6 @@ def setup_database_schema(db_connection: connection):
             );
         """)
 
-        # Create block_status ENUM if not exists
-        cursor.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'block_status') THEN
-                    CREATE TYPE block_status AS ENUM (
-                        'uploaded', 'validated', 'in_fabrication', 'completed', 'archived'
-                    );
-                END IF;
-            END $$;
-        """)
-
-        # Create blocks table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS blocks (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                iso_code TEXT UNIQUE,
-                status block_status DEFAULT 'uploaded',
-                tipologia TEXT,
-                zone_id UUID,
-                workshop_id UUID,
-                created_by UUID REFERENCES profiles(id),
-                updated_by UUID REFERENCES profiles(id),
-                url_original TEXT,
-                url_glb TEXT,
-                rhino_metadata JSONB,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                is_archived BOOLEAN DEFAULT FALSE
-            );
-        """)
-
-        # Insert a test profile for FK references
         cursor.execute("""
             INSERT INTO profiles (id, name, email, role)
             VALUES ('00000000-0000-0000-0000-000000000001', 'Test User', 'test@example.com', 'architect')
@@ -219,12 +198,6 @@ def setup_database_schema(db_connection: connection):
 
     except Exception as e:
         db_connection.rollback()
-        pytest.skip(f"Failed to setup database schema: {e}")
+        pytest.skip(f"Failed to setup test prerequisites: {e}")
 
     yield
-
-    # Cleanup: optionally drop tables after session (not recommended for integration tests)
-    # cursor.execute("DROP TABLE IF EXISTS blocks;")
-    # cursor.execute("DROP TABLE IF EXISTS profiles;")
-    # cursor.execute("DROP TYPE IF EXISTS block_status;")
-    # db_connection.commit()

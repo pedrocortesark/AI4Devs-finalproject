@@ -1,4 +1,8 @@
-.PHONY: build build-prod up up-all down init-db setup-events migrate-t0503 migrate-all test test-all test-infra test-unit test-integration test-storage shell clean front-install test-front front-shell front-dev help
+.PHONY: build build-prod up up-all down init-db setup-events migrate-t0503 migrate-all migrate-local migrate-cloud test test-all test-infra test-unit test-integration test-storage shell clean front-install test-front front-shell front-dev help
+
+# Force bash as shell (required on Windows with GnuWin32 make)
+SHELL := bash
+.SHELLFLAGS := -euo pipefail -c
 
 # ===== DOCKER LIFECYCLE =====
 
@@ -32,7 +36,7 @@ clean:
 
 # Initialize database infrastructure (create buckets, policies)
 init-db:
-	docker compose run --rm backend python /app/infra/init_db.py
+	docker compose run --rm --no-deps backend python /app/infra/init_db.py
 
 # Setup events table for T-004-BACK (automated via psycopg2)
 setup-events:
@@ -44,6 +48,7 @@ migrate-t0503:
 	docker compose run --rm backend python /app/infra/apply_t0503_migration.py
 
 # Apply all pending migrations (runs all SQL files in supabase/migrations/)
+# NOTE: connects to local Docker db container, NOT Supabase cloud
 migrate-all:
 	@echo "📦 Applying all Supabase migrations..."
 	@for file in supabase/migrations/*.sql; do \
@@ -51,6 +56,38 @@ migrate-all:
 		docker compose run --rm backend bash -c "PGPASSWORD=\$$DATABASE_PASSWORD psql -h db -U \$$DATABASE_USER -d \$$DATABASE_NAME -f /app/$$file" || exit 1; \
 	done
 	@echo "✅ All migrations applied successfully"
+
+# Apply all migrations to LOCAL Docker PostgreSQL (requires: make up)
+# Use this when the postgres_data volume already exists (not fresh install).
+# On a fresh install (make clean + make up), migrations run automatically
+# via docker-entrypoint-initdb.d.
+migrate-local:
+	@echo "🐘 Applying all migrations to local Docker DB..."
+	@for file in supabase/migrations/*.sql; do \
+		echo "  Applying $$file..."; \
+		docker compose exec -T db psql -U $$DATABASE_USER -d $$DATABASE_NAME < "$$file" || exit 1; \
+	done
+	@echo "✅ Local migrations applied"
+
+# Apply all migrations to Supabase CLOUD (production)
+# Uses Docker to run psql — no local psql installation needed.
+# Requires SUPABASE_DATABASE_URL in .env
+# Usage: make migrate-cloud
+migrate-cloud:
+	@echo "☁️  Applying all migrations to Supabase cloud..."
+	@if [ -z "$$SUPABASE_DATABASE_URL" ]; then \
+		echo "❌ SUPABASE_DATABASE_URL is not set. Check your .env file."; \
+		exit 1; \
+	fi
+	@for file in supabase/migrations/*.sql; do \
+		echo "  Applying $$file..."; \
+		MSYS_NO_PATHCONV=1 docker run --rm \
+			--dns 8.8.8.8 --dns 8.8.4.4 \
+			-v "$$(pwd)/supabase/migrations:/migrations" \
+			postgres:15-alpine \
+			psql "$$SUPABASE_DATABASE_URL?sslmode=require" -f "/migrations/$$(basename $$file)" || exit 1; \
+	done
+	@echo "✅ Cloud migrations applied successfully"
 
 # Run all tests inside Docker (backend + agent)
 test:
@@ -72,7 +109,7 @@ test-infra:
 
 # Run only unit tests (backend)
 test-unit:
-	docker compose run --rm backend pytest tests/unit/ -v
+	docker compose run --rm --no-deps backend pytest tests/unit/ -v
 
 # Run backend tests quickly (unit + core integration, no slow tests)
 test-backend-quick:
@@ -81,7 +118,7 @@ test-backend-quick:
 
 # Run specific integration test
 test-storage:
-	docker compose run --rm backend pytest tests/integration/test_storage_config.py -v
+	docker compose run --rm --no-deps backend pytest tests/integration/test_storage_config.py -v
 
 # Open a shell inside the backend container
 shell:
@@ -128,8 +165,10 @@ help:
 	@echo "  Backend:"
 	@echo "    make init-db       - Initialize DB infrastructure (buckets, policies)"
 	@echo "    make setup-events  - Create events table in Supabase (T-004-BACK)"
-	@echo "    make migrate-t0503 - Apply T-0503-DB migration (low_poly_url + bbox)"
-	@echo "    make migrate-all   - Apply all pending Supabase migrations"
+	@echo "    make migrate-t0503   - Apply T-0503-DB migration (low_poly_url + bbox)"
+	@echo "    make migrate-all     - Apply all migrations (local Docker db, legacy)"
+	@echo "    make migrate-local   - Apply all migrations to local Docker DB (requires: make up)"
+	@echo "    make migrate-cloud   - Apply all migrations to Supabase cloud (prod)"
 	@echo "    make test          - Run all tests (backend + agent)"
 	@echo "    make test-agent    - Run agent tests only"
 	@echo "    make test-unit     - Run backend unit tests only"

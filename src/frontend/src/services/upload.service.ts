@@ -15,19 +15,26 @@ import type {
 import type { PartDetail } from '../types/parts';
 
 /**
+ * Base URL for backend API calls.
+ * In dev: '' → Vite proxy handles /api/* → http://backend:8000
+ * In prod: VITE_API_URL → https://sf-pm-backend.up.railway.app
+ */
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
+/**
  * API endpoint for requesting presigned upload URLs
  */
-const UPLOAD_URL_ENDPOINT = '/api/upload/url';
+const UPLOAD_URL_ENDPOINT = `${API_BASE}/api/upload/url`;
 
 /**
  * API endpoint for confirming a completed upload
  */
-const CONFIRM_UPLOAD_ENDPOINT = '/api/upload/confirm';
+const CONFIRM_UPLOAD_ENDPOINT = `${API_BASE}/api/upload/confirm`;
 
 /**
  * API endpoint for fetching part details
  */
-const PART_DETAIL_ENDPOINT = '/api/parts';
+const PART_DETAIL_ENDPOINT = `${API_BASE}/api/parts`;
 
 /**
  * Content type for .3dm Rhino files

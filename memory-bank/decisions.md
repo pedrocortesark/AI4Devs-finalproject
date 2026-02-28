@@ -2,6 +2,22 @@
 
 Este archivo documenta todas las decisiones importantes tomadas durante el desarrollo del proyecto. Funciona como un ADR (Architecture Decision Record) simplificado.
 
+## 2026-02-28 - Migraciones SQL como Única Fuente de Verdad para Schema en Tests
+- **Contexto:** `tests/conftest.py` duplicaba DDL (CREATE TABLE blocks, CREATE TYPE block_status) que ya existía en `supabase/migrations/`. Esto creaba dos fuentes de verdad: conftest creaba la tabla con un subset de columnas (sin `validation_report`, `low_poly_url`, `bbox`), mientras las migraciones tenían el schema completo. Al añadir una columna en una migración sin actualizar el conftest, los tests pasaban con schema incorrecto.
+- **Decisión:** Eliminar toda DDL de tablas que existen en migraciones del `conftest.py`. El conftest solo crea: (1) `profiles` — tabla de US futura no incluida en migraciones aún, (2) un perfil de test para referencias FK. El schema de `blocks` y `block_status` proviene exclusivamente de `supabase/migrations/*.sql`.
+- **Alternativas Descartadas:**
+  1. Mantener DDL en conftest con sincronización manual: demasiado propenso a divergencia, ya estaba desactualizado.
+  2. Usar Supabase cloud para todos los tests de schema: lento, depende de red, modifica datos reales.
+- **Mecanismo de aplicación del schema en local:**
+  - **Volumen fresco** (`make clean + make up`): PostgreSQL auto-aplica todas las migraciones via `docker-entrypoint-initdb.d` (configurado en `docker-compose.yml` línea 62).
+  - **Volumen existente** (tras añadir nueva migración): `make migrate-local` (nuevo target, usa `docker compose exec -T db psql < migration.sql`).
+- **Consecuencias:**
+  - ✅ Schema de tests = schema de producción (mismas migraciones)
+  - ✅ Al añadir una migración, solo hay UNA cosa que actualizar (el archivo SQL)
+  - ⚠️ `make test-infra` requiere `make up` + `make migrate-local` si el volumen es antiguo
+  - ⚠️ `profiles` sigue en conftest hasta que se implemente US de Auth (futuro)
+- **Archivos modificados:** `tests/conftest.py`, `Makefile` (nuevo target `migrate-local`), `docs/11-deployment-runbook.md`
+
 ## 2026-02-20 - React useEffect Infinite Loop Prevention: Ref Pattern for Event Handlers
 - **Contexto:** Durante TDD-GREEN phase de T-0504-FRONT (DraggableFiltersSidebar), tests colgaban 28-70 segundos con "0 passed (18)" sin ejecutar assertions. Causa raíz: infinite loop en useEffect de drag behavior. El efecto dependía de `[isDragging, internalPosition, dockPosition, handleDockChange, onPositionChange]`, donde `internalPosition` cambiaba en cada `mousemove` → re-ejecutaba useEffect → adjuntaba nuevos listeners → `internalPosition` cambiaba de nuevo → loop infinito. Vitest timeout default 5000ms se extendía con retries.
 - **Decisión:** Aplicar **Ref Pattern for Stable Event Handlers**: (1) Reducir dependencies de drag useEffect a `[isDragging]` solamente, (2) Usar `useRef` para capturar valores actualizados sin trigger re-renders (`internalPositionRef.current = internalPosition` en render body), (3) Event handlers acceden a `.current` para leer valor fresco sin estar en dependencies. Patrón aplicado a `internalPosition`, `dockPosition`, `onDockChange`, `onPositionChange`.

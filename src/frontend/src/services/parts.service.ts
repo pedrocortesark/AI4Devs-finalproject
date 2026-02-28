@@ -9,9 +9,16 @@ import axios from 'axios';
 import type { PartsListResponse, PartCanvasItem } from '@/types/parts';
 
 /**
+ * Base URL for backend API calls.
+ * In dev: '' → Vite proxy handles /api/* → http://backend:8000
+ * In prod: VITE_API_URL → https://sf-pm-backend.up.railway.app
+ */
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
+/**
  * API endpoint for fetching parts list
  */
-const PARTS_ENDPOINT = '/api/parts';
+const PARTS_ENDPOINT = `${API_BASE}/api/parts`;
 
 /**
  * Fetch all parts from backend
