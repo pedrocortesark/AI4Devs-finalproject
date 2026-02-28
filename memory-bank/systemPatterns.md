@@ -221,6 +221,41 @@ def get_celery_client() -> Celery:
   - **Issue**: Alpine Linux (musl) causes fatal JavaScript memory errors with jsdom
   - **Solution**: Use glibc-based images (Debian/Ubuntu) for frontend testing
 
+### DB Schema Source of Truth Pattern (2026-02-28)
+**Rule**: `supabase/migrations/*.sql` is the single source of truth for the `blocks` table schema (columns, types, indexes, ENUMs). `tests/conftest.py` must NOT duplicate DDL for tables that exist in migrations.
+
+**Rationale**: DDL in conftest creates a second definition of the schema that diverges over time. When a migration adds a column, conftest doesn't update → tests pass locally with wrong schema.
+
+**Correct split**:
+- **Migrations** → blocks table, block_status ENUM, all columns, all indexes
+- **conftest.py** → ONLY tables NOT in migrations (e.g., `profiles` — future US) + seed data for FK references
+
+**On fresh volume** (`make clean + make up`):
+- `./supabase/migrations` is mounted at `/docker-entrypoint-initdb.d` in the `db` service
+- PostgreSQL auto-runs all `.sql` files → full schema applied without manual step
+
+**On existing volume** (re-apply after adding a migration):
+```bash
+make up             # ensure db container is running
+make migrate-local  # docker compose exec -T db psql < each migration file
+```
+
+**`--no-deps` pattern** (cloud-only tests that don't need local DB):
+```makefile
+test-unit:    docker compose run --rm --no-deps backend pytest tests/unit/ -v
+test-storage: docker compose run --rm --no-deps backend pytest tests/integration/test_storage_config.py -v
+init-db:      docker compose run --rm --no-deps backend python /app/infra/init_db.py
+```
+`--no-deps` prevents Docker from trying to start the `db` service (and fail with port 5432 conflict if already in use).
+
+### Makefile Targets for Migrations
+
+| Target | Command | When to use |
+|---|---|---|
+| `migrate-local` | `docker compose exec -T db psql < file` | Existing volume, add new migration |
+| `migrate-cloud` | `docker run postgres:15-alpine psql` (via Docker) | Deploy to Supabase cloud |
+| `make up` (fresh) | auto via `docker-entrypoint-initdb.d` | First-time setup after `make clean` |
+
 ### Three.js / WebGL jsdom Mock Pattern (T-0500-INFRA)
 **Problem**: `@react-three/fiber` Canvas requires a real WebGL context. jsdom has no WebGL → tests crash at collection time.
 
