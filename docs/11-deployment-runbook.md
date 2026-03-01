@@ -92,16 +92,17 @@ En Supabase Dashboard → **Storage** deben aparecer: `raw-uploads`, `processed-
 ## PASO 3: Crear Proyecto Railway y añadir Redis
 
 ```bash
-# Instalar Railway CLI (si no está instalado)
-npm install -g @railway/cli
-
-# Login con GitHub
-railway login
+# Login con GitHub (npx descarga Railway CLI sin instalación global)
+npx @railway/cli login
 
 # Crear proyecto vacío
-railway init
+npx @railway/cli init
 # Seleccionar: Empty Project
 # Nombre: sf-pm
+
+# Nota: Si prefieres instalar globalmente para evitar escribir 'npx @railway/cli':
+# npm install -g @railway/cli
+# Luego puedes usar solo: railway login, railway init, etc.
 ```
 
 En el **Railway Dashboard**:
@@ -181,22 +182,29 @@ celery@[hostname] ready.
 ## PASO 6: Desplegar Frontend en Vercel
 
 ```bash
-# Instalar Vercel CLI
-npm install -g vercel
-
 # Desde la carpeta del frontend
 cd src/frontend
 
-# Login con GitHub
-vercel login
-
-# Primer despliegue (producción)
-vercel --prod
+# Primera ejecución: gestiona login + configuración del proyecto + despliega a preview
+npx vercel
 ```
+
+> **Nota:** `npx vercel` ejecuta Vercel CLI sin necesidad de instalación global, evitando problemas de permisos con `npm install -g`. No hay un paso de `vercel login` separado — el login se integra en el flujo de la primera ejecución (abre el navegador para autenticarse con GitHub).
+
+El asistente interactivo de la primera ejecución pregunta:
+1. **Set up and deploy?** → `Y`
+2. **Which scope?** → Tu cuenta de GitHub
+3. **Project name** → `sf-pm-frontend` (o el nombre que prefieras)
+4. **In which directory is your code located?** → `./` (estamos en `src/frontend`)
+5. **Auto-detected framework** → Vite ✓ — confirmar configuración por defecto
 
 Vercel detecta Vite automáticamente y ejecuta `npm run build`. El `vercel.json` ya está en la carpeta.
 
-Variables de entorno en **Vercel Dashboard → Settings → Environment Variables**:
+El primer `npx vercel` despliega a una **URL de preview** (ej: `sf-pm-frontend-xxx.vercel.app`). No es necesario añadir `--prod` en este paso.
+
+### Añadir variables de entorno
+
+En **Vercel Dashboard → tu proyecto → Settings → Environment Variables**:
 
 ```
 VITE_SUPABASE_URL      = https://[TU_PROYECTO].supabase.co
@@ -205,11 +213,16 @@ VITE_API_URL           = https://sf-pm-backend.up.railway.app
 ```
 
 > `VITE_API_URL` debe apuntar a la URL del backend de Railway del Paso 4.
+> `VITE_SUPABASE_ANON_KEY` es la clave **anon/public** del dashboard de Supabase, no la service_role.
 
-Tras añadir las variables, hacer un **redeploy**:
+### Desplegar a producción
+
+Tras añadir las variables, desplegar a producción:
 ```bash
-vercel --prod
+npx vercel --prod
 ```
+
+Vercel asigna el dominio de producción (ej: `sf-pm-frontend.vercel.app`) y el alias `*.vercel.app` a este despliegue.
 
 ---
 
@@ -265,6 +278,8 @@ curl -H "Origin: https://sf-pm-frontend.vercel.app" \
 
 ## Comandos Útiles Post-Despliegue
 
+> **Nota:** Los comandos asumen Railway CLI disponible. Si usaste `npx` en el PASO 3, reemplaza `railway` por `npx @railway/cli` en cada comando.
+
 ```bash
 # Ver logs del agent worker
 railway logs --service sf-pm-agent-worker --tail 100
@@ -286,7 +301,7 @@ redis-cli -u $REDIS_URL ping
 celery -A celery_app inspect active
 
 # Re-desplegar Vercel frontend
-vercel --prod
+npx vercel --prod
 ```
 
 ---
