@@ -72,4 +72,7 @@ celery_app.conf.update(
 
     # Task acknowledgment
     task_acks_late=True,  # Acknowledge after task completion
+
+    # Celery 6.0 compatibility
+    broker_connection_retry_on_startup=True,
 )
