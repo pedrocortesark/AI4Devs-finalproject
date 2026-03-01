@@ -65,7 +65,7 @@ export async function getPresignedUrl(
   const payload: PresignedUrlRequest = {
     filename,
     size,
-    checksum,
+    ...(checksum !== undefined && { checksum }),
   };
 
   const response = await axios.post<PresignedUrlResponse>(

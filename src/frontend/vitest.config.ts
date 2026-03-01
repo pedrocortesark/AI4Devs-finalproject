@@ -13,6 +13,9 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    env: {
+      VITE_API_URL: '',
+    },
     include: [
       'src/**/*.test.{ts,tsx}',
       'src/**/__integration__/**/*.test.{ts,tsx}',
