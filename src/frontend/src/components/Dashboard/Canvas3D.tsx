@@ -18,12 +18,15 @@ import {
 } from './Dashboard3D.constants';
 import { usePartsStore } from '@/stores/parts.store';
 import { DESELECTION_KEYS } from '@/constants/selection.constants';
+import { PartsScene } from './PartsScene';
 
 const Canvas3D: React.FC<Canvas3DProps> = ({ 
   showStats = false, 
   cameraConfig 
 }) => {
   const clearSelection = usePartsStore((state: any) => state.clearSelection);
+  const getFilteredParts = usePartsStore((state: any) => state.getFilteredParts);
+  const filteredParts = getFilteredParts();
 
   // Merge default config with custom config
   const cameraPosition = cameraConfig?.position || CAMERA_CONFIG.POSITION;
@@ -123,6 +126,9 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewcube />
         </GizmoHelper>
+
+        {/* Parts Scene */}
+        <PartsScene parts={filteredParts} />
 
         {/* Stats Panel (dev only) */}
         {showStats && <Stats />}

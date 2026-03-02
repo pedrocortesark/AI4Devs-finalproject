@@ -18,6 +18,7 @@ vi.mock('@/stores/parts.store', () => ({
   usePartsStore: vi.fn((selector) => {
     const mockState = {
       clearSelection: mockClearSelection,
+      getFilteredParts: () => [],
     };
     return selector ? selector(mockState) : mockState;
   }),
