@@ -20,6 +20,7 @@ export interface PresignedUrlResponse {
   upload_url: string;
   file_id: string;
   filename: string;
+  file_key: string;
 }
 
 /**

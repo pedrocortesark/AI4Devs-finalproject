@@ -25,10 +25,12 @@ class UploadResponse(BaseModel):
         upload_url (str): The presigned URL to upload the file to S3.
         file_id (str): The unique identifier assigned to the file.
         filename (str): The original filename.
+        file_key (str): The storage path (bucket key) used to confirm the upload.
     """
     upload_url: str = Field(..., description="Presigned URL for S3 upload")
     file_id: str = Field(..., description="Unique identifier for the file")
     filename: str = Field(..., description="Original filename")
+    file_key: str = Field(..., description="Storage path for upload confirmation")
 
 
 # ===== T-004-BACK: Confirm Upload Schemas =====

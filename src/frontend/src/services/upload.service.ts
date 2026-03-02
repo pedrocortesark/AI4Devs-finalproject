@@ -166,10 +166,13 @@ export async function uploadFile(
   onProgress?: (progress: UploadProgress) => void
 ): Promise<string> {
   // Step 1: Get presigned URL
-  const { upload_url, file_id } = await getPresignedUrl(file.name, file.size);
+  const { upload_url, file_id, file_key } = await getPresignedUrl(file.name, file.size);
 
   // Step 2: Upload to storage
   await uploadToStorage(upload_url, file, onProgress);
+
+  // Step 3: Confirm upload — creates block in DB and enqueues Celery validation task
+  await confirmUpload(file_id, file_key);
 
   return file_id;
 }

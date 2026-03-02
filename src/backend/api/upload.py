@@ -42,14 +42,15 @@ async def generate_upload_url(request: Request, body: UploadRequest) -> UploadRe
     try:
         supabase = get_supabase_client()
         upload_service = UploadService(supabase)
-        signed_url, _ = upload_service.generate_presigned_url(file_id, body.filename)
+        signed_url, file_key = upload_service.generate_presigned_url(file_id, body.filename)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate upload URL: {str(e)}")
 
     return UploadResponse(
         file_id=file_id,
         upload_url=signed_url,
-        filename=body.filename
+        filename=body.filename,
+        file_key=file_key,
     )
 
 
