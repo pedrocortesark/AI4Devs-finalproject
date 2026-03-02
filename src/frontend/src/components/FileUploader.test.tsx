@@ -64,12 +64,18 @@ describe('FileUploader - Minimal Critical Tests', () => {
       data: {
         upload_url: 'https://fake-s3.com/upload',
         file_id: 'abc-123-def-456',
-        filename: 'model.3dm'
+        filename: 'model.3dm',
+        file_key: 'uploads/abc-123-def-456/model.3dm',
       }
     });
 
     // Mock S3 PUT request
     mockedAxios.put.mockResolvedValueOnce({ status: 200 });
+
+    // Mock confirm upload response (matches T-004-BACK schema)
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { success: true, message: 'Upload confirmed and validation enqueued' }
+    });
 
     const onComplete = vi.fn();
     render(<FileUploader onUploadComplete={onComplete} />);
