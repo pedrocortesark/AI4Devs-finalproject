@@ -230,13 +230,13 @@ def get_celery_client() -> Celery:
 - **Migrations** → blocks table, block_status ENUM, all columns, all indexes
 - **conftest.py** → ONLY tables NOT in migrations (e.g., `profiles` — future US) + seed data for FK references
 
-**On fresh volume** (`make clean + make up`):
+**On fresh volume** (`make clean + make up-db`):
 - `./supabase/migrations` is mounted at `/docker-entrypoint-initdb.d` in the `db` service
 - PostgreSQL auto-runs all `.sql` files → full schema applied without manual step
 
 **On existing volume** (re-apply after adding a migration):
 ```bash
-make up             # ensure db container is running
+make up-db          # ensure db container is running
 make migrate-local  # docker compose exec -T db psql < each migration file
 ```
 
@@ -254,7 +254,7 @@ init-db:      docker compose run --rm --no-deps backend python /app/infra/init_d
 |---|---|---|
 | `migrate-local` | `docker compose exec -T db psql < file` | Existing volume, add new migration |
 | `migrate-cloud` | `docker run postgres:15-alpine psql` (via Docker) | Deploy to Supabase cloud |
-| `make up` (fresh) | auto via `docker-entrypoint-initdb.d` | First-time setup after `make clean` |
+| `make up-db` (fresh) | auto via `docker-entrypoint-initdb.d` | First-time setup after `make clean` |
 
 ### Three.js / WebGL jsdom Mock Pattern (T-0500-INFRA)
 **Problem**: `@react-three/fiber` Canvas requires a real WebGL context. jsdom has no WebGL → tests crash at collection time.

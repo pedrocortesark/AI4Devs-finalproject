@@ -14,18 +14,19 @@ All development runs through Docker. The Makefile wraps `docker compose` command
 # Setup
 cp .env.example .env              # Then fill in SUPABASE_URL, SUPABASE_KEY, SUPABASE_DATABASE_URL
 make build                        # Build Docker images
-make up                           # Start database (postgres:15)
+make up-db                        # Start database only (postgres:15)
 make init-db                      # Initialize Supabase buckets & policies
 make setup-events                 # Create events table (T-004-BACK)
 
 # Frontend (React/Vite on :5173)
-make front-dev                    # Start dev server
+make up-frontend                  # Start dev server
 make front-install                # npm install in container
 make front-shell                  # Shell into frontend container
 
 # Backend (FastAPI on :8000)
 make shell                        # Shell into backend container
-make up-all                       # Start all services (db + backend + frontend)
+make up-backend                   # Start backend + dependencies (db + redis)
+make up                           # Start all services (db + redis + backend + frontend)
 
 # Teardown
 make down                         # Stop services (keep volumes)

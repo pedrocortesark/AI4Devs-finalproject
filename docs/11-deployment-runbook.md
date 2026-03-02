@@ -139,10 +139,10 @@ USE_CDN               = false
 Railway desplegará automáticamente. Verificar:
 
 ```bash
-curl https://sf-pm-backend.up.railway.app/health
+curl https://sf-pm.up.railway.app/health
 # Esperado: {"status":"ok"}
 
-curl https://sf-pm-backend.up.railway.app/ready
+curl https://sf-pm.up.railway.app/ready
 # Esperado: {"status":"ready","checks":{"database":"ok","redis":"ok"}}
 ```
 
@@ -209,7 +209,7 @@ En **Vercel Dashboard → tu proyecto → Settings → Environment Variables**:
 ```
 VITE_SUPABASE_URL      = https://[TU_PROYECTO].supabase.co
 VITE_SUPABASE_ANON_KEY = [ANON_KEY — NO usar service_role]
-VITE_API_URL           = https://sf-pm-backend.up.railway.app
+VITE_API_URL           = https://sf-pm.up.railway.app
 ```
 
 > `VITE_API_URL` debe apuntar a la URL del backend de Railway del Paso 4.
@@ -228,10 +228,10 @@ Vercel asigna el dominio de producción (ej: `sf-pm-frontend.vercel.app`) y el a
 
 ## PASO 7: Actualizar ALLOWED_ORIGINS con URL de Vercel
 
-Una vez obtenida la URL de Vercel (ej: `https://sf-pm-frontend.vercel.app`), actualizar en Railway → `sf-pm-backend` → Variables:
+Una vez obtenida la URL de Vercel (ej: `https://sf-pm.vercel.app`), actualizar en Railway → `sf-pm` → Variables:
 
 ```
-ALLOWED_ORIGINS = https://sf-pm-frontend.vercel.app
+ALLOWED_ORIGINS = https://sf-pm.vercel.app
 ```
 
 Railway redesplegará automáticamente el backend.
@@ -242,19 +242,15 @@ Railway redesplegará automáticamente el backend.
 
 ```bash
 # 1. Infraestructura
-curl https://sf-pm-backend.up.railway.app/health
-curl https://sf-pm-backend.up.railway.app/ready
+curl https://sf-pm.up.railway.app/health
+curl https://sf-pm.up.railway.app/ready
 
 # 2. CORS (desde CLI)
-curl -H "Origin: https://sf-pm-frontend.vercel.app" \
-     -H "Access-Control-Request-Method: POST" \
-     -X OPTIONS \
-     https://sf-pm-backend.up.railway.app/api/upload/url \
-     -v 2>&1 | grep -i "access-control"
-# Debe mostrar: Access-Control-Allow-Origin: https://sf-pm-frontend.vercel.app
+curl -H "Origin: https://sf-pm.vercel.app" -H "Access-Control-Request-Method: POST" -X OPTIONS https://sf-pm.up.railway.app/api/upload/url -v 2>&1 | grep -i "access-control"
+# Debe mostrar: access-control-allow-origin: https://sf-pm.vercel.app
 
 # 3. Flujo completo (browser)
-# a) Abrir https://sf-pm-frontend.vercel.app
+# a) Abrir https://sf-pm.vercel.app
 # b) Subir un archivo .3dm de prueba (< 10MB)
 # c) Verificar que la barra de progreso sube
 # d) Verificar que aparece "Procesando..." (Celery task en curso)
@@ -268,8 +264,8 @@ curl -H "Origin: https://sf-pm-frontend.vercel.app" \
 
 | Servicio | URL | Tipo |
 |---|---|---|
-| Frontend | `https://sf-pm-frontend.vercel.app` | Público |
-| Backend API | `https://sf-pm-backend.up.railway.app` | Público |
+| Frontend | `https://sf-pm.vercel.app` | Público |
+| Backend API | `https://sf-pm.up.railway.app` | Público |
 | Supabase | `https://[proyecto].supabase.co` | Gestionado |
 | Redis | Interno Railway | Privado |
 | Agent Worker | Sin URL (background) | Privado |
@@ -316,16 +312,16 @@ El esquema proviene **exclusivamente** de las migraciones SQL — esta es la ún
 ```
 supabase/migrations/*.sql  ←── fuente de verdad del esquema
        │
-       ├─ make clean + make up  → auto-aplica en volumen nuevo (docker-entrypoint-initdb.d)
+       ├─ make clean + make up-db  → auto-aplica en volumen nuevo (docker-entrypoint-initdb.d)
        │
-       └─ make migrate-local    → aplica a volumen existente (requiere: make up primero)
+       └─ make migrate-local        → aplica a volumen existente (requiere: make up-db primero)
 ```
 
 ### Inicializar entorno de tests desde cero
 
 ```bash
 make clean          # Elimina contenedores + volúmenes
-make up             # Arranca PostgreSQL local; auto-aplica las 5 migraciones
+make up-db          # Arranca PostgreSQL local; auto-aplica las 5 migraciones
 make test-unit      # Tests unitarios (no necesitan DB local)
 make test-infra     # Tests de integración (DB local + Supabase cloud)
 ```
@@ -335,7 +331,7 @@ make test-infra     # Tests de integración (DB local + Supabase cloud)
 Usar cuando se añade una nueva migración sin querer destruir los datos de desarrollo:
 
 ```bash
-make up             # Asegurarse de que el contenedor db está corriendo
+make up-db          # Asegurarse de que el contenedor db está corriendo
 make migrate-local  # Aplica todas las migraciones via docker compose exec
 ```
 
@@ -426,3 +422,25 @@ SHELL := bash
 - `processed-geometry` — público (URLs directas para .glb en Three.js)
 
 También se corrigió `constants.py`: `STORAGE_BUCKET_PROCESSED` tenía el valor incorrecto `"processed-files"` → corregido a `"processed-geometry"`.
+
+---
+
+### Error CORS: backend devuelve 502 al arrancar
+
+```
+{"status":"error","code":502,"message":"Application failed to respond"}
+```
+
+**Causa:** Faltaban variables de entorno obligatorias en Railway (`SUPABASE_URL`, `SUPABASE_KEY`, `DATABASE_URL`). La app crashea en el startup antes de poder responder a ninguna petición, incluyendo el preflight CORS.
+
+**Solución:** Añadir todas las variables del PASO 4 en Railway → servicio → Variables. Verificar con `curl https://[servicio].up.railway.app/health` — debe devolver `{"status":"ok"}`.
+
+> **Nota sobre URLs de Railway:** El dominio público del servicio es `[nombre].up.railway.app` (el que aparece en Public Networking). `[nombre].railway.app` (sin `.up.`) es una URL diferente del dashboard de Railway — no usarla para verificar el backend.
+
+---
+
+### Error CORS: `ALLOWED_ORIGINS` con typo o valor incorrecto
+
+**Causa:** Un guión en lugar de punto en el dominio de Vercel (`https://sf-pm-vercel.app` en vez de `https://sf-pm.vercel.app`) hace que el origen del browser no coincida con ningún origen permitido.
+
+**Solución:** Verificar en Railway → Variables que `ALLOWED_ORIGINS` contiene exactamente la URL de Vercel: `https://[proyecto].vercel.app` (con punto antes de `vercel`). Después del cambio, esperar a que Railway redespliegue (estado verde) antes de volver a probar.

@@ -148,3 +148,12 @@
 
 ### Pendiente (acción usuario)
 - ⚠️ Rotar credenciales Supabase (password + service role key) — expuestas en git history de AGENTS.md
+
+---
+
+## Despliegue a Producción (2026-03-01)
+
+- Infraestructura desplegada: Railway (backend `sf-pm` + agent worker Celery) + Vercel (frontend `sf-pm`) + Supabase cloud
+- URLs producción: `https://sf-pm.vercel.app` (frontend) | `https://sf-pm.up.railway.app` (backend)
+- Verificaciones: `/health` ✅ | `/ready` `{"database":"ok","redis":"ok"}` ✅ | CORS ✅ | Upload E2E ✅ | Celery worker activo ✅
+- Runbook: `docs/11-deployment-runbook.md` — actualizado con URLs reales y problemas resueltos (CORS typo, 502 por vars faltantes, URLs Railway)

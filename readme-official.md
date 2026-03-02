@@ -163,14 +163,14 @@ make build
 **3. Inicializar base de datos e infraestructura de storage:**
 
 ```bash
-make up          # Arranca PostgreSQL (postgres:15-alpine)
+make up-db       # Arranca PostgreSQL (postgres:15-alpine)
 make init-db     # Crea buckets Supabase + políticas RLS
 ```
 
 **4. Levantar todos los servicios:**
 
 ```bash
-make up-all
+make up
 # Servicios disponibles:
 #   Frontend:    http://localhost:5173  (React + Vite HMR)
 #   Backend API: http://localhost:8000  (FastAPI + uvicorn --reload)
@@ -180,6 +180,9 @@ make up-all
 #### Comandos de desarrollo habituales
 
 ```bash
+make up-db          # Solo la base de datos
+make up-backend     # Backend + dependencias (db + redis)
+make up-frontend    # Frontend dev server (Vite)
 make shell          # Shell en contenedor backend (para debugging)
 make front-shell    # Shell en contenedor frontend
 make test           # Tests backend + agent (pytest)
@@ -210,7 +213,7 @@ curl http://localhost:8000/ready
 
 #### Troubleshooting
 
-**`make up-all` falla por falta de `.env`:**
+**`make up` falla por falta de `.env`:**
 - Verificar que `.env` existe y tiene todas las variables de `.env.example` completadas.
 
 **Error de conexión a Supabase:**

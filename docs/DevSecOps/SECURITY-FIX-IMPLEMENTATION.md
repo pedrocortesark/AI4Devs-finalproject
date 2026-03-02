@@ -70,7 +70,7 @@ command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
 nano .env  # Or use your preferred editor
 
 # 3. Start services with new secure configuration
-make down && make up-all
+make down && make up
 ```
 
 ### Option B: Manual Setup
@@ -87,7 +87,7 @@ openssl rand -base64 24  # For REDIS_PASSWORD
 nano .env
 
 # 4. Start services
-make down && make up-all
+make down && make up
 ```
 
 ---
@@ -138,7 +138,7 @@ docker compose exec db psql -U ${DATABASE_USER} -d ${DATABASE_NAME} -c "SELECT 1
 ### ✅ 5. Test Full Stack
 ```bash
 # Start all services
-make up-all
+make up
 
 # Check healthchecks (wait ~30 seconds)
 docker compose ps
@@ -202,7 +202,7 @@ git checkout HEAD -- docker-compose.yml .env.example
 cp .env.backup .env  # If setup-env.sh created a backup
 
 # 3. Restart services
-make down && make up-all
+make down && make up
 ```
 
 **⚠️ WARNING:** Old configuration has critical security vulnerabilities. Only rollback for debugging.
@@ -266,5 +266,5 @@ REDIS_PASSWORD=<generate-for-ci>
 **Problems?** Check:
 1. Is `.env` file present in project root?
 2. Are all required variables set (no `xxx` placeholders)?
-3. Did you restart services after creating `.env`? (`make down && make up-all`)
+3. Did you restart services after creating `.env`? (`make down && make up`)
 4. Check logs: `docker compose logs backend db redis agent-worker`

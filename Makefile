@@ -1,4 +1,4 @@
-.PHONY: build build-prod up up-all down init-db setup-events migrate-t0503 migrate-all migrate-local migrate-cloud test test-all test-infra test-unit test-integration test-storage shell clean front-install test-front front-shell front-dev help
+.PHONY: build build-prod up-db up-backend up-frontend up down init-db setup-events migrate-t0503 migrate-all migrate-local migrate-cloud test test-all test-infra test-unit test-integration test-storage shell clean front-install test-front front-shell help
 
 # Force bash as shell (required on Windows with GnuWin32 make)
 SHELL := bash
@@ -15,12 +15,16 @@ build-prod:
 	docker build --target prod -t sf-pm-backend:prod --file src/backend/Dockerfile src/backend
 	docker build --target prod -t sf-pm-frontend:prod --file src/frontend/Dockerfile src/frontend
 
-# Start services (database + backend)
-up:
+# Start only the database
+up-db:
 	docker compose up -d db
 
+# Start backend + its dependencies (db + redis)
+up-backend:
+	docker compose up -d backend
+
 # Start all services
-up-all:
+up:
 	docker compose up -d
 
 # Stop all services (without removing volumes)
@@ -57,9 +61,9 @@ migrate-all:
 	done
 	@echo "✅ All migrations applied successfully"
 
-# Apply all migrations to LOCAL Docker PostgreSQL (requires: make up)
+# Apply all migrations to LOCAL Docker PostgreSQL (requires: make up-db)
 # Use this when the postgres_data volume already exists (not fresh install).
-# On a fresh install (make clean + make up), migrations run automatically
+# On a fresh install (make clean + make up-db), migrations run automatically
 # via docker-entrypoint-initdb.d.
 migrate-local:
 	@echo "🐘 Applying all migrations to local Docker DB..."
@@ -127,7 +131,7 @@ shell:
 # ===== FRONTEND COMMANDS =====
 
 # Start frontend dev server
-front-dev:
+up-frontend:
 	docker compose up frontend
 
 # Install frontend dependencies inside Docker
@@ -157,8 +161,9 @@ help:
 	@echo "  Docker lifecycle:"
 	@echo "    make build         - Build Docker images (dev)"
 	@echo "    make build-prod    - Build production images"
-	@echo "    make up            - Start database service"
-	@echo "    make up-all        - Start all services"
+	@echo "    make up-db         - Start only the database"
+	@echo "    make up-backend    - Start backend + its dependencies (db + redis)"
+	@echo "    make up            - Start all services"
 	@echo "    make down          - Stop all services"
 	@echo "    make clean         - Stop + remove volumes + prune"
 	@echo ""
@@ -167,7 +172,7 @@ help:
 	@echo "    make setup-events  - Create events table in Supabase (T-004-BACK)"
 	@echo "    make migrate-t0503   - Apply T-0503-DB migration (low_poly_url + bbox)"
 	@echo "    make migrate-all     - Apply all migrations (local Docker db, legacy)"
-	@echo "    make migrate-local   - Apply all migrations to local Docker DB (requires: make up)"
+	@echo "    make migrate-local   - Apply all migrations to local Docker DB (requires: make up-db)"
 	@echo "    make migrate-cloud   - Apply all migrations to Supabase cloud (prod)"
 	@echo "    make test          - Run all tests (backend + agent)"
 	@echo "    make test-agent    - Run agent tests only"
@@ -177,7 +182,7 @@ help:
 	@echo "    make shell         - Open shell in backend container"
 	@echo ""
 	@echo "  Frontend:"
-	@echo "    make front-dev     - Start frontend dev server (Vite)"
+	@echo "    make up-frontend   - Start frontend dev server (Vite)"
 	@echo "    make front-install - Install frontend dependencies (npm install)"
 	@echo "    make test-front    - Run frontend tests (Vitest)"
 	@echo "    make front-shell   - Open shell in frontend container"

@@ -311,7 +311,7 @@ src/frontend/src/
 - [ ] **T2 — TypeScript imports:** `import { Canvas } from '@react-three/fiber'` y `import { useGLTF } from '@react-three/drei'` pasan `tsc --noEmit` sin errores
 - [ ] **T3 — GLB type resolution:** `import model from './test.glb'` resuelve como `string` (sin TS2307)
 - [ ] **T4 — Sin regresiones:** `npm test` ejecuta FileUploader + ValidationReportModal con 0 fallos
-- [ ] **T5 — Smoke visual:** TestCanvas muestra cubo rotable en `make front-dev` sin errores consola
+- [ ] **T5 — Smoke visual:** TestCanvas muestra cubo rotable en `make up-frontend` sin errores consola
 - [ ] **T6 — Code splitting:** `npm run build` genera `three-vendor-[hash].js` en `/dist/assets/`
 
 ### Edge Cases

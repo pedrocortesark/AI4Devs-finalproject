@@ -9,12 +9,12 @@ Este archivo documenta todas las decisiones importantes tomadas durante el desar
   1. Mantener DDL en conftest con sincronización manual: demasiado propenso a divergencia, ya estaba desactualizado.
   2. Usar Supabase cloud para todos los tests de schema: lento, depende de red, modifica datos reales.
 - **Mecanismo de aplicación del schema en local:**
-  - **Volumen fresco** (`make clean + make up`): PostgreSQL auto-aplica todas las migraciones via `docker-entrypoint-initdb.d` (configurado en `docker-compose.yml` línea 62).
+  - **Volumen fresco** (`make clean + make up-db`): PostgreSQL auto-aplica todas las migraciones via `docker-entrypoint-initdb.d` (configurado en `docker-compose.yml` línea 62).
   - **Volumen existente** (tras añadir nueva migración): `make migrate-local` (nuevo target, usa `docker compose exec -T db psql < migration.sql`).
 - **Consecuencias:**
   - ✅ Schema de tests = schema de producción (mismas migraciones)
   - ✅ Al añadir una migración, solo hay UNA cosa que actualizar (el archivo SQL)
-  - ⚠️ `make test-infra` requiere `make up` + `make migrate-local` si el volumen es antiguo
+  - ⚠️ `make test-infra` requiere `make up-db` + `make migrate-local` si el volumen es antiguo
   - ⚠️ `profiles` sigue en conftest hasta que se implemente US de Auth (futuro)
 - **Archivos modificados:** `tests/conftest.py`, `Makefile` (nuevo target `migrate-local`), `docs/11-deployment-runbook.md`
 

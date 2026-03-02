@@ -457,7 +457,7 @@ Most components already work individually. This phase focuses on:
 ### Test 20: FPS During Interaction
 
 **Prerequisites:**
-- Dev environment running (`make front-dev`)
+- Dev environment running (`make up-frontend`)
 - Database seeded with 150 real parts (`npm run seed:parts -- --count=150`)
 - Chrome browser (for consistent DevTools)
 

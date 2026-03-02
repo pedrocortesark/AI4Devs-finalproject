@@ -21,7 +21,7 @@ This document defines the manual performance testing protocol for the 3D Dashboa
 ### Environment Setup
 
 **Required:**
-- ✅ Dev environment running: `make front-dev` or `docker compose up frontend`
+- ✅ Dev environment running: `make up-frontend` or `docker compose up frontend`
 - ✅ Database seeded with 150 test parts (see Seed Script below)
 - ✅ Chrome browser (latest version)
 - ✅ Chrome DevTools open (F12 or Cmd+Option+I)

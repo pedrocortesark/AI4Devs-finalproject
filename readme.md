@@ -77,7 +77,9 @@ cp .env.example .env
 2. Levantar servicios en contenedores (dev):
 
 ```bash
-make up
+make up-db        # Solo la base de datos
+make up-backend   # Backend + dependencias (db + redis)
+make up-frontend  # Frontend dev server (Vite)
 ```
 
 3. Inicializar infra (crear buckets / semillas necesarias):
@@ -86,10 +88,10 @@ make up
 make init-db
 ```
 
-4. Levantar todos los servicios (backend + frontend + agent-worker):
+4. O levantar todos los servicios a la vez (backend + frontend + agent-worker):
 
 ```bash
-make up-all
+make up
 # Frontend:   http://localhost:5173
 # Backend API: http://localhost:8000
 # API Docs:    http://localhost:8000/docs
@@ -110,10 +112,10 @@ make test-storage # Ejecuta test específico de storage
 
 **Frontend:**
 ```bash
-make front-install # Instala dependencias npm dentro de Docker
-make test-front    # Ejecuta tests de frontend (Vitest)
-make front-dev     # Inicia servidor de desarrollo Vite
-make front-shell   # Abre shell en contenedor frontend
+make front-install  # Instala dependencias npm dentro de Docker
+make test-front     # Ejecuta tests de frontend (Vitest)
+make up-frontend    # Inicia servidor de desarrollo Vite
+make front-shell    # Abre shell en contenedor frontend
 ```
 
 ### Desarrollo Frontend
@@ -127,7 +129,7 @@ make front-install
 
 2. Iniciar servidor de desarrollo:
 ```bash
-make front-dev
+make up-frontend
 # Accede a http://localhost:5173
 ```
 

@@ -561,7 +561,7 @@ grep -A 20 "\[136\]" prompts.md
 ### A.3. Verificar Performance (Manual)
 ```bash
 # Start dev server
-make front-dev
+make up-frontend
 
 # En Chrome DevTools:
 # 1. Performance tab → Record
