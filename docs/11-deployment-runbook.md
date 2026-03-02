@@ -89,7 +89,7 @@ En Supabase Dashboard → **Storage** deben aparecer: `raw-uploads`, `processed-
 
 ---
 
-## PASO 3: Crear Proyecto Railway y añadir Redis
+## PASO 3: Crear Proyecto Railway y añadir Redis ✅ COMPLETADO
 
 ```bash
 # Login con GitHub (npx descarga Railway CLI sin instalación global)
@@ -112,7 +112,7 @@ En el **Railway Dashboard**:
 
 ---
 
-## PASO 4: Desplegar Backend (FastAPI)
+## PASO 4: Desplegar Backend (FastAPI) ✅ COMPLETADO
 
 En Railway Dashboard → proyecto `sf-pm` → **New Service** → **GitHub Repo**:
 
@@ -148,7 +148,7 @@ curl https://sf-pm.up.railway.app/ready
 
 ---
 
-## PASO 5: Desplegar Agent Worker (Celery)
+## PASO 5: Desplegar Agent Worker (Celery) ✅ COMPLETADO
 
 En Railway Dashboard → **New Service** → **GitHub Repo**:
 
@@ -179,7 +179,7 @@ celery@[hostname] ready.
 
 ---
 
-## PASO 6: Desplegar Frontend en Vercel
+## PASO 6: Desplegar Frontend en Vercel ✅ COMPLETADO
 
 ```bash
 # Desde la carpeta del frontend
@@ -226,7 +226,7 @@ Vercel asigna el dominio de producción (ej: `sf-pm-frontend.vercel.app`) y el a
 
 ---
 
-## PASO 7: Actualizar ALLOWED_ORIGINS con URL de Vercel
+## PASO 7: Actualizar ALLOWED_ORIGINS con URL de Vercel ✅ COMPLETADO
 
 Una vez obtenida la URL de Vercel (ej: `https://sf-pm.vercel.app`), actualizar en Railway → `sf-pm` → Variables:
 
