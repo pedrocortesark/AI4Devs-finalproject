@@ -43,6 +43,7 @@ except ImportError:
         ERROR_MSG_FAILED_PARSE_3DM,
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
+        MAX_3DM_FILE_SIZE_MB,
     )
 
 import rhino3dm
