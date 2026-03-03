@@ -144,6 +144,9 @@ function DashboardPage() {
 
   useEffect(() => {
     fetchParts();
+    // Poll every 30s so newly processed parts appear without manual refresh
+    const interval = setInterval(fetchParts, 30_000);
+    return () => clearInterval(interval);
   }, [fetchParts]);
 
   return <Dashboard3D />;

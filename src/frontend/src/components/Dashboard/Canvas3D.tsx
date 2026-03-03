@@ -6,7 +6,7 @@
  * Wraps @react-three/fiber Canvas with standardized camera, lights, and controls
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewcube, Stats } from '@react-three/drei';
 import type { Canvas3DProps } from './Dashboard3D.types';
@@ -25,8 +25,9 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
   cameraConfig 
 }) => {
   const clearSelection = usePartsStore((state: any) => state.clearSelection);
+  const parts = usePartsStore((state: any) => state.parts); // reactive: re-renders when parts load
   const getFilteredParts = usePartsStore((state: any) => state.getFilteredParts);
-  const filteredParts = getFilteredParts();
+  const filteredParts = useMemo(() => getFilteredParts(), [parts, getFilteredParts]);
 
   // Merge default config with custom config
   const cameraPosition = cameraConfig?.position || CAMERA_CONFIG.POSITION;
