@@ -18,6 +18,7 @@ try:
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
         PROCESSED_GEOMETRY_BUCKET,
+        RAW_UPLOADS_BUCKET,
         LOW_POLY_PREFIX,
         TEMP_DIR,
         ERROR_MSG_NO_MESHES_FOUND,
@@ -34,6 +35,7 @@ except ImportError:
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
         PROCESSED_GEOMETRY_BUCKET,
+        RAW_UPLOADS_BUCKET,
         LOW_POLY_PREFIX,
         TEMP_DIR,
         ERROR_MSG_NO_MESHES_FOUND,
@@ -127,20 +129,47 @@ def _fetch_block_metadata(block_id: str) -> tuple[str, str]:
 
 def _download_3dm_from_s3(url: str, local_path: str) -> None:
     """
-    Download .3dm file from S3 to local filesystem with size validation.
+    Download .3dm file from Supabase Storage (primary) or HTTP URL (fallback).
 
-    Performs a HEAD request to verify file size before downloading to prevent
-    zip bomb DoS attacks (OWASP A04:2021 - Insecure Design).
+    Treats `url` as a Supabase storage key first (e.g. 'uploads/{id}/file.3dm').
+    Falls back to HTTP requests for full URLs, then to s3_client mock for tests.
 
     Args:
-        url: S3 URL of the .3dm file
+        url: Supabase storage key or HTTP URL of the .3dm file
         local_path: Local filesystem path where file will be saved
 
     Raises:
-        FileNotFoundError: If S3 URL is invalid or file doesn't exist
+        FileNotFoundError: If download fails from all sources
         ValueError: If file exceeds MAX_3DM_FILE_SIZE_MB
     """
-    # SECURITY: HEAD request to check size before downloading
+    # Primary: Supabase storage client (handles storage paths like 'uploads/...')
+    try:
+        supabase = get_supabase_client()
+        content = supabase.storage.from_(RAW_UPLOADS_BUCKET).download(url)
+
+        # isinstance check distinguishes real bytes from test mocks (MagicMock)
+        if isinstance(content, (bytes, bytearray)) and len(content) > 0:
+            file_size_mb = len(content) / (1024 * 1024)
+            if file_size_mb > MAX_3DM_FILE_SIZE_MB:
+                raise ValueError(
+                    f"File size {file_size_mb:.1f}MB exceeds limit {MAX_3DM_FILE_SIZE_MB}MB. "
+                    f"Possible zip bomb attack or corrupt file."
+                )
+            with open(local_path, 'wb') as f:
+                f.write(content)
+            logger.info("download_3dm.supabase_success", key=url, size_mb=f"{file_size_mb:.2f}")
+            return
+    except ValueError:
+        raise  # Re-raise size validation errors
+    except Exception as e:
+        logger.warning(
+            "download_3dm.supabase_failed_trying_http",
+            url=url,
+            error=str(e),
+            message="Falling back to HTTP download"
+        )
+
+    # Fallback: HTTP download (for full HTTPS URLs)
     try:
         response = requests.head(url, timeout=10)
         response.raise_for_status()
@@ -154,40 +183,21 @@ def _download_3dm_from_s3(url: str, local_path: str) -> None:
                 f"File size {size_mb:.1f}MB exceeds limit {MAX_3DM_FILE_SIZE_MB}MB. "
                 f"Possible zip bomb attack or corrupt file."
             )
-            logger.error(
-                "download_3dm.size_exceeded",
-                url=url,
-                size_mb=size_mb,
-                limit_mb=MAX_3DM_FILE_SIZE_MB
-            )
+            logger.error("download_3dm.size_exceeded", url=url, size_mb=size_mb)
             raise ValueError(error_msg)
 
-        logger.info(
-            "download_3dm.size_check_passed",
-            url=url,
-            size_mb=size_mb
-        )
-
     except requests.exceptions.RequestException as e:
-        logger.warning(
-            "download_3dm.head_request_failed",
-            url=url,
-            error=str(e),
-            message="Proceeding with download (network issue or no HEAD support)"
-        )
+        logger.warning("download_3dm.head_request_failed", url=url, error=str(e))
 
-    # Download file with streaming to handle large files safely
     try:
         with requests.get(url, stream=True, timeout=300) as r:
             r.raise_for_status()
             with open(local_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
-
-        logger.info("download_3dm.success", url=url, local_path=local_path)
+        logger.info("download_3dm.http_success", url=url, local_path=local_path)
 
     except requests.exceptions.RequestException as e:
-        # Fallback to s3_client if requests fails (for compatibility)
         logger.warning(
             "download_3dm.requests_failed_fallback",
             url=url,

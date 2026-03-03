@@ -12,6 +12,7 @@ try:
     from ..constants import (
         TASK_HEALTH_CHECK,
         TASK_VALIDATE_FILE,
+        TASK_GENERATE_LOW_POLY_GLB,
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
     )
@@ -21,6 +22,7 @@ except ImportError:
     from src.agent.constants import (
         TASK_HEALTH_CHECK,
         TASK_VALIDATE_FILE,
+        TASK_GENERATE_LOW_POLY_GLB,
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
     )
@@ -190,6 +192,10 @@ def validate_file(self, part_id: str, s3_key: str):
 
         # Step 8: Update status to validated
         db_service.update_block_status(part_id, "validated")
+
+        # Step 9: Enqueue geometry processing to generate low-poly GLB
+        celery_app.send_task(TASK_GENERATE_LOW_POLY_GLB, args=[part_id])
+        logger.info("validate_file.geometry_task_enqueued", part_id=part_id)
 
         logger.info(
             "validate_file.success",
