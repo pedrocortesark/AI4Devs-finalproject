@@ -43,7 +43,8 @@ except (ImportError, ModuleNotFoundError):
 celery_app = Celery(
     CELERY_APP_NAME,
     broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND
+    backend=settings.CELERY_RESULT_BACKEND,
+    include=['tasks.file_validation', 'tasks.geometry_processing'],
 )
 
 # Configuration
