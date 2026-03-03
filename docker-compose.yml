@@ -137,7 +137,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${SUPABASE_DATABASE_URL}
       - PYTHONPATH=/app  # Ensure proper Python import paths
     depends_on:
       redis:
