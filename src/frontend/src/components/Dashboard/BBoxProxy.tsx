@@ -42,27 +42,21 @@ export function BBoxProxy({
   const height = bbox.max[1] - bbox.min[1];
   const depth = bbox.max[2] - bbox.min[2];
   
-  // Calculate center position
-  const centerX = (bbox.min[0] + bbox.max[0]) / 2;
-  const centerY = (bbox.min[1] + bbox.max[1]) / 2;
-  const centerZ = (bbox.min[2] + bbox.max[2]) / 2;
-  
+  // BBoxProxy is rendered inside a <group> already positioned at bbox center,
+  // so position is [0, 0, 0] relative to parent
   return (
-    <mesh 
-      position={[centerX, centerY, centerZ]}
-      data-testid="bbox-mesh"
-      data-lod-level="2"
-      data-component="BBoxProxy"
-      data-bbox={JSON.stringify(bbox)}
+    <mesh
+      name="bbox-proxy"
+      position={[0, 0, 0]}
     >
       <boxGeometry args={[width, height, depth]} />
-      <meshBasicMaterial 
+      <meshBasicMaterial
+        name="bbox-material"
         color={color}
         opacity={opacity}
         transparent={true}
         wireframe={wireframe}
-        data-testid="bbox-material"
-        // Add explicit attributes for testing (jsdom doesn't render Three.js boolean props)
+        // Explicit string attributes for jsdom test assertions
         {...({
           transparent: 'true',
           wireframe: wireframe ? 'true' : 'false',

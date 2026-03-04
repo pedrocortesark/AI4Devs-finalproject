@@ -1,34 +1,41 @@
 /**
  * Constants for Dashboard 3D components
  * T-0504-FRONT: Dashboard 3D Canvas Layout
- * 
+ *
  * Following constants extraction pattern from US-001 (FileUploader)
+ *
+ * UNIT SYSTEM: all Three.js distances are in metres (1 scene unit = 1 m).
+ * Rhino .3dm files use metres for Sagrada Família coordinates; GLBs are exported
+ * in Rhino coordinates, so the canvas matches the source data directly.
  */
 
 import type { DockPosition } from './Dashboard3D.types';
 
 /**
- * Camera configuration defaults
+ * Camera configuration defaults — all distances in metres.
  */
 export const CAMERA_CONFIG = {
   FOV: 50,
-  POSITION: [50, 50, 50] as [number, number, number],
-  NEAR: 0.1,
-  FAR: 10000,
+  // Start at 8 m above, 12 m back — parts visible at first frame without
+  // relying on Bounds.fit() to fire before the first GLB loads.
+  // Bounds.fit() will still reposition once geometry is in the scene.
+  POSITION: [5, 8, 12] as [number, number, number],
+  NEAR: 0.001,    // 1 mm minimum render distance
+  FAR: 10000,     // 10 km maximum render distance
 } as const;
 
 /**
- * Grid configuration for Three.js scene
+ * Grid configuration for Three.js scene — all distances in metres.
  */
 export const GRID_CONFIG = {
-  SIZE: [200, 200] as [number, number],
-  CELL_SIZE: 5,
-  SECTION_SIZE: 25,
+  SIZE: [200, 200] as [number, number],       // 200 m total grid
+  CELL_SIZE: 5,                               // 5 m between minor grid lines
+  SECTION_SIZE: 25,                           // 25 m between major grid lines
   CELL_THICKNESS: 0.5,
   SECTION_THICKNESS: 1,
   CELL_COLOR: '#6e6e6e',
   SECTION_COLOR: '#9d4b4b',
-  FADE_DISTANCE: 400,
+  FADE_DISTANCE: 400,                         // 400 m fade-out distance
   FADE_STRENGTH: 1,
 } as const;
 
@@ -95,22 +102,22 @@ export const ARIA_LABELS = {
 } as const;
 
 /**
- * Lighting configuration for Three.js scene
+ * Lighting configuration for Three.js scene — positions in metres.
  */
 export const LIGHTING_CONFIG = {
   AMBIENT_INTENSITY: 0.4,
   DIRECTIONAL_INTENSITY: 1,
-  DIRECTIONAL_POSITION: [50, 100, 50] as [number, number, number],
-  SHADOW_MAP_SIZE: [2048, 2048] as [number, number],
+  DIRECTIONAL_POSITION: [50, 100, 50] as [number, number, number], // 50/100/50 m
+  SHADOW_MAP_SIZE: 2048,
 } as const;
 
 /**
- * OrbitControls configuration
+ * OrbitControls configuration — distances in metres.
  */
 export const CONTROLS_CONFIG = {
   ENABLE_DAMPING: true,
   DAMPING_FACTOR: 0.05,
-  MIN_DISTANCE: 10,
-  MAX_DISTANCE: 500,
+  MIN_DISTANCE: 0.001,  // 1 mm minimum zoom
+  MAX_DISTANCE: 1000,   // 1 km maximum zoom-out (parts at ~90m from origin)
   MAX_POLAR_ANGLE: Math.PI / 2, // Don't allow rotation below ground
 } as const;

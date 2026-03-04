@@ -81,12 +81,12 @@ describe('Dashboard3D Component', () => {
       expect(canvas).toHaveAttribute('data-has-controls', 'true');
     });
 
-    it('should position camera at default [50, 50, 50]', () => {
+    it('should position camera at default [5, 8, 12]', () => {
       render(<Dashboard3D />);
       
       const canvas = screen.getByTestId('canvas');
       // Camera position should match CAMERA_CONFIG defaults
-      expect(canvas).toHaveAttribute('data-camera-position', '50,50,50');
+      expect(canvas).toHaveAttribute('data-camera-position', '5,8,12'); // metres
     });
 
     it('should render lights (ambient + directional)', () => {

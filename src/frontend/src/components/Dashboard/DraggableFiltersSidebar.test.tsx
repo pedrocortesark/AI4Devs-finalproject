@@ -219,8 +219,8 @@ describe('DraggableFiltersSidebar Component', () => {
     });
   });
 
-  describe('Dock Position Icons', () => {
-    it('should render pin-left icon button', () => {
+  describe('Dock Controls — No explicit buttons (auto-dock only)', () => {
+    it('should NOT render explicit pin-left button (auto-dock only)', () => {
       render(
         <DraggableFiltersSidebar
           dockPosition="right"
@@ -230,11 +230,10 @@ describe('DraggableFiltersSidebar Component', () => {
         </DraggableFiltersSidebar>
       );
 
-      const pinLeftBtn = screen.getByLabelText(/Anclar panel a la izquierda/i);
-      expect(pinLeftBtn).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Anclar panel a la izquierda/i)).not.toBeInTheDocument();
     });
 
-    it('should render pin-right icon button', () => {
+    it('should NOT render explicit pin-right button (auto-dock only)', () => {
       render(
         <DraggableFiltersSidebar
           dockPosition="left"
@@ -244,11 +243,10 @@ describe('DraggableFiltersSidebar Component', () => {
         </DraggableFiltersSidebar>
       );
 
-      const pinRightBtn = screen.getByLabelText(/Anclar panel a la derecha/i);
-      expect(pinRightBtn).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Anclar panel a la derecha/i)).not.toBeInTheDocument();
     });
 
-    it('should render float icon button', () => {
+    it('should NOT render explicit float button (auto-dock only)', () => {
       render(
         <DraggableFiltersSidebar
           dockPosition="left"
@@ -258,13 +256,10 @@ describe('DraggableFiltersSidebar Component', () => {
         </DraggableFiltersSidebar>
       );
 
-      const floatBtn = screen.getByLabelText(/Dejar panel flotante/i);
-      expect(floatBtn).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Dejar panel flotante/i)).not.toBeInTheDocument();
     });
 
-    it('should call onDockChange when pin-left clicked', async () => {
-      const user = userEvent.setup();
-      
+    it('should only expose drag handle as dock control', () => {
       render(
         <DraggableFiltersSidebar
           dockPosition="right"
@@ -274,10 +269,8 @@ describe('DraggableFiltersSidebar Component', () => {
         </DraggableFiltersSidebar>
       );
 
-      const pinLeftBtn = screen.getByLabelText(/Anclar panel a la izquierda/i);
-      await user.click(pinLeftBtn);
-
-      expect(mockOnDockChange).toHaveBeenCalledWith('left');
+      const dragHandle = screen.getByLabelText(/Arrastrar panel/i);
+      expect(dragHandle).toBeInTheDocument();
     });
   });
 
@@ -318,7 +311,9 @@ describe('DraggableFiltersSidebar Component', () => {
   });
 
   describe('Edge Cases - localStorage Persistence', () => {
-    it('should save dock position to localStorage on change', () => {
+    it('should save dock position to localStorage on double-click cycle', async () => {
+      const user = userEvent.setup();
+
       render(
         <DraggableFiltersSidebar
           dockPosition="left"
@@ -328,9 +323,9 @@ describe('DraggableFiltersSidebar Component', () => {
         </DraggableFiltersSidebar>
       );
 
-      // Trigger dock change
-      const pinRightBtn = screen.getByLabelText(/Anclar panel a la derecha/i);
-      fireEvent.click(pinRightBtn);
+      // Trigger dock change via double-click (left → right)
+      const dragHandle = screen.getByLabelText(/Arrastrar panel/i);
+      await user.dblClick(dragHandle);
 
       expect(Storage.prototype.setItem).toHaveBeenCalledWith(
         'dashboard-sidebar-dock',

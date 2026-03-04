@@ -140,7 +140,7 @@ function UploadPage() {
 // ── Dashboard Page ───────────────────────────────────────────────────────────
 
 function DashboardPage() {
-  const { fetchParts } = usePartsStore();
+  const fetchParts = usePartsStore((state) => state.fetchParts);
 
   useEffect(() => {
     fetchParts();

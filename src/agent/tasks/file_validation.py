@@ -12,6 +12,7 @@ try:
     from ..constants import (
         TASK_HEALTH_CHECK,
         TASK_VALIDATE_FILE,
+        TASK_REGISTER_3DM_BLOCKS,
         TASK_GENERATE_LOW_POLY_GLB,
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
@@ -22,6 +23,7 @@ except ImportError:
     from src.agent.constants import (
         TASK_HEALTH_CHECK,
         TASK_VALIDATE_FILE,
+        TASK_REGISTER_3DM_BLOCKS,
         TASK_GENERATE_LOW_POLY_GLB,
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
@@ -237,3 +239,99 @@ def validate_file(self, part_id: str, s3_key: str):
         }
 
 
+@celery_app.task(
+    name=TASK_REGISTER_3DM_BLOCKS,
+    bind=True,
+    max_retries=TASK_MAX_RETRIES,
+    default_retry_delay=TASK_RETRY_DELAY_SECONDS
+)
+def register_3dm_blocks(self, file_key: str):
+    """
+    Parse a .3dm file and register one block per InstanceDefinition.
+
+    Replaces the old "create one PENDING block per upload" approach.
+    A single .3dm file contains N InstanceDefinitions (Codis), each of
+    which must become an independent block in the database.
+
+    This task is idempotent: re-uploading the same file skips iso_codes
+    that already exist (leverages the UNIQUE constraint on blocks.iso_code).
+
+    Workflow:
+    1. Download .3dm file from S3
+    2. Enumerate InstanceDefinitions (each .Name is an iso_code / Codi)
+    3. Register new blocks in DB (skip existing ones)
+    4. Enqueue validate_file for each newly created block
+    5. Clean up temp file
+
+    Args:
+        file_key: S3 object key of the uploaded .3dm file
+
+    Returns:
+        dict: {success, registered, skipped, block_ids}
+    """
+    logger.info("register_3dm_blocks.started", file_key=file_key)
+
+    # Import services
+    try:
+        from services.file_download_service import FileDownloadService
+        from services.db_service import DBService
+    except ModuleNotFoundError:
+        from src.agent.services.file_download_service import FileDownloadService
+        from src.agent.services.db_service import DBService
+
+    import rhino3dm
+
+    file_download = FileDownloadService()
+    db_service = DBService()
+
+    # Step 1: Download .3dm file from S3
+    success, local_path, download_error = file_download.download_from_s3(file_key)
+    if not success:
+        logger.error("register_3dm_blocks.download_failed", file_key=file_key, error=download_error)
+        return {"success": False, "error": download_error}
+
+    try:
+        # Step 2: Open file and enumerate InstanceDefinitions
+        file3dm = rhino3dm.File3dm.Read(local_path)
+        if file3dm is None:
+            raise ValueError(f"rhino3dm could not open file: {file_key}")
+
+        iso_codes = [idef.Name for idef in file3dm.InstanceDefinitions]
+        logger.info("register_3dm_blocks.idefs_found",
+                    file_key=file_key,
+                    count=len(iso_codes),
+                    iso_codes=iso_codes)
+
+        if not iso_codes:
+            logger.warning("register_3dm_blocks.no_idefs", file_key=file_key)
+            return {"success": True, "registered": 0, "skipped": 0, "block_ids": []}
+
+        # Step 3: Register blocks (idempotent — skips existing iso_codes)
+        new_blocks = db_service.register_blocks_for_iso_codes(iso_codes, file_key)
+
+        # Step 4: Enqueue validate_file for each newly created block
+        for block in new_blocks:
+            celery_app.send_task(TASK_VALIDATE_FILE, args=[block["id"], file_key])
+            logger.info("register_3dm_blocks.validate_enqueued",
+                        block_id=block["id"],
+                        iso_code=block["iso_code"])
+
+        skipped = len(iso_codes) - len(new_blocks)
+        logger.info("register_3dm_blocks.success",
+                    file_key=file_key,
+                    registered=len(new_blocks),
+                    skipped=skipped)
+
+        return {
+            "success": True,
+            "registered": len(new_blocks),
+            "skipped": skipped,
+            "block_ids": [b["id"] for b in new_blocks],
+        }
+
+    except Exception as e:
+        logger.exception("register_3dm_blocks.error", file_key=file_key, error=str(e))
+        return {"success": False, "error": str(e)}
+
+    finally:
+        file_download.cleanup_temp_file(local_path)

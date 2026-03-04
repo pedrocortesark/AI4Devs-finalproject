@@ -134,10 +134,10 @@ const DraggableFiltersSidebar: React.FC<DraggableSidebarProps> = ({
       position: dockPosition === 'floating' ? 'absolute' : 'fixed',
       width: `${SIDEBAR_CONFIG.WIDTH}px`,
       height: '100%',
-      backgroundColor: '#f5f5f5',
-      borderLeft: dockPosition === 'right' ? '1px solid #ddd' : 'none',
-      borderRight: dockPosition === 'left' ? '1px solid #ddd' : 'none',
-      boxShadow: dockPosition === 'floating' ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+      backgroundColor: '#1e293b',
+      borderLeft: dockPosition === 'right' ? '1px solid #334155' : 'none',
+      borderRight: dockPosition === 'left' ? '1px solid #334155' : 'none',
+      boxShadow: dockPosition === 'floating' ? '0 4px 24px rgba(0,0,0,0.5)' : 'none',
       transition: dockPosition !== 'floating' ? `all ${SIDEBAR_CONFIG.TRANSITION_DURATION}ms ease` : 'none',
       zIndex: 100,
     };
@@ -169,7 +169,7 @@ const DraggableFiltersSidebar: React.FC<DraggableSidebarProps> = ({
       className={getClassName()}
       style={getStyles()}
     >
-      {/* Drag Handle */}
+      {/* Drag Handle — drag to move, double-click to cycle dock positions */}
       <div
         role="button"
         tabIndex={0}
@@ -181,13 +181,13 @@ const DraggableFiltersSidebar: React.FC<DraggableSidebarProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#e0e0e0',
+          backgroundColor: '#0f172a',
           cursor: isDragging ? 'grabbing' : 'grab',
-          borderBottom: '1px solid #ccc',
+          borderBottom: '1px solid #334155',
         }}
       >
-        {/* 6-dot Grip Icon */}
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+        {/* 9-dot Grip Icon */}
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#475569">
           <circle cx="7" cy="6" r="1.5" />
           <circle cx="12" cy="6" r="1.5" />
           <circle cx="17" cy="6" r="1.5" />
@@ -200,68 +200,8 @@ const DraggableFiltersSidebar: React.FC<DraggableSidebarProps> = ({
         </svg>
       </div>
 
-      {/* Dock Position Controls */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '4px',
-          padding: '8px',
-          borderBottom: '1px solid #ddd',
-          backgroundColor: '#fafafa',
-        }}
-      >
-        <button
-          aria-label={ARIA_LABELS.DOCK_LEFT}
-          onClick={() => handleDockChange('left')}
-          style={{
-            flex: 1,
-            padding: '4px 8px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            backgroundColor: dockPosition === 'left' ? '#007bff' : '#fff',
-            color: dockPosition === 'left' ? '#fff' : '#333',
-            border: '1px solid #ccc',
-            borderRadius: '3px',
-          }}
-        >
-          ← Left
-        </button>
-        <button
-          aria-label={ARIA_LABELS.DOCK_RIGHT}
-          onClick={() => handleDockChange('right')}
-          style={{
-            flex: 1,
-            padding: '4px 8px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            backgroundColor: dockPosition === 'right' ? '#007bff' : '#fff',
-            color: dockPosition === 'right' ? '#fff' : '#333',
-            border: '1px solid #ccc',
-            borderRadius: '3px',
-          }}
-        >
-          Right →
-        </button>
-        <button
-          aria-label={ARIA_LABELS.FLOAT}
-          onClick={() => handleDockChange('floating')}
-          style={{
-            flex: 1,
-            padding: '4px 8px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            backgroundColor: dockPosition === 'floating' ? '#007bff' : '#fff',
-            color: dockPosition === 'floating' ? '#fff' : '#333',
-            border: '1px solid #ccc',
-            borderRadius: '3px',
-          }}
-        >
-          ⚡ Float
-        </button>
-      </div>
-
       {/* Sidebar Content */}
-      <div style={{ padding: '16px', overflowY: 'auto', height: 'calc(100% - 100px)' }}>
+      <div style={{ overflowY: 'auto', height: `calc(100% - ${SIDEBAR_CONFIG.DRAG_HANDLE_HEIGHT}px)` }}>
         {children}
       </div>
     </aside>

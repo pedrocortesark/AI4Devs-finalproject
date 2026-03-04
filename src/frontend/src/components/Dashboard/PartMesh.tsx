@@ -5,13 +5,14 @@
  * T-0506-FRONT: Added filter-based opacity
  * T-0507-FRONT: Added 3-level LOD system
  * 
- * Loads GLB geometry with useGLTF, applies status colors, tooltip, selection state.
- * LOD system: Level 0 (mid-poly <20u) → Level 1 (low-poly 20-50u) → Level 2 (bbox >50u)
+ * Renders parts at their real building coordinates from Rhino (absolute positioning).
+ * GLB geometry includes Z→Y rotation applied during backend export.
+ * LOD system: Level 0 (mid-poly <20km) → Level 1 (low-poly 20-50km) → Level 2 (bbox >50km)
  * 
  * @module PartMesh
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useGLTF, Html, Detailed } from '@react-three/drei';
 import { STATUS_COLORS } from '@/constants/dashboard3d.constants';
 import { FILTER_VISUAL_FEEDBACK } from '@/constants/parts.constants';
@@ -118,9 +119,23 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   // When enableLod=true: load both mid_poly (or fallback to low_poly) and low_poly
   const lowPolyUrl = part.low_poly_url!;
   const midPolyUrl = enableLod ? (part.mid_poly_url ?? lowPolyUrl) : lowPolyUrl;
-  
+
   const { scene: lowPolyScene } = useGLTF(lowPolyUrl);
   const { scene: midPolyScene } = useGLTF(midPolyUrl);
+
+  // Clone scenes so each LOD level owns its own Three.js Object3D.
+  // useGLTF returns the same cached object for the same URL; a Three.js
+  // object can only have one parent, so sharing the reference across
+  // multiple <primitive> elements causes the second to reparent the scene,
+  // removing it from the first LOD level.
+  // lod2Clone is a third separate clone for LOD level 2 (same reason).
+  //
+  // GLB geometry is already centred at origin by geometry_processing.py
+  // (_extract_and_merge_meshes subtracts the mesh centroid before export).
+  // No per-part JavaScript offset calculation is needed.
+  const lowPolyClone = useMemo(() => lowPolyScene.clone(), [lowPolyScene]);
+  const midPolyClone = useMemo(() => midPolyScene.clone(), [midPolyScene]);
+  const lod2Clone    = useMemo(() => lowPolyScene.clone(), [lowPolyScene]);
 
   // Preload LOD assets on mount for smoother transitions
   useEffect(() => {
@@ -157,8 +172,8 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   );
 
   // Create material props (shared across all LOD levels)
+  // NOTE: data-testid intentionally excluded — Three.js objects don't support HTML attributes
   const materialProps = {
-    'data-testid': 'part-material',
     color,
     emissive,
     emissiveIntensity,
@@ -169,14 +184,11 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   // Backward compatibility: Single-level rendering when enableLod=false
   if (!enableLod) {
     return (
+      // GLB is positioned at part's real building coordinates (from bbox center).
+      // Z→Y rotation already applied during backend GLB export.
       <group name={`part-${part.iso_code}`} position={position}>
         <primitive
-          object={lowPolyScene}
-          // Z-up rotation: Rhino3dm exports with Y-up coordinate system,
-          // Three.js uses Y-up, but Sagrada Familia models use Z-up.
-          // -90° rotation (PI/2 radians) aligns geometry correctly.
-          rotation-x={-Math.PI / 2}
-          data-rotation-x={-Math.PI / 2}
+          object={lowPolyClone}
           onClick={handleClick}
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
@@ -202,9 +214,10 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   }
 
   // LOD System: 3-level distance-based rendering
-  // NOTE: Lod component from @react-three/drei
-  // Level 0 (<20u): mid_poly_url → Level 1 (20-50u): low_poly_url → Level 2 (>50u): BBoxProxy
+  // Level 0 (<20 km): mid_poly → Level 1 (20–50 km): low_poly → Level 2 (>50 km): BBoxProxy
   return (
+    // GLB is positioned at part's real building coordinates (from bbox center).
+    // Z→Y rotation already applied during backend GLB export.
     <group name={`part-${part.iso_code}`} position={position}>
       {/* Tooltip on hover or selection (shared across all LOD levels) */}
       {(hovered || isSelected) && (
@@ -218,13 +231,11 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
       )}
 
       <Detailed distances={[...LOD_DISTANCES]}>
-        {/* Level 0: Mid-poly geometry (0-20 units) */}
-        <group data-lod-level="0" data-geometry-url={midPolyUrl}>
+        {/* Level 0: Mid-poly geometry (0-20 km) */}
+        <group name="lod-0">
           <primitive
             name={`part-${part.iso_code}`}
-            object={midPolyScene}
-            rotation-x={-Math.PI / 2}
-            data-rotation-x={-Math.PI / 2}
+            object={midPolyClone}
             onClick={handleClick}
             onPointerOver={() => setHovered(true)}
             onPointerOut={() => setHovered(false)}
@@ -236,13 +247,11 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
           </primitive>
         </group>
 
-        {/* Level 1: Low-poly geometry (20-50 units) */}
-        <group data-lod-level="1" data-geometry-url={part.low_poly_url}>
+        {/* Level 1: Low-poly geometry (20-50 km) */}
+        <group name="lod-1">
           <primitive
             name={`part-${part.iso_code}`}
-            object={lowPolyScene}
-            rotation-x={-Math.PI / 2}
-            data-rotation-x={-Math.PI / 2}
+            object={lowPolyClone}
             onClick={handleClick}
             onPointerOver={() => setHovered(true)}
             onPointerOut={() => setHovered(false)}
@@ -254,10 +263,9 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
           </primitive>
         </group>
 
-        {/* Level 2: BBox proxy (>50 units) or low-poly fallback */}
-        <group 
-          name={`part-${part.iso_code}`}
-          data-lod-level="2"
+        {/* Level 2: BBox proxy (>50 km) or low-poly fallback */}
+        <group
+          name="lod-2"
           onClick={handleClick}
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
@@ -270,10 +278,10 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
               wireframe={true}
             />
           ) : (
+            // lod2Clone is a dedicated third clone; lowPolyScene cannot be
+            // shared across LOD levels (a THREE.Object3D can only have one parent).
             <primitive
-              object={lowPolyScene}
-              rotation-x={-Math.PI / 2}
-              data-rotation-x={-Math.PI / 2}
+              object={lod2Clone}
             >
               <meshStandardMaterial
                 attach="material"

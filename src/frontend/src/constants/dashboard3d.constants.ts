@@ -1,8 +1,10 @@
 /**
  * Dashboard 3D Constants
- * 
+ *
  * T-0505-FRONT: Constants for 3D Parts Scene rendering
- * 
+ *
+ * UNIT SYSTEM: all Three.js distances are in metres (1 scene unit = 1 m).
+ *
  * @module dashboard3d.constants
  */
 
@@ -24,27 +26,27 @@ export const STATUS_COLORS: Record<BlockStatus, string> = {
 };
 
 /**
- * Grid layout configuration for automatic part positioning
+ * Grid layout configuration for automatic part positioning — distances in metres.
  */
-export const GRID_SPACING = 5;  // Units between parts in grid layout (meters)
-export const GRID_COLUMNS = 10; // 10x10 grid for automatic layout
+export const GRID_SPACING = 5;  // 5 m between part groups in the fallback grid layout.
+export const GRID_COLUMNS = 10; // 10×10 grid for automatic layout
 
 /**
- * LOD (Level of Detail) distance thresholds in scene units
+ * LOD (Level of Detail) distance thresholds in metres
  * Used by T-0507-FRONT LOD System
  */
 export const LOD_DISTANCES = {
-  NEAR: 0,    // <20 units: Full detail (1000 triangles)
-  MID: 20,    // 20-50 units: Mid detail (500 triangles)
-  FAR: 50,    // >50 units: Bounding box proxy
+  NEAR: 0,    // <20 m: Full detail (1000 triangles)
+  MID: 20,    // 20–50 m: Mid detail (500 triangles)
+  FAR: 50,    // >50 m: Bounding box proxy
 };
 
 /**
- * Camera configuration defaults
+ * Camera configuration defaults — distances in metres.
  */
 export const CAMERA_DEFAULTS = {
-  POSITION: [50, 50, 50] as [number, number, number],
+  POSITION: [50, 50, 50] as [number, number, number], // 50 m from origin
   FOV: 60,
-  NEAR: 0.1,
-  FAR: 1000,
+  NEAR: 0.001,  // 1 mm
+  FAR: 10000,   // 10 km
 };

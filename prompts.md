@@ -5898,6 +5898,144 @@ Implementada lógica de validación geométrica siguiendo spec (sección 4.3) co
 **4. Regression Tests:**
 - ✅ 27/28 tests PASSING (T-024/T-025/T-026 no regression)
 - T-026-AGENT (NomenclatureValidator): 9 passed
+---
+
+## [100] - DIAGNÓSTICO: Canvas 3D no muestra piezas (problema de escala)
+**Fecha:** 2026-03-04 10:30
+
+**Prompt Original:**
+> Necesito que diagnostiques un problema en el canvas. No puedo ver los elementos que ya existen en la base de datos (debería haber 6). Hay un movimiento de la camara cuando carga la pagina, pero parece que los elementos sean muy pequeños y no se vean. No se si puede ser un problema d escala. He estado iterando mucho sobre este problema, así que quiero un analisis previo para buscar causas.
+> Por otro lado, tambien comentar que hay un POC que funcionó y que debería ser la base del proyecto. Quiero que analices y traces un plan para poder solucionar este problema
+
+**Resumen de la Respuesta/Acción:**
+**DIAGNÓSTICO COMPLETADO - Problema identificado: BBox NULL en todas las piezas**
+
+### 1. Evidencia Recolectada:
+
+**A. Base de Datos (6 piezas verificadas):**
+```json
+[
+  {
+    "id": "5201e50d-6c27-46d1-bd9a-ce3943bb0410",
+    "iso_code": "GLPER.B-PAE0720.0704",
+    "low_poly_url": "https://tqduceanvyckaztgpcmw.supabase.co/storage/.../5201e50d...glb",
+    "bbox": null  ← PROBLEMA CRÍTICO
+  },
+  // ... 5 piezas más, todas con bbox: null
+]
+```
+
+**B. Sistema de Layout (usePartsSpatialLayout):**
+- Grid 3 columnas con separación de 5000mm (5 metros)
+- Posiciones: [0,0,0], [5000,0,0], [10000,0,0], [0,0,5000], etc.
+- La cámara inicia en [5000, 8000, 12000] mm (5m, 8m, 12m)
+
+**C. Sistema de Escalado (PartMesh):**
+- **SIN bbox:** usa geometría GLB en coordenadas Rhino originales (sin normalización)
+- **CON bbox:** puede aplicar BBoxProxy wireframe en LOD nivel 2
+- Las geometrías se renderizan con rotación Z-up → Y-up (-90° en X)
+
+**D. Comparación con POC exitoso:**
+```tsx
+// POC (GltfDracoViewer.tsx) - FUNCIONABA:
+useEffect(() => {
+  const box = new THREE.Box3().setFromObject(gltf.scene);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  
+  // 1. Centraba en origen
+  gltf.scene.position.sub(center);
+  
+  // 2. Ajustaba cámara según dimensiones reales
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const cameraZ = maxDim / 2 / Math.tan(fov / 2) * 1.5;
+  camera.position.set(center.x + cameraZ, ...);
+})
+
+// Sistema Actual (PartMesh) - NO FUNCIONA:
+// ❌ NO calcula bbox dinámicamente del GLB
+// ❌ NO centra las geometrías
+// ❌ Asume que geometry_processing.py ya normalizó todo
+// ❌ Pero bbox NULL → geometrías sin procesar completamente
+```
+
+### 2. Causa Raíz Identificada:
+
+**Pipeline Roto en Geometry Processing:**
+```
+.3dm upload → validate_file_task.py → geometry_processing.py → Supabase Storage
+                                              ↓
+                                    ⚠️ NO guarda bbox en DB
+                                    ⚠️ GLB exportado en coordenadas Rhino raw
+```
+
+**Resultado:** 
+- GLBs existen y son válidos (200 OK en URLs)
+- PERO están en escala/posición Rhino original (potencialmente mm, cm, o m)
+- Canvas los coloca en grid 5m × 5m asumiendo geometrías normalizadas
+- Si piezas están a escala 1:1000 o centradas en [50000, 30000, 0] en vez de [0,0,0]:
+  - **Aparecen microscópicas o fuera de vista**
+
+### 3. Plan de Solución (3 opciones, orden por prioridad):
+
+#### OPCIÓN A (Recomendada - Fix Pipeline): 
+1. **Auditar geometry_processing.py:**
+   - Verificar que calcula bbox antes de exportar GLB
+   - Verificar que guarda bbox en `blocks.bbox` (JSONB)
+   - Verificar que centra/normaliza geometrías en GLB export
+
+2. **Reprocesar las 6 piezas existentes:**
+   ```bash
+   # Forzar re-procesamiento con pipeline fijo
+   for part_id in $(list_6_parts); do
+     trigger_reprocess $part_id
+   done
+   ```
+
+3. **Verificar resultado:**
+   - `bbox` debe tener `{"min": [...], "max": [...]}`
+   - GLBs deben estar centrados en [0,0,0] y escalados a dimensiones razonables (~2-5m)
+
+#### OPCIÓN B (Workaround Frontend - Rápido):
+1. **Implementar auto-bbox en ModelLoader.tsx:**
+   ```tsx
+   useEffect(() => {
+     if (!partData.bbox && scene) {
+       const box = new THREE.Box3().setFromObject(scene);
+       const center = box.getCenter(new THREE.Vector3());
+       const size = box.getSize(new THREE.Vector3());
+       
+       // Center at origin
+       group.position.sub(center);
+       
+       // Scale to target size (5m = 5000mm)
+       const maxDim = Math.max(size.x, size.y, size.z);
+       const scale = 5000 / maxDim;
+       group.scale.setScalar(scale);
+     }
+   }, [scene, partData]);
+   ```
+
+2. **Pro:** Fix inmediato sin tocar backend
+3. **Con:** No resuelve causa raíz, bbox sigue NULL en DB
+
+#### OPCIÓN C (Investigación Profunda):
+1. **Descargar un GLB y analizarlo:**
+   ```bash
+   curl -o test.glb "https://.../5201e50d...glb"
+   npx gltf-transform inspect test.glb
+   # Ver: bounds, primitive counts, materials
+   ```
+
+2. **Verificar logs de geometry_processing:**
+   ```bash
+   docker compose logs agent-worker | grep geometry_processing
+   # Buscar: bbox calculation, export confirmation
+   ```
+
+3. **Comparar con archivos .3dm originales:**
+   - Verificar coordenadas en Rhino (raw data)
+   - Confirmar sistema de unidades (mm vs m vs cm)
 - T-025-AGENT (UserStringExtractor): 8 passed
 - T-024-AGENT (RhinoParserService): 10 passed, 1 skipped
 
@@ -14190,5 +14328,29 @@ Inventario completo de la estructura del repo: identificar archivos huérfanos, 
 
 **Resumen de la Respuesta/Acción:**
 Auditoría de coherencia entre memory-bank (activeContext, techContext, systemPatterns, decisions, progress) y docs/ con la realidad del código tras completar Entrega 2 (US-001, US-002, US-005, US-010).
+
+---
+
+## 203 - Script Reprocesamiento para Digital Twin Architecture (BBox + Coordenadas Reales)
+**Fecha:** 2026-03-04 23:20
+
+**Prompt Original:**
+> quiero que crees el script
+
+**Contexto de la Sesión:**
+Tras implementar cambio arquitectónico en US-005 de coordenadas artificiales (grid layout centrado en origen) a coordenadas reales de Rhino (digital twin approach):
+- Backend modificado: Eliminado centrado en origen (merged_mesh.vertices -= centroid), agregada rotación Z→Y en _export_and_upload_glb
+- Frontend modificado: usePartsSpatialLayout ahora usa bbox center [(min+max)/2] en lugar de grid artificial
+- PartMesh.tsx: Removidos 4 rotation-x={-Math.PI/2} props (rotación ahora en backend)
+- Problema: 6 piezas en DB tienen low_poly_url válido pero bbox:null (procesadas con código viejo pre-bbox storage)
+
+**Resumen de la Respuesta/Acción:**
+Creación de `scripts/reprocess_parts_with_bbox.py` que:
+1. Conecta a PostgreSQL via SUPABASE_DATABASE_URL
+2. Verifica que las 6 piezas tienen original_file_url (prerequisito para reprocesar)
+3. Pone low_poly_url=NULL para forzar idempotency bypass
+4. Encola tareas Celery generate_low_poly_glb con nuevo pipeline (bbox storage absoluto, rotación Z→Y, coordenadas reales)
+
+IDs afectados: 5201e50d, c2fe5121, 9f510eb2, 61d7256d, a42eb99c, eca59e49
 
 ---

@@ -26,6 +26,7 @@ TASK_RETRY_DELAY_SECONDS = 60  # 1 minute between retries
 # Task Names (for type safety and refactoring)
 TASK_HEALTH_CHECK = "agent.tasks.health_check"
 TASK_VALIDATE_FILE = "agent.tasks.validate_file"
+TASK_REGISTER_3DM_BLOCKS = "agent.tasks.register_3dm_blocks"
 
 # Validation Patterns
 # ISO-19650 nomenclature:  [PREFIX]-[ZONE/CODE]-[TYPE]-[ID]
@@ -69,6 +70,15 @@ RAW_UPLOADS_BUCKET = "raw-uploads"
 
 # Temp File Paths
 TEMP_DIR = "/tmp"  # Docker container temp directory
+
+# ===== Draco Compression (via gltf-pipeline CLI — mirrors POC export_gltf_draco.py) =====
+DRACO_COMPRESSION_LEVEL = 7         # 0-10 scale (POC used 10; 7 = good quality/size balance)
+DRACO_QUANTIZE_POSITION_BITS = 14   # ~0.1mm precision at Sagrada Família scale (POC value)
+DRACO_QUANTIZE_NORMAL_BITS = 10
+DRACO_QUANTIZE_TEXCOORD_BITS = 12
+
+# Bbox Centering Validation
+BBOX_CENTROID_TOLERANCE_MM = 1.0    # Centroid must be within 1mm of origin after centering
 
 # Error Messages
 ERROR_MSG_NO_MESHES_FOUND = "No meshes found in {iso_code}"

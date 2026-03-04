@@ -148,8 +148,8 @@ describe('Canvas3D Component', () => {
       render(<Canvas3D />);
       
       const canvas = screen.getByTestId('canvas');
-      expect(canvas).toHaveAttribute('data-controls-min-distance', '10');
-      expect(canvas).toHaveAttribute('data-controls-max-distance', '500');
+      expect(canvas).toHaveAttribute('data-controls-min-distance', '0.001');  // 1 mm
+      expect(canvas).toHaveAttribute('data-controls-max-distance', '500');    // 500 m
     });
   });
 

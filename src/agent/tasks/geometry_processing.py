@@ -6,6 +6,9 @@ low-poly GLB representations suitable for web visualization.
 """
 
 import os
+import json
+import shutil
+import subprocess
 import psycopg2
 from contextlib import contextmanager
 import structlog
@@ -27,6 +30,10 @@ try:
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
         MAX_3DM_FILE_SIZE_MB,
+        DRACO_COMPRESSION_LEVEL,
+        DRACO_QUANTIZE_POSITION_BITS,
+        DRACO_QUANTIZE_NORMAL_BITS,
+        DRACO_QUANTIZE_TEXCOORD_BITS,
     )
 except ImportError:
     # Fallback for test environment
@@ -44,6 +51,10 @@ except ImportError:
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
         MAX_3DM_FILE_SIZE_MB,
+        DRACO_COMPRESSION_LEVEL,
+        DRACO_QUANTIZE_POSITION_BITS,
+        DRACO_QUANTIZE_NORMAL_BITS,
+        DRACO_QUANTIZE_TEXCOORD_BITS,
     )
 
 import rhino3dm
@@ -94,25 +105,25 @@ class S3Client:
 s3_client = S3Client()
 
 
-def _fetch_block_metadata(block_id: str) -> tuple[str, str]:
+def _fetch_block_metadata(block_id: str) -> tuple[str, str, str | None]:
     """Fetch block metadata from database.
 
     Args:
         block_id: UUID of the block to query
 
     Returns:
-        Tuple of (url_original, iso_code)
+        Tuple of (url_original, iso_code, low_poly_url)
 
     Raises:
         ValueError: If block not found in database
 
     Example:
-        url, iso_code = _fetch_block_metadata("123e4567-e89b-12d3-a456-426614174000")
+        url, iso_code, low_poly_url = _fetch_block_metadata("123e4567-e89b-12d3-a456-426614174000")
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT url_original, iso_code FROM blocks WHERE id = %s",
+            "SELECT url_original, iso_code, low_poly_url FROM blocks WHERE id = %s",
             (block_id,)
         )
         row = cursor.fetchone()
@@ -122,10 +133,11 @@ def _fetch_block_metadata(block_id: str) -> tuple[str, str]:
             logger.error("fetch_block_metadata.not_found", block_id=block_id)
             raise ValueError(error_msg)
 
-        url_original, iso_code = row
+        url_original, iso_code, low_poly_url = row
         logger.info("fetch_block_metadata.success",
-                   block_id=block_id, iso_code=iso_code)
-        return url_original, iso_code
+                   block_id=block_id, iso_code=iso_code,
+                   already_processed=low_poly_url is not None)
+        return url_original, iso_code, low_poly_url
 
 
 def _download_3dm_from_s3(url: str, local_path: str) -> None:
@@ -239,53 +251,152 @@ def _extract_and_merge_meshes(
     block_id: str,
     iso_code: str
 ) -> tuple[trimesh.Trimesh, int]:
-    """Extract meshes from Rhino file, handle quads, and merge into single mesh.
+    """Extract meshes from preprocessed Rhino file using InstanceObject API.
 
-    Processes all mesh objects in the Rhino file:
-    - Extracts vertices and faces
-    - Splits quad faces into 2 triangles each
-    - Merges all geometries into a single trimesh
+    Expects .3dm files with ONLY InstanceObject architecture (ADR-001):
+    - InstanceDefinitions contain Mesh geometry (after Rhino Desktop _Mesh preprocessing)
+    - InstanceReferences are the scene objects (skipped during extraction)
+    - rhino3dm exposes InstanceDefinition Meshes when iterating file3dm.Objects
+
+    Deduplication key: iso_code == Codi User String == InstanceDefinition.Name.
+    Files must be preprocessed: Brep geometry inside InstanceDefinitions must be
+    converted to Mesh via Rhino Desktop _Mesh command before uploading.
 
     Args:
         rhino_file: Parsed rhino3dm File3dm object
         block_id: UUID of the block (for logging)
-        iso_code: ISO code of the block (for error messages)
+        iso_code: ISO code of the block — must match InstanceDefinition.Name (Codi)
 
     Returns:
         Tuple of (merged_mesh, original_faces_count)
 
     Raises:
-        ValueError: If no valid meshes found in file
+        ValueError: If no valid meshes found (file not preprocessed or wrong file)
 
     Example:
-        mesh, face_count = _extract_and_merge_meshes(rhino_file, block_id, "SF-C12-D-001")
+        mesh, face_count = _extract_and_merge_meshes(rhino_file, block_id, "GLPER.B-PAE0720.0102")
     """
+    # Phase 1: InstanceDefinition structure validation (ADR-001 API usage)
+    idef_count = len(rhino_file.InstanceDefinitions)
+    matched_idef = None
+
+    for idef in rhino_file.InstanceDefinitions:
+        logger.debug("extract_meshes.idef",
+                     name=idef.Name, id=str(idef.Id),
+                     object_ids=len(idef.GetObjectIds()))
+        if idef.Name == iso_code:
+            matched_idef = idef
+
+    if matched_idef:
+        logger.info("extract_meshes.idef_matched",
+                    block_id=block_id, iso_code=iso_code,
+                    idef_id=str(matched_idef.Id))
+    else:
+        logger.warning("extract_meshes.idef_not_matched",
+                       block_id=block_id, iso_code=iso_code,
+                       available=[idef.Name for idef in rhino_file.InstanceDefinitions])
+
+    iref_count = sum(
+        1 for obj in rhino_file.Objects
+        if getattr(obj.Geometry, 'ObjectType', None) == rhino3dm.ObjectType.InstanceReference
+    )
+    logger.info("extract_meshes.file_structure",
+                block_id=block_id, iso_code=iso_code,
+                instance_definitions=idef_count,
+                instance_references=iref_count)
+
+    # Phase 2: Extract Mesh objects (POC pattern — export_gltf_draco.py:73–122)
+    # rhino3dm's object table exposes Meshes embedded inside InstanceDefinitions
+    # when iterating file3dm.Objects alongside the InstanceReferences.
+    #
+    # InstanceDefinition filter: each block maps 1-to-1 to one InstanceDefinition
+    # (iso_code == idef.Name). Only process objects whose ID is listed in that
+    # InstanceDefinition's object table so each GLB contains only its own geometry.
+    # Fallback: if no InstanceDefinition matched (unit tests, standalone geometry),
+    # skip the filter and process all objects.
+    if matched_idef:
+        idef_object_ids = set(str(oid).lower() for oid in matched_idef.GetObjectIds())
+        logger.info("extract_meshes.idef_filter_active",
+                    block_id=block_id, iso_code=iso_code,
+                    object_ids_count=len(idef_object_ids))
+    else:
+        idef_object_ids = None  # No filter — process all objects
+
     all_vertices = []
     all_faces = []
     vertex_offset = 0
     original_faces_count = 0
+    mesh_count = 0
+    brep_count = 0
+
+    # Collect mesh geometries to process:
+    # - Direct Mesh objects (preprocessed files)
+    # - Render meshes attached to Brep objects (raw files saved from Rhino)
+    meshes_to_process = []
 
     for obj in rhino_file.Objects:
-        # Check if object is a mesh (ObjectType == 1)
-        if hasattr(obj.Geometry, 'ObjectType') and obj.Geometry.ObjectType != 1:
+        # Skip objects that don't belong to the matched InstanceDefinition
+        if idef_object_ids is not None:
+            if str(obj.Attributes.Id).lower() not in idef_object_ids:
+                continue
+
+        geom = obj.Geometry
+        obj_type = getattr(geom, 'ObjectType', None)
+
+        # Skip InstanceReferences (scene placement objects, not geometry)
+        if obj_type == rhino3dm.ObjectType.InstanceReference:
             continue
 
-        mesh = obj.Geometry
+        # Primary: isinstance check for real rhino3dm objects (POC pattern)
+        # Fallback: ObjectType comparison for unit test MagicMocks (ObjectType=32)
+        is_mesh = isinstance(geom, rhino3dm.Mesh) or obj_type == rhino3dm.ObjectType.Mesh
+        if is_mesh:
+            meshes_to_process.append(geom)
+        elif obj_type == rhino3dm.ObjectType.Brep:
+            brep_count += 1
+            # BrepFace.GetMesh(Render) returns the render mesh attached to each
+            # face — pre-computed by Rhino when the file was saved.
+            # This avoids requiring _Mesh preprocessing before upload.
+            for brep_face in geom.Faces:
+                mesh = brep_face.GetMesh(rhino3dm.MeshType.Render)
+                if mesh is not None:
+                    meshes_to_process.append(mesh)
 
-        # Extract vertices
-        vertices = np.array([[v.X, v.Y, v.Z] for v in mesh.Vertices])
+    if brep_count > 0:
+        logger.info("extract_meshes.breps_with_render_mesh",
+                    block_id=block_id, iso_code=iso_code,
+                    brep_count=brep_count, meshes_from_breps=len(meshes_to_process))
 
-        # Extract faces and handle quads
-        for face in mesh.Faces:
-            if face.IsQuad:
-                # Split quad into 2 triangles: (A,B,C) + (A,C,D)
-                all_faces.append([face.A + vertex_offset, face.B + vertex_offset, face.C + vertex_offset])
-                all_faces.append([face.A + vertex_offset, face.C + vertex_offset, face.D + vertex_offset])
-                original_faces_count += 2
+    # Process all collected mesh geometries
+    for geom in meshes_to_process:
+        mesh_count += 1
+        vertices = np.array([[v.X, v.Y, v.Z] for v in geom.Vertices])
+        if len(vertices) == 0:
+            continue
+
+        # Extract faces: rhino3dm returns 4-tuples — (A,B,C,C) for triangles, (A,B,C,D) for quads
+        # Unit test mocks use objects with .IsQuad, .A, .B, .C, .D attributes
+        for face in geom.Faces:
+            if isinstance(face, tuple):
+                a, b, c, d = face
+                if c == d:
+                    # Triangle (degenerate quad with C repeated)
+                    all_faces.append([a + vertex_offset, b + vertex_offset, c + vertex_offset])
+                    original_faces_count += 1
+                else:
+                    # Quad: split into 2 triangles (A,B,C) + (A,C,D)
+                    all_faces.append([a + vertex_offset, b + vertex_offset, c + vertex_offset])
+                    all_faces.append([a + vertex_offset, c + vertex_offset, d + vertex_offset])
+                    original_faces_count += 2
             else:
-                # Triangle
-                all_faces.append([face.A + vertex_offset, face.B + vertex_offset, face.C + vertex_offset])
-                original_faces_count += 1
+                # Mock format with .IsQuad attribute (unit tests only)
+                if face.IsQuad:
+                    all_faces.append([face.A + vertex_offset, face.B + vertex_offset, face.C + vertex_offset])
+                    all_faces.append([face.A + vertex_offset, face.C + vertex_offset, face.D + vertex_offset])
+                    original_faces_count += 2
+                else:
+                    all_faces.append([face.A + vertex_offset, face.B + vertex_offset, face.C + vertex_offset])
+                    original_faces_count += 1
 
         all_vertices.append(vertices)
         vertex_offset += len(vertices)
@@ -298,17 +409,40 @@ def _extract_and_merge_meshes(
     # Merge into single trimesh
     combined_vertices = np.vstack(all_vertices)
     combined_faces = np.array(all_faces)
-
-    # Create mesh with processing enabled (validates + repairs geometry)
     merged_mesh = trimesh.Trimesh(vertices=combined_vertices, faces=combined_faces, process=True)
 
-    logger.info("extract_meshes.success",
-               block_id=block_id,
-               original_faces=original_faces_count,
-               actual_faces=len(merged_mesh.faces),
-               vertices=len(merged_mesh.vertices))
+    # Keep geometry in Rhino world-space coordinates (absolute building position).
+    # This creates a true digital twin where parts maintain their real spatial relationships.
+    # The frontend will render them at their actual building positions.
+    # Z-up → Y-up rotation is applied during GLB export (see _export_and_upload_glb).
+    centroid = merged_mesh.centroid.copy()
+    logger.info("extract_meshes.absolute_coords",
+                block_id=block_id, iso_code=iso_code,
+                centroid_mm=centroid.tolist(),
+                message="Geometry preserved in Rhino world coordinates")
 
-    return merged_mesh, original_faces_count
+    # Compute bounding box in absolute Rhino coordinates.
+    # Stored in the database so the frontend can:
+    # 1. Position parts at their real building location
+    # 2. Render BBoxProxy wireframe for LOD level 2
+    # 3. Calculate camera bounds for auto-fit
+    # trimesh.bounds returns [[x_min, y_min, z_min], [x_max, y_max, z_max]].
+    bbox = {
+        "min": merged_mesh.bounds[0].tolist(),
+        "max": merged_mesh.bounds[1].tolist(),
+    }
+    logger.info("extract_meshes.bbox_absolute",
+                block_id=block_id, iso_code=iso_code,
+                bbox_min=bbox["min"], bbox_max=bbox["max"])
+
+    logger.info("extract_meshes.success",
+                block_id=block_id,
+                meshes_found=mesh_count,
+                original_faces=original_faces_count,
+                actual_faces=len(merged_mesh.faces),
+                vertices=len(merged_mesh.vertices))
+
+    return merged_mesh, original_faces_count, bbox
 
 
 def _apply_decimation(
@@ -371,14 +505,63 @@ def _apply_decimation(
         return mesh, actual_faces
 
 
+def _apply_draco_compression(input_path: str, output_path: str) -> bool:
+    """Apply Draco compression to GLB via gltf-pipeline CLI (Node.js).
+
+    Mirrors POC: poc/formats-comparison/exporters/export_gltf_draco.py:166-207
+
+    Falls back to copying the uncompressed file if gltf-pipeline is not
+    available (dev environments without Node.js installed).
+
+    Args:
+        input_path: Path to uncompressed GLB file
+        output_path: Path for Draco-compressed output
+
+    Returns:
+        True if Draco applied, False if fallback copy used
+    """
+    cmd = [
+        "gltf-pipeline",
+        "-i", input_path,
+        "-o", output_path,
+        "-d",
+        "--draco.compressionLevel", str(DRACO_COMPRESSION_LEVEL),
+        "--draco.quantizePositionBits", str(DRACO_QUANTIZE_POSITION_BITS),
+        "--draco.quantizeNormalBits", str(DRACO_QUANTIZE_NORMAL_BITS),
+        "--draco.quantizeTexcoordBits", str(DRACO_QUANTIZE_TEXCOORD_BITS),
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, check=True, timeout=120)
+        compressed_kb = os.path.getsize(output_path) // 1024
+        original_kb = os.path.getsize(input_path) // 1024
+        logger.info("draco_compression.success",
+                    input_kb=original_kb,
+                    output_kb=compressed_kb,
+                    reduction_pct=round((1 - compressed_kb / max(original_kb, 1)) * 100, 1))
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+        logger.warning("draco_compression.fallback",
+                       error=str(e),
+                       message="Uploading uncompressed GLB")
+        shutil.copy2(input_path, output_path)
+        return False
+
+
 def _export_and_upload_glb(
     mesh: trimesh.Trimesh,
     block_id: str
 ) -> tuple[str, int]:
-    """Export mesh to GLB format and upload to S3 storage.
+    """Export mesh to GLB format, apply Draco compression, and upload to S3.
+
+    Pipeline:
+    1. Apply Z-up → Y-up rotation (Rhino → Three.js coordinate system)
+    2. Export uncompressed GLB to /tmp/{block_id}_raw.glb
+    3. Apply Draco compression → /tmp/{block_id}.glb (falls back if unavailable)
+    4. Upload compressed GLB to Supabase Storage
+    5. Clean up both temp files
 
     Args:
-        mesh: Trimesh mesh to export
+        mesh: Trimesh mesh to export (in Rhino Z-up coordinates)
         block_id: UUID of the block (used in S3 key)
 
     Returns:
@@ -387,11 +570,41 @@ def _export_and_upload_glb(
     Example:
         url, size = _export_and_upload_glb(mesh, "123e4567-e89b-12d3-a456-426614174000")
     """
-    # Export to GLB
-    temp_glb_path = os.path.join(TEMP_DIR, f"{block_id}.glb")
-    mesh.export(temp_glb_path, file_type='glb')
+    # Step 1: Apply Z-up → Y-up rotation for Three.js compatibility
+    # Rhino: Z-up (architectural standard)
+    # Three.js: Y-up (WebGL standard)
+    # Rotation: -90° around X-axis converts Z-up to Y-up
+    rotation_matrix = trimesh.transformations.rotation_matrix(
+        -np.pi / 2,  # -90 degrees
+        [1, 0, 0],   # Around X-axis
+        [0, 0, 0]    # At origin
+    )
+    mesh.apply_transform(rotation_matrix)
+    logger.info("export_glb.rotation_applied",
+                block_id=block_id,
+                message="Applied Z-up → Y-up rotation for Three.js")
 
-    # Get file size
+    # Step 2: Export raw (uncompressed) GLB
+    raw_glb_path = os.path.join(TEMP_DIR, f"{block_id}_raw.glb")
+    temp_glb_path = os.path.join(TEMP_DIR, f"{block_id}.glb")
+    mesh.export(raw_glb_path, file_type='glb')
+
+    raw_size_kb = os.path.getsize(raw_glb_path) // 1024
+    logger.info("export_glb.raw",
+               block_id=block_id,
+               file_size_kb=raw_size_kb,
+               path=raw_glb_path)
+
+    # Step 2: Apply Draco compression (mirrors POC export_gltf_draco.py:166-207)
+    _apply_draco_compression(raw_glb_path, temp_glb_path)
+
+    # Clean up raw file immediately after compression
+    try:
+        os.remove(raw_glb_path)
+    except Exception as e:
+        logger.warning("cleanup.raw_glb_failed", block_id=block_id, error=str(e))
+
+    # Get final compressed file size
     file_size_bytes = os.path.getsize(temp_glb_path)
     file_size_kb = file_size_bytes // 1024
 
@@ -400,7 +613,7 @@ def _export_and_upload_glb(
                file_size_kb=file_size_kb,
                path=temp_glb_path)
 
-    # Upload to S3
+    # Step 3: Upload to Supabase Storage
     supabase = get_supabase_client()
     glb_key = f"{LOW_POLY_PREFIX}{block_id}.glb"
 
@@ -410,7 +623,7 @@ def _export_and_upload_glb(
     supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).upload(
         glb_key,
         glb_data,
-        {'content-type': 'model/gltf-binary'}
+        {'content-type': 'model/gltf-binary', 'upsert': 'true'}
     )
 
     # Get public URL
@@ -421,7 +634,7 @@ def _export_and_upload_glb(
                url=low_poly_url,
                key=glb_key)
 
-    # Cleanup temp file
+    # Step 4: Cleanup compressed temp file
     try:
         os.remove(temp_glb_path)
     except Exception as e:
@@ -430,22 +643,24 @@ def _export_and_upload_glb(
     return low_poly_url, file_size_kb
 
 
-def _update_block_low_poly_url(block_id: str, url: str) -> None:
-    """Update database with low_poly_url for processed block.
+def _update_block_low_poly_url(block_id: str, url: str, bbox: dict) -> None:
+    """Update database with low_poly_url and bbox for processed block.
 
     Args:
         block_id: UUID of the block to update
         url: Public URL of the uploaded GLB file
+        bbox: Bounding box in centred coordinates: {"min": [x,y,z], "max": [x,y,z]}
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE blocks SET low_poly_url = %s WHERE id = %s",
-            (url, block_id)
+            "UPDATE blocks SET low_poly_url = %s, bbox = %s WHERE id = %s",
+            (url, json.dumps(bbox), block_id)
         )
         conn.commit()
 
-    logger.info("update_db.success", block_id=block_id, low_poly_url=url)
+    logger.info("update_db.success", block_id=block_id, low_poly_url=url,
+                bbox_min=bbox["min"], bbox_max=bbox["max"])
 
 
 @celery_app.task(
@@ -497,7 +712,21 @@ def generate_low_poly_glb(self, block_id: str):
 
     try:
         # Step 1: Fetch block metadata
-        url_original, iso_code = _fetch_block_metadata(block_id)
+        url_original, iso_code, existing_low_poly_url = _fetch_block_metadata(block_id)
+
+        # Step 1b: Idempotency — skip if Codi/iso_code already has a GLB
+        if existing_low_poly_url:
+            logger.info("generate_low_poly_glb.already_processed",
+                        block_id=block_id, iso_code=iso_code,
+                        low_poly_url=existing_low_poly_url)
+            return {
+                'status': 'skipped',
+                'low_poly_url': existing_low_poly_url,
+                'original_faces': 0,
+                'decimated_faces': 0,
+                'file_size_kb': 0,
+                'error_message': None
+            }
 
         # Step 2: Download .3dm file
         temp_3dm_path = os.path.join(TEMP_DIR, f"{block_id}.3dm")
@@ -506,8 +735,8 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 3: Parse .3dm file
         rhino_file = _parse_rhino_file(temp_3dm_path, iso_code)
 
-        # Step 4-5: Extract and merge meshes
-        merged_mesh, original_faces_count = _extract_and_merge_meshes(
+        # Step 4-5: Extract and merge meshes (returns bbox in centred coords)
+        merged_mesh, original_faces_count, bbox = _extract_and_merge_meshes(
             rhino_file, block_id, iso_code
         )
 
@@ -519,8 +748,8 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 7-8: Export and upload GLB
         low_poly_url, file_size_kb = _export_and_upload_glb(decimated_mesh, block_id)
 
-        # Step 9: Update database
-        _update_block_low_poly_url(block_id, low_poly_url)
+        # Step 9: Update database (low_poly_url + bbox in centred coordinates)
+        _update_block_low_poly_url(block_id, low_poly_url, bbox)
 
         # Step 10: Cleanup temp .3dm file
         if temp_3dm_path and os.path.exists(temp_3dm_path):

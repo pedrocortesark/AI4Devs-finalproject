@@ -92,10 +92,20 @@ export const usePartsStore = create<PartsState>((set, get) => ({
 
   fetchParts: async () => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const parts = await listParts(get().filters);
-      set({ parts, isLoading: false });
+      // Skip store update if data is structurally identical to avoid
+      // unnecessary re-renders in Canvas3D / PartsScene (re-render cascade).
+      const current = get().parts;
+      const unchanged =
+        current.length === parts.length &&
+        current.every((p, i) => p.id === parts[i].id && p.status === parts[i].status && p.low_poly_url === parts[i].low_poly_url);
+      if (unchanged) {
+        set({ isLoading: false });
+      } else {
+        set({ parts, isLoading: false });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch parts';
       set({ error: errorMessage, isLoading: false });

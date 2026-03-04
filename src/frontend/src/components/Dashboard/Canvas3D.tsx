@@ -8,7 +8,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid, GizmoHelper, GizmoViewcube, Stats } from '@react-three/drei';
+import { OrbitControls, Grid, GizmoHelper, GizmoViewcube, Stats, Bounds } from '@react-three/drei';
 import type { Canvas3DProps } from './Dashboard3D.types';
 import { 
   CAMERA_CONFIG, 
@@ -19,6 +19,7 @@ import {
 import { usePartsStore } from '@/stores/parts.store';
 import { DESELECTION_KEYS } from '@/constants/selection.constants';
 import { PartsScene } from './PartsScene';
+import { DebugHelpers } from './DebugHelpers';
 
 const Canvas3D: React.FC<Canvas3DProps> = ({ 
   showStats = false, 
@@ -90,6 +91,9 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         }}
         onPointerMissed={handleBackgroundClick}
       >
+        {/* Coordinate System Helper — Shows origin (0,0,0) with RGB axes */}
+        <axesHelper args={[100]} /> {/* 100m axes for scale reference */}
+
         {/* Ambient Light */}
         <ambientLight intensity={LIGHTING_CONFIG.AMBIENT_INTENSITY} />
 
@@ -114,8 +118,9 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           infiniteGrid
         />
 
-        {/* Orbit Controls */}
+        {/* Orbit Controls — makeDefault registers controls in R3F context so <Bounds> can find them */}
         <OrbitControls
+          makeDefault
           enableDamping={CONTROLS_CONFIG.ENABLE_DAMPING}
           dampingFactor={CONTROLS_CONFIG.DAMPING_FACTOR}
           minDistance={CONTROLS_CONFIG.MIN_DISTANCE}
@@ -128,8 +133,16 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           <GizmoViewcube />
         </GizmoHelper>
 
-        {/* Parts Scene */}
-        <PartsScene parts={filteredParts} />
+        {/* Parts Scene — Bounds auto-fits camera to all visible geometry on load.
+             clip is omitted: it sets near/far from scene bounds, which causes NaN
+             when parts are still loading (empty scene on first render).
+             margin=2.0: adds 200% padding around bounding box for comfortable view */}
+        <Bounds fit observe margin={2.0}>
+          <PartsScene parts={filteredParts} />
+        </Bounds>
+
+        {/* Debug Helpers — Outside Bounds to not interfere with camera fitting */}
+        <DebugHelpers parts={filteredParts} enabled={true} />
 
         {/* Stats Panel (dev only) */}
         {showStats && <Stats />}

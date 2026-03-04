@@ -96,5 +96,12 @@ vi.mock('@react-three/drei', () => {
     Grid: mockComponent,
     GizmoViewcube: mockComponent,
     Stats: mockComponent,
+    // useBounds hook — returns chainable API (refresh/fit used by BoundsRefitter)
+    useBounds: vi.fn(() => ({
+      refresh: vi.fn().mockReturnThis(),
+      fit: vi.fn().mockReturnThis(),
+    })),
+    // Bounds provider — pass-through wrapper for children
+    Bounds: mockComponentWithChildren,
   };
 });

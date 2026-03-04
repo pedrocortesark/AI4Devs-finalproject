@@ -15,10 +15,7 @@ from constants import (
     STORAGE_UPLOAD_PATH_PREFIX,
     EVENT_TYPE_UPLOAD_CONFIRMED,
     TABLE_EVENTS,
-    TABLE_BLOCKS,
-    TASK_VALIDATE_FILE,
-    BLOCK_TIPOLOGIA_PENDING,
-    BLOCK_ISO_CODE_PREFIX,
+    TASK_REGISTER_3DM_BLOCKS,
 )
 
 logger = structlog.get_logger()
@@ -150,37 +147,13 @@ class UploadService:
 
         return event_id
 
-    def create_block_record(self, file_id: str, file_key: str) -> str:
+    def enqueue_register_blocks(self, file_key: str) -> str:
         """
-        Create a block record with temporary pending values.
+        Send a Celery task to parse the .3dm file and register one block
+        per InstanceDefinition found inside it.
 
         Args:
-            file_id: UUID of the uploaded file
-            file_key: S3 object key where file was uploaded
-
-        Returns:
-            str: UUID of the created block
-
-        Raises:
-            Exception: If INSERT fails
-        """
-        iso_code = f"{BLOCK_ISO_CODE_PREFIX}-{file_id[:8]}"
-        block_data = {
-            "iso_code": iso_code,
-            "tipologia": BLOCK_TIPOLOGIA_PENDING,
-            "url_original": file_key,
-        }
-
-        result = self.supabase.table(TABLE_BLOCKS).insert(block_data).execute()
-        return result.data[0]["id"]
-
-    def enqueue_validation(self, block_id: str, file_key: str) -> str:
-        """
-        Send a Celery task to validate the uploaded file.
-
-        Args:
-            block_id: UUID of the block record
-            file_key: S3 object key where file was uploaded
+            file_key: S3 object key of the uploaded .3dm file
 
         Returns:
             str: Celery task ID
@@ -192,8 +165,8 @@ class UploadService:
             raise RuntimeError("Celery client not configured")
 
         result = self.celery.send_task(
-            TASK_VALIDATE_FILE,
-            args=[block_id, file_key]
+            TASK_REGISTER_3DM_BLOCKS,
+            args=[file_key]
         )
         return result.id
 
@@ -209,8 +182,11 @@ class UploadService:
         1. Verify file exists in storage
         2. Validate file content (magic bytes) to prevent malware injection
         3. Create event record in database
-        4. Create block record
-        5. Enqueue validation task
+        4. Enqueue register_3dm_blocks task (creates N blocks, one per InstanceDefinition)
+
+        Note: Block creation is now handled asynchronously by the agent worker,
+        which parses the .3dm file and creates one block per InstanceDefinition.
+        This replaces the old approach of creating a single PENDING block here.
 
         Args:
             file_id: UUID of the uploaded file
@@ -255,15 +231,9 @@ class UploadService:
         except Exception as e:
             return False, None, None, f"Database error: {str(e)}"
 
-        # Step 4: Create block record
+        # Step 4: Enqueue register_3dm_blocks (parses .3dm → N blocks, one per InstanceDefinition)
         try:
-            block_id = self.create_block_record(file_id, file_key)
-        except Exception as e:
-            return False, event_id, None, f"Block creation error: {str(e)}"
-
-        # Step 5: Enqueue validation task
-        try:
-            task_id = self.enqueue_validation(block_id, file_key)
+            task_id = self.enqueue_register_blocks(file_key)
         except Exception as e:
             return True, event_id, None, f"Enqueue error: {str(e)}"
 

@@ -15,7 +15,10 @@ import { TIPOLOGIA_OPTIONS, STATUS_OPTIONS } from '@/constants/parts.constants';
  */
 const SIDEBAR_CONTAINER_STYLES: React.CSSProperties = {
   padding: '20px',
-  backgroundColor: '#f9fafb',
+  backgroundColor: '#1e293b',
+  color: '#f1f5f9',
+  height: '100%',
+  boxSizing: 'border-box',
 };
 
 /**
@@ -32,16 +35,24 @@ const HEADER_CONTAINER_STYLES: React.CSSProperties = {
  * Heading styles
  */
 const HEADING_STYLES: React.CSSProperties = {
-  fontSize: '18px',
-  fontWeight: 'bold',
+  fontSize: '13px',
+  fontWeight: 600,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase' as const,
+  color: '#94a3b8',
 };
 
 /**
  * Clear button styles
  */
 const CLEAR_BUTTON_STYLES: React.CSSProperties = {
-  padding: '4px 12px',
-  fontSize: '14px',
+  padding: '3px 10px',
+  fontSize: '12px',
+  cursor: 'pointer',
+  backgroundColor: 'transparent',
+  color: '#64748b',
+  border: '1px solid #334155',
+  borderRadius: '4px',
 };
 
 /**
@@ -49,8 +60,9 @@ const CLEAR_BUTTON_STYLES: React.CSSProperties = {
  */
 const COUNTER_STYLES: React.CSSProperties = {
   marginBottom: '20px',
-  fontSize: '14px',
-  color: '#6b7280',
+  fontSize: '12px',
+  color: '#475569',
+  fontFamily: 'monospace',
 };
 
 /**
@@ -64,17 +76,21 @@ const SECTION_STYLES: React.CSSProperties = {
  * Section heading styles
  */
 const SECTION_HEADING_STYLES: React.CSSProperties = {
-  fontSize: '14px',
-  fontWeight: 'bold',
-  marginBottom: '12px',
+  fontSize: '11px',
+  fontWeight: 600,
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase' as const,
+  color: '#64748b',
+  marginBottom: '10px',
 };
 
 /**
  * Placeholder text styles
  */
 const PLACEHOLDER_STYLES: React.CSSProperties = {
-  fontSize: '14px',
-  color: '#9ca3af',
+  fontSize: '12px',
+  color: '#475569',
+  fontStyle: 'italic',
 };
 
 /**

@@ -44,9 +44,10 @@ def mock_rhino_simple_mesh():
     # Mock object container
     mock_obj = MagicMock()
     mock_obj.Geometry = mock_mesh
-    mock_obj.Geometry.ObjectType = 1  # Mesh type enum value
+    mock_obj.Geometry.ObjectType = 32  # ObjectType.Mesh (rhino3dm)
 
     mock_file.Objects = [mock_obj]
+    mock_file.InstanceDefinitions = []
     return mock_file
 
 
@@ -90,10 +91,11 @@ def mock_rhino_multiple_meshes():
 
         mock_obj = MagicMock()
         mock_obj.Geometry = mock_mesh
-        mock_obj.Geometry.ObjectType = 1  # Mesh type
+        mock_obj.Geometry.ObjectType = 32  # ObjectType.Mesh (rhino3dm)
         mock_objects.append(mock_obj)
 
     mock_file.Objects = mock_objects
+    mock_file.InstanceDefinitions = []
     return mock_file
 
 
@@ -148,9 +150,10 @@ def mock_rhino_with_quads():
 
     mock_obj = MagicMock()
     mock_obj.Geometry = mock_mesh
-    mock_obj.Geometry.ObjectType = 1
+    mock_obj.Geometry.ObjectType = 32  # ObjectType.Mesh (rhino3dm)
 
     mock_file.Objects = [mock_obj]
+    mock_file.InstanceDefinitions = []
     return mock_file
 
 
@@ -164,6 +167,7 @@ def mock_rhino_empty():
     mock_curve_obj.Geometry.ObjectType = 4  # Curve type (not mesh)
 
     mock_file.Objects = [mock_curve_obj]
+    mock_file.InstanceDefinitions = []
     return mock_file
 
 
@@ -189,9 +193,10 @@ def mock_rhino_huge_geometry():
 
     mock_obj = MagicMock()
     mock_obj.Geometry = mock_mesh
-    mock_obj.Geometry.ObjectType = 1
+    mock_obj.Geometry.ObjectType = 32  # ObjectType.Mesh (rhino3dm)
 
     mock_file.Objects = [mock_obj]
+    mock_file.InstanceDefinitions = []
     return mock_file
 
 
@@ -225,7 +230,8 @@ class TestGeometryDecimation:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/{block_id}.3dm",
-                "SF-C12-D-001"
+                "SF-C12-D-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
@@ -272,7 +278,8 @@ class TestGeometryDecimation:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/{block_id}.3dm",
-                "SF-TEST-M-001"
+                "SF-TEST-M-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
@@ -313,7 +320,8 @@ class TestGeometryDecimation:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/{block_id}.3dm",
-                "SF-QUAD-T-001"
+                "SF-QUAD-T-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
@@ -370,14 +378,16 @@ class TestGeometryDecimation:
 
         mock_obj = MagicMock()
         mock_obj.Geometry = mock_mesh
-        mock_obj.Geometry.ObjectType = 1
+        mock_obj.Geometry.ObjectType = 32  # ObjectType.Mesh (rhino3dm)
         mock_file.Objects = [mock_obj]
+        mock_file.InstanceDefinitions = []
 
         with patch('src.agent.tasks.geometry_processing.get_db_connection') as mock_db:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/{block_id}.3dm",
-                "SF-LOWP-L-001"
+                "SF-LOWP-L-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
@@ -417,7 +427,8 @@ class TestGeometryDecimation:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/{block_id}.3dm",
-                "SF-EMPTY-E-001"
+                "SF-EMPTY-E-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
@@ -452,7 +463,8 @@ class TestGeometryDecimation:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/{block_id}.3dm",
-                "SF-HUGE-H-001"
+                "SF-HUGE-H-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
@@ -495,7 +507,8 @@ class TestGeometryDecimation:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/deleted-{block_id}.3dm",
-                "SF-404-N-001"
+                "SF-404-N-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 
@@ -525,7 +538,8 @@ class TestGeometryDecimation:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 f"https://xyz.supabase.co/storage/v1/object/public/raw-uploads/{block_id}.3dm",
-                "SF-CORR-C-001"
+                "SF-CORR-C-001",
+                None
             )
             mock_db.return_value.__enter__.return_value.cursor.return_value = mock_cursor
 

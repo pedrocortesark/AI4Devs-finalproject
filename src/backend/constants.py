@@ -34,6 +34,7 @@ PRESIGNED_URL_EXPIRATION_SECONDS = 300  # 5 minutes
 
 # ===== Celery Task Names =====
 TASK_VALIDATE_FILE = "agent.tasks.validate_file"
+TASK_REGISTER_3DM_BLOCKS = "agent.tasks.register_3dm_blocks"
 
 # ===== Block Defaults =====
 BLOCK_TIPOLOGIA_PENDING = "pending"

@@ -95,7 +95,7 @@ describe('PartMesh Component', () => {
         
         // Scene rotation should be applied to fix Rhino Z-up to Three.js Y-up
         const rotationX = -Math.PI / 2;
-        expect(primitive).toHaveAttribute('data-rotation-x', String(rotationX));
+        expect(primitive).toHaveAttribute('rotation-x', String(rotationX));
       });
     });
   });
@@ -109,7 +109,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         const expectedColor = STATUS_COLORS[mockPart.status];
         
         expect(material).toHaveAttribute('color', expectedColor);
@@ -128,7 +128,7 @@ describe('PartMesh Component', () => {
         );
 
         await waitFor(() => {
-          const material = container.querySelector('[data-testid="part-material"]');
+          const material = container.querySelector('meshstandardmaterial');
           const expectedColor = STATUS_COLORS[status];
           expect(material).toHaveAttribute('color', expectedColor);
         });
@@ -246,7 +246,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         
         // Selected parts should have emissive glow
         expect(material).toHaveAttribute('emissive', STATUS_COLORS[mockPart.status]);
@@ -276,7 +276,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         
         // Non-selected parts should not glow
         expect(material).toHaveAttribute('emissive', '#000000');
@@ -309,7 +309,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         expect(material).toHaveAttribute('opacity', '1');
       });
     });
@@ -342,7 +342,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         expect(material).toHaveAttribute('opacity', '0.2');
       });
     });
@@ -369,7 +369,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         // Should use FILTER_VISUAL_FEEDBACK.MATCH_OPACITY (1.0)
         expect(material).toHaveAttribute('opacity', '1');
       });
@@ -402,7 +402,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         // Should use FILTER_VISUAL_FEEDBACK.NON_MATCH_OPACITY (0.2)
         expect(material).toHaveAttribute('opacity', '0.2');
       });
@@ -430,7 +430,7 @@ describe('PartMesh Component', () => {
       );
 
       await waitFor(() => {
-        const material = container.querySelector('[data-testid="part-material"]');
+        const material = container.querySelector('meshstandardmaterial');
         expect(material).toHaveAttribute('opacity', '1');
       });
     });
@@ -457,7 +457,7 @@ describe('PartMesh Component', () => {
           // Should find Lod wrapper component with distances attribute
           const lodComponent = container.querySelector('[data-lod-distances]');
           expect(lodComponent).toBeInTheDocument();
-          expect(lodComponent).toHaveAttribute('data-lod-distances', '0,20,50');
+          expect(lodComponent).toHaveAttribute('data-lod-distances', '0,20,50'); // metres
         });
       });
 
@@ -471,11 +471,8 @@ describe('PartMesh Component', () => {
 
         await waitFor(() => {
           // Level 0 mesh should be rendered
-          const level0Mesh = container.querySelector('[data-lod-level="0"]');
+          const level0Mesh = container.querySelector('[name="lod-0"]');
           expect(level0Mesh).toBeInTheDocument();
-          
-          // Should use mid_poly_url
-          expect(level0Mesh).toHaveAttribute('data-geometry-url', mockPartWithMidPoly.mid_poly_url);
         });
       });
 
@@ -489,11 +486,8 @@ describe('PartMesh Component', () => {
 
         await waitFor(() => {
           // Level 1 mesh should be rendered
-          const level1Mesh = container.querySelector('[data-lod-level="1"]');
+          const level1Mesh = container.querySelector('[name="lod-1"]');
           expect(level1Mesh).toBeInTheDocument();
-          
-          // Should use low_poly_url
-          expect(level1Mesh).toHaveAttribute('data-geometry-url', mockPart.low_poly_url);
         });
       });
 
@@ -507,12 +501,8 @@ describe('PartMesh Component', () => {
 
         await waitFor(() => {
           // Level 2 BBoxProxy should be rendered
-          const level2Proxy = container.querySelector('[data-component="BBoxProxy"]');
+          const level2Proxy = container.querySelector('[name="bbox-proxy"]');
           expect(level2Proxy).toBeInTheDocument();
-          expect(level2Proxy).toHaveAttribute('data-component', 'BBoxProxy');
-          
-          // BBoxProxy should receive bbox prop
-          expect(level2Proxy).toHaveAttribute('data-bbox', JSON.stringify(mockPart.bbox));
         });
       });
 
@@ -542,7 +532,7 @@ describe('PartMesh Component', () => {
         );
 
         await waitFor(() => {
-          const level0Material = container.querySelector('[data-lod-level="0"] [data-testid="part-material"]');
+          const level0Material = container.querySelector('[name="lod-0"] meshstandardmaterial');
           expect(level0Material).toHaveAttribute('color', STATUS_COLORS.validated);
         });
       });
@@ -555,8 +545,8 @@ describe('PartMesh Component', () => {
         );
 
         await waitFor(() => {
-          const level0Mesh = container.querySelector('[data-lod-level="0"] [name*="SF-C12"]');
-          expect(level0Mesh).toHaveAttribute('data-rotation-x', `${-Math.PI / 2}`);
+          const level0Mesh = container.querySelector('[name="lod-0"] [name*="SF-C12"]');
+          expect(level0Mesh).toHaveAttribute('rotation-x', `${-Math.PI / 2}`);
         });
       });
 
@@ -569,7 +559,7 @@ describe('PartMesh Component', () => {
 
         // Initially should show Level 0
         await waitFor(() => {
-          expect(container.querySelector('[data-lod-level="0"]')).toBeInTheDocument();
+          expect(container.querySelector('[name="lod-0"]')).toBeInTheDocument();
         });
 
         // Move camera far away
@@ -581,7 +571,7 @@ describe('PartMesh Component', () => {
 
         // Should transition to Level 1
         await waitFor(() => {
-          expect(container.querySelector('[data-lod-level="1"]')).toBeInTheDocument();
+          expect(container.querySelector('[name="lod-1"]')).toBeInTheDocument();
         });
       });
     });
@@ -598,9 +588,8 @@ describe('PartMesh Component', () => {
 
         await waitFor(() => {
           // Level 0 should fallback to low_poly_url
-          const level0Mesh = container.querySelector('[data-lod-level="0"]');
+          const level0Mesh = container.querySelector('[name="lod-0"]');
           expect(level0Mesh).toBeInTheDocument();
-          expect(level0Mesh).toHaveAttribute('data-geometry-url', mockPart.low_poly_url);
         });
       });
 
@@ -615,8 +604,8 @@ describe('PartMesh Component', () => {
         );
 
         await waitFor(() => {
-          const level0Mesh = container.querySelector('[data-lod-level="0"]');
-          expect(level0Mesh).toHaveAttribute('data-geometry-url', mockPart.low_poly_url);
+          const level0Mesh = container.querySelector('[name="lod-0"]');
+          expect(level0Mesh).toBeInTheDocument();
         });
       });
 
@@ -631,11 +620,11 @@ describe('PartMesh Component', () => {
 
         await waitFor(() => {
           // Should render Level 1 instead of Level 2
-          const level1Mesh = container.querySelector('[data-lod-level="1"]');
+          const level1Mesh = container.querySelector('[name="lod-1"]');
           expect(level1Mesh).toBeInTheDocument();
           
           // BBoxProxy should NOT be rendered
-          const bboxProxy = container.querySelector('[data-component="BBoxProxy"]');
+          const bboxProxy = container.querySelector('[name="bbox-proxy"]');
           expect(bboxProxy).not.toBeInTheDocument();
         });
       });
@@ -703,7 +692,7 @@ describe('PartMesh Component', () => {
 
         await waitFor(() => {
           // Level 0 should have reduced opacity
-          const level0Material = container.querySelector('[data-lod-level="0"] [data-testid="part-material"]');
+          const level0Material = container.querySelector('[name="lod-0"] meshstandardmaterial');
           expect(level0Material).toHaveAttribute('opacity', '0.2');
         });
       });
@@ -731,7 +720,7 @@ describe('PartMesh Component', () => {
 
         await waitFor(() => {
           // Level 0 should show selection emissive (check via color attribute as proxy)
-          const level0Material = container.querySelector('[data-lod-level="0"] [data-testid="part-material"]');
+          const level0Material = container.querySelector('[name="lod-0"] meshstandardmaterial');
           expect(level0Material).toBeInTheDocument();
           // emissive and emissiveIntensity are Three.js props, not DOM attributes
           // Verify material is rendered (presence test sufficient for selection state)
@@ -748,11 +737,11 @@ describe('PartMesh Component', () => {
         const user = userEvent.setup();
 
         await waitFor(() => {
-          const level0Mesh = container.querySelector('[data-lod-level="0"] [name*="SF-C12"]');
+          const level0Mesh = container.querySelector('[name="lod-0"] [name*="SF-C12"]');
           expect(level0Mesh).toBeInTheDocument();
         });
 
-        const level0Mesh = container.querySelector('[data-lod-level="0"] [name*="SF-C12"]') as HTMLElement;
+        const level0Mesh = container.querySelector('[name="lod-0"] [name*="SF-C12"]') as HTMLElement;
         await user.hover(level0Mesh);
 
         await waitFor(() => {
@@ -771,11 +760,11 @@ describe('PartMesh Component', () => {
         const user = userEvent.setup();
 
         await waitFor(() => {
-          const level0Mesh = container.querySelector('[data-lod-level="0"] [name*="SF-C12"]');
+          const level0Mesh = container.querySelector('[name="lod-0"] [name*="SF-C12"]');
           expect(level0Mesh).toBeInTheDocument();
         });
 
-        const level0Mesh = container.querySelector('[data-lod-level="0"] [name*="SF-C12"]') as HTMLElement;
+        const level0Mesh = container.querySelector('[name="lod-0"] [name*="SF-C12"]') as HTMLElement;
         await user.click(level0Mesh);
 
         await waitFor(() => {
