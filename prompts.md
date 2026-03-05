@@ -14364,3 +14364,38 @@ IDs afectados: 5201e50d, c2fe5121, 9f510eb2, 61d7256d, a42eb99c, eca59e49
 **Resumen de la Respuesta/Acción:**
 Crear función reutilizable fitCameraToObject() con matemáticas correctas Three.js + transiciones smooth + listener tecla F integrado con usePartsStore.
 ---
+
+## 204 - Epic US: Refactorización E2E del Flujo de Ingesta 3D
+**Fecha:** 2026-03-05 15:30
+
+**Prompt Original:**
+> # Prompt: Definición de Epic/US - Refactorización E2E del Flujo de Ingesta 3D
+>
+> **Role:** Actúa como **Principal Staff Engineer** y **Experto en TDD**.
+>
+> **Contexto y Problema:**
+> Actualmente tenemos el flujo de ingesta y visualización de piezas 3D (GLB) roto o con demasiada fricción. Estamos experimentando fallos recurrentes que van desde la subida, la gestión de rutas de los archivos GLB, los modelos de datos en la BD, hasta la visualización final en el canvas de Three.js del Frontend.
+> Tenemos una *Proof of Concept (PoC)* anterior que SÍ funcionaba. Necesitamos dar un paso atrás, comparar qué se rompió al escalar, y reconstruir el flujo completo paso a paso, aplicando TDD estricto para no volver a romperlo.
+>
+> **Alcance del Flujo E2E a revisar:**
+> 1. **Ingesta:** Subida y validación del archivo (.3dm / .glb). Cada archivo de Rhino tendrá una serie de InstanceObject elements con UserStrings que almacenaremos en la base de datos. Cada uno de estos elementos será una entrada de la DB.
+> 2. **Modelado de Datos (Backend/DB):** Estructura en base de datos (Supabase/PostgreSQL) y esquemas (Pydantic/Zod).
+> 3. **Gestión de Assets:** Nomenclatura, almacenamiento y resolución de rutas (paths) de los archivos GLB.
+> 4. **API:** Endpoints que sirven los datos y las URLs de los modelos.
+> 5. **Frontend (Visualización):** Carga segura en React Three Fiber (R3F) manejando estados de carga y errores (CORS, fallos de red). El dashboard es un canvas 3D a pantalla completa donde se renderizarán las piezas. La UI será un panel flotante que podrá adosarse a derecha o izquierda, donde tendremos filtros para poder visualizar elementos especificos en el canvas principal, así como la opcion de ampliar informacion de cada una de las piezas
+>
+> **Objetivo (Fase 1 - Planificación):**
+> Quiero que generes una **User Story Épica (Epic US)** que sirva como nuestra hoja de ruta para arreglar esto.
+>
+> **Instrucciones para la Epic US:**
+> 1. **Análisis PoC vs Actualidad:** Define un paso inicial para que analicemos juntos la PoC que funcionaba y detectemos las diferencias arquitectónicas con el código actual.
+> 2. **Desglose en Tareas (Baby Steps):** Divide el flujo E2E en al menos 5 sub-tickets (Backend Models, Storage Logic, API Contratos, Frontend Fetching, Frontend 3D Viewer).
+> 3. **Contratos Claros:** Define que antes de picar código, debemos establecer un contrato JSON estricto de cómo viaja la ruta del GLB desde la DB hasta el `<ModelLoader />`.
+> 4. **Regla TDD Inquebrantable:** Añade una nota estricta de que CADA sub-ticket se ejecutará bajo el ciclo RED-GREEN-REFACTOR. No se escribirá lógica de producción sin un test fallando primero.
+>
+> **Output Esperado:**
+> Genera el documento Markdown de esta "Epic User Story" detallada. Al final del documento, hazme una pregunta directa para comenzar con el "Paso 1: Análisis de la PoC y Contratos de Datos".
+
+**Resumen de la Respuesta/Acción:**
+Creación de Epic US para refactorización completa del flujo E2E de ingesta 3D (.3dm → GLB → Three.js) con enfoque TDD estricto. Incluye análisis PoC vs estado actual, desglose en 6 sub-tickets, definición de contratos JSON, y protocolo RED-GREEN-REFACTOR obligatorio.
+---
