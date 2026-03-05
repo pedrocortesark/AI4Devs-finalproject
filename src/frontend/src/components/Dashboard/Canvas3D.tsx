@@ -8,7 +8,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid, GizmoHelper, GizmoViewcube, Stats, Bounds } from '@react-three/drei';
+import { OrbitControls, Grid, GizmoHelper, GizmoViewcube, Stats } from '@react-three/drei';
 import type { Canvas3DProps } from './Dashboard3D.types';
 import { 
   CAMERA_CONFIG, 
@@ -133,15 +133,10 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           <GizmoViewcube />
         </GizmoHelper>
 
-        {/* Parts Scene — Bounds auto-fits camera to all visible geometry on load.
-             clip is omitted: it sets near/far from scene bounds, which causes NaN
-             when parts are still loading (empty scene on first render).
-             margin=2.0: adds 200% padding around bounding box for comfortable view */}
-        <Bounds fit observe margin={2.0}>
-          <PartsScene parts={filteredParts} />
-        </Bounds>
+        {/* Parts Scene (camera fitting is handled internally by ManualCameraFit) */}
+        <PartsScene parts={filteredParts} />
 
-        {/* Debug Helpers — Outside Bounds to not interfere with camera fitting */}
+        {/* Debug Helpers — TEMPORARILY ENABLED for diagnosis */}
         <DebugHelpers parts={filteredParts} enabled={true} />
 
         {/* Stats Panel (dev only) */}

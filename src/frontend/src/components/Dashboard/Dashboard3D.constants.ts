@@ -15,7 +15,7 @@ import type { DockPosition } from './Dashboard3D.types';
  * Camera configuration defaults — all distances in metres.
  */
 export const CAMERA_CONFIG = {
-  FOV: 50,
+  FOV: 55,
   // Start at 8 m above, 12 m back — parts visible at first frame without
   // relying on Bounds.fit() to fire before the first GLB loads.
   // Bounds.fit() will still reposition once geometry is in the scene.
@@ -119,5 +119,5 @@ export const CONTROLS_CONFIG = {
   DAMPING_FACTOR: 0.05,
   MIN_DISTANCE: 0.001,  // 1 mm minimum zoom
   MAX_DISTANCE: 1000,   // 1 km maximum zoom-out (parts at ~90m from origin)
-  MAX_POLAR_ANGLE: Math.PI / 2, // Don't allow rotation below ground
+  MAX_POLAR_ANGLE: Math.PI, // Allow full rotation including below ground
 } as const;

@@ -11,74 +11,88 @@
  */
 
 import { useMemo, useEffect, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { useGLTF, useBounds } from '@react-three/drei';
+import { useFrame, useThree } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
+import { Vector3 } from 'three';
 import { PartMesh } from './PartMesh';
 import { usePartsSpatialLayout } from '@/hooks/usePartsSpatialLayout';
 import type { PartsSceneProps } from './PartsScene.types';
 
 /**
- * Triggers camera refit once GLB geometry is actually present in the scene.
- *
- * Problem with a fixed setTimeout: GLBs load asynchronously from Supabase.
- * If we call bounds.refresh().fit() before the meshes appear in the Three.js
- * scene, the bounding box is empty and the camera doesn't move.
- *
- * Solution: poll every frame with useFrame, look inside the 'parts-scene'
- * group for any Mesh object. As soon as geometry appears (Suspense resolved +
- * Three.js object added), fit the camera and stop polling.
+ * Manual camera fitting - immediately positions camera based on parts bbox data.
+ * Does not wait for meshes to load.
  */
-function BoundsRefitter({ count }: { count: number }) {
-  const bounds = useBounds();
+function ManualCameraFit({ parts }: { parts: PartsSceneProps['parts'] }) {
+  const { camera, size } = useThree();
   const fittedRef = useRef(false);
 
-  // Reset fitted flag whenever the number of geometry parts changes
-  // (e.g., filters applied, new parts uploaded) so the camera re-fits.
   useEffect(() => {
-    if (count > 0) {
-      console.log(`🎥 BoundsRefitter: Resetting for ${count} parts`);
-      fittedRef.current = false;
+    if (parts.length === 0) return;
+    
+    console.log(`🎥 ManualCameraFit: ${parts.length} parts detected`);
+
+    // Calculate bounding box immediately from parts data
+    const partsWithBbox = parts.filter(p => p.bbox);
+    if (partsWithBbox.length === 0) {
+      console.warn('🎥 No parts with bbox found');
+      return;
     }
-  }, [count]);
 
-  // Fallback: after a short delay, force-fit even if useFrame polling missed
-  // the Suspense resolution window. This handles the case where Bounds.fit
-  // fires before any GLB is in the THREE.js scene (empty bounds → no-op),
-  // and the useFrame loop never catches it because hasMesh stays false.
-  useEffect(() => {
-    if (count === 0) return;
-    const timer = setTimeout(() => {
-      if (!fittedRef.current) {
-        console.log('🎥 BoundsRefitter: Fallback timeout - forcing fit');
-        bounds.refresh().fit();
-        fittedRef.current = true;
-      }
-    }, 1000); // 1s timeout for faster response
-    return () => clearTimeout(timer);
-  }, [count, bounds]);
+    const globalMin = new Vector3(Infinity, Infinity, Infinity);
+    const globalMax = new Vector3(-Infinity, -Infinity, -Infinity);
 
-  useFrame((state) => {
-    if (count === 0 || fittedRef.current) return;
-
-    // Find the parts-scene group in the Three.js scene graph
-    let partsGroup: any = null;
-    state.scene.traverse((obj: any) => {
-      if (obj.name === 'parts-scene') partsGroup = obj;
+    partsWithBbox.forEach(part => {
+      if (!part.bbox) return;
+      globalMin.x = Math.min(globalMin.x, part.bbox.min[0]);
+      globalMin.y = Math.min(globalMin.y, part.bbox.min[1]);
+      globalMin.z = Math.min(globalMin.z, part.bbox.min[2]);
+      globalMax.x = Math.max(globalMax.x, part.bbox.max[0]);
+      globalMax.y = Math.max(globalMax.y, part.bbox.max[1]);
+      globalMax.z = Math.max(globalMax.z, part.bbox.max[2]);
     });
-    if (!partsGroup) return;
 
-    // Check whether any Mesh has been added (GLBs resolved from Suspense)
-    let hasMesh = false;
-    partsGroup.traverse((obj: any) => {
-      if (obj.isMesh) hasMesh = true;
+    const center = new Vector3(
+      (globalMin.x + globalMax.x) / 2,
+      (globalMin.y + globalMax.y) / 2,
+      (globalMin.z + globalMax.z) / 2
+    );
+
+    const bboxSize = new Vector3(
+      globalMax.x - globalMin.x,
+      globalMax.y - globalMin.y,
+      globalMax.z - globalMin.z
+    );
+    const radius = bboxSize.length() / 2;
+
+    // Calculate distance with aspect ratio consideration
+    const perspCam = camera as any;
+    const vFOV = perspCam.fov;
+    const hFOV = vFOV * perspCam.aspect;
+    const effectiveFOV = Math.min(vFOV, hFOV);
+    const fovRadians = (effectiveFOV * Math.PI) / 180;
+    const distance = radius / Math.sin(fovRadians / 2);
+
+    // Position camera immediately
+    const offset = new Vector3(1, 1, 1).normalize().multiplyScalar(distance);
+    camera.position.copy(center.clone().add(offset));
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+
+    console.log('🎥 Camera positioned IMMEDIATELY', {
+      partsCount: partsWithBbox.length,
+      center: center.toArray().map(v => v.toFixed(2)),
+      bboxSize: bboxSize.toArray().map(v => v.toFixed(3)),
+      radius: radius.toFixed(3),
+      vFOV: vFOV.toFixed(1),
+      hFOV: hFOV.toFixed(1),
+      effectiveFOV: effectiveFOV.toFixed(1),
+      aspect: perspCam.aspect.toFixed(2),
+      distance: distance.toFixed(3),
+      cameraPos: camera.position.toArray().map(v => v.toFixed(2)),
     });
-    if (!hasMesh) return;
 
-    // Geometry is present — fit camera and stop polling
-    console.log('🎥 BoundsRefitter: Meshes detected, fitting camera');
-    bounds.refresh().fit();
     fittedRef.current = true;
-  });
+  }, [parts, camera, size]);
 
   return null;
 }
@@ -121,7 +135,7 @@ export function PartsScene({ parts }: PartsSceneProps) {
 
   return (
     <group name="parts-scene">
-      <BoundsRefitter count={partsWithGeometry.length} />
+      <ManualCameraFit parts={partsWithGeometry} />
       {partsWithGeometry.map((part, index) => (
         <PartMesh
           key={part.id}
