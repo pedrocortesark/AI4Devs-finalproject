@@ -106,17 +106,29 @@ export function usePartNavigation(
 ) {
   const [adjacentParts, setAdjacentParts] = useState<AdjacentPartsInfo | null>(null);
   const [navigationLoading, setNavigationLoading] = useState<boolean>(false);
+  const [navigationError, setNavigationError] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isOpen || !partId || !enableNavigation) return;
 
     const fetchNavigation = async () => {
       setNavigationLoading(true);
+      setNavigationError(false);
       try {
         const navData = await getPartNavigation(partId, filters);
-        setAdjacentParts(navData);
+        // getPartNavigation now returns safe fallback on error (see navigation.service.ts)
+        // Check if we got valid navigation data or fallback
+        if (navData && (navData.prev_id !== null || navData.next_id !== null || navData.total_count > 1)) {
+          setAdjacentParts(navData);
+        } else {
+          // No adjacent parts available (single part or error fallback)
+          setAdjacentParts(null);
+        }
       } catch (err) {
-        // Silent fail for navigation (non-critical feature)
+        // Extremely unlikely since getPartNavigation returns fallback instead of throwing
+        // But keeping defensive handling for unexpected errors
+        console.error('[usePartNavigation] Unexpected error:', err);
+        setNavigationError(true);
         setAdjacentParts(null);
       } finally {
         setNavigationLoading(false);
@@ -126,7 +138,7 @@ export function usePartNavigation(
     fetchNavigation();
   }, [isOpen, partId, enableNavigation, filters]);
 
-  return { adjacentParts, navigationLoading };
+  return { adjacentParts, navigationLoading, navigationError };
 }
 
 /**

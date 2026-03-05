@@ -65,24 +65,33 @@ export async function getPartNavigation(
         // T-1003-BACK uses X-Workshop-Id for RLS (optional, multi-workshop mode)
         'X-Workshop-Id': getCurrentWorkshopId() || '',
       },
+      // Add timeout to prevent hanging requests
+      signal: AbortSignal.timeout(8000), // 8s timeout
     });
     
     if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error('Part not found');
-      }
-      if (response.status === 403) {
-        throw new Error('Access denied');
-      }
-      throw new Error(`Navigation API error: ${response.status}`);
+      // Return safe fallback for non-critical navigation feature
+      // This prevents 3D viewer crash if navigation fails
+      console.warn(`[Navigation API] ${response.status} for part ${partId}`);
+      return {
+        prev_id: null,
+        next_id: null,
+        current_index: 1,
+        total_count: 1,
+      };
     }
     
     return await response.json();
   } catch (error) {
-    if (error instanceof Error) {
-      throw error; // Re-throw with original message
-    }
-    throw new Error('Failed to fetch navigation data');
+    // CORS, network, or timeout errors: return safe fallback
+    // Navigation is non-critical - don't crash the 3D viewer
+    console.warn('[Navigation API] Error:', error instanceof Error ? error.message : 'Unknown error');
+    return {
+      prev_id: null,
+      next_id: null,
+      current_index: 1,
+      total_count: 1,
+    };
   }
 }
 

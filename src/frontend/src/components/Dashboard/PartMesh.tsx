@@ -117,9 +117,18 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   // Load GLB geometries
   // When enableLod=false: only load low_poly (backward compatibility)
   // When enableLod=true: load both mid_poly (or fallback to low_poly) and low_poly
-  const lowPolyUrl = part.low_poly_url!;
-  const midPolyUrl = enableLod ? (part.mid_poly_url ?? lowPolyUrl) : lowPolyUrl;
+  // 
+  // BUG FIX: Remove trailing '?' from URLs (database has invalid query strings)
+  // URLs like "https://...glb?" cause useGLTF cache issues
+  const sanitizeUrl = (url: string) => url.replace(/\?$/, '');
+  
+  const lowPolyUrl = sanitizeUrl(part.low_poly_url!);
+  const midPolyUrl = enableLod 
+    ? (part.mid_poly_url ? sanitizeUrl(part.mid_poly_url) : lowPolyUrl)
+    : lowPolyUrl;
 
+  // useGLTF suspends during loading (handled by parent <Suspense> boundary)
+  // IMPORTANT: These hooks always return valid scenes or suspend - no need for null checks
   const { scene: lowPolyScene } = useGLTF(lowPolyUrl);
   const { scene: midPolyScene } = useGLTF(midPolyUrl);
 

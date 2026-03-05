@@ -46,11 +46,24 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
   const { camera, scene } = useThree();
   const controls = useThree((state) => state.controls) as OrbitControls | null;
   const { animateTo } = useCameraAnimationWithControls(controls);
-  const fittedRef = useRef(false);
+  
+  // Track if we've successfully fitted to prevent redundant animations
+  const lastFittedCountRef = useRef(0);
 
-  // Fit All - runs once when parts first load
+  // Fit All - runs when parts change (but not on every render)
   useEffect(() => {
-    if (parts.length === 0 || fittedRef.current || !controls) return;
+    if (parts.length === 0 || !controls) {
+      console.log('🎥 CameraController: Waiting for parts/controls...', { 
+        partsCount: parts.length, 
+        hasControls: !!controls 
+      });
+      return;
+    }
+
+    // Skip if we already fitted to the same number of parts (avoid redundant fits)
+    if (parts.length === lastFittedCountRef.current) {
+      return;
+    }
 
     console.log(`🎥 CameraController: Fitting camera to ${parts.length} parts`);
 
@@ -115,7 +128,7 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
       ease: CAMERA_FIT_CONFIG.ANIMATION_EASING,
     });
 
-    fittedRef.current = true;
+    lastFittedCountRef.current = parts.length;
   }, [parts, camera, controls, animateTo]);
 
   // Focus Selected - 'F' key handler

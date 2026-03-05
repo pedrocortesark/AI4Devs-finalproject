@@ -6,9 +6,9 @@
  * Wraps @react-three/fiber Canvas with standardized camera, lights, and controls
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid, GizmoHelper, GizmoViewcube, Stats } from '@react-three/drei';
+import { OrbitControls, Grid, GizmoHelper, GizmoViewcube, Stats, Html } from '@react-three/drei';
 import type { Canvas3DProps } from './Dashboard3D.types';
 import { 
   CAMERA_CONFIG, 
@@ -135,7 +135,9 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         </GizmoHelper>
 
         {/* Parts Scene with professional camera controls */}
-        <PartsScene parts={filteredParts} selectedId={selectedId} />
+        <Suspense fallback={<Html center><div style={{ color: 'white' }}>Loading 3D models...</div></Html>}>
+          <PartsScene parts={filteredParts} selectedId={selectedId} />
+        </Suspense>
 
         {/* Debug Helpers — TEMPORARILY ENABLED for diagnosis */}
         <DebugHelpers parts={filteredParts} enabled={true} />

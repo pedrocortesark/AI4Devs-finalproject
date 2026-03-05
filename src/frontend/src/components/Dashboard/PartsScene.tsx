@@ -42,14 +42,17 @@ export function PartsScene({ parts, selectedId = null }: PartsSceneProps) {
 
   // Preload all geometry URLs to prevent pop-in during LOD transitions (T-0507)
   useEffect(() => {
+    // BUG FIX: Sanitize URLs to remove trailing '?' (database bug)
+    const sanitizeUrl = (url: string) => url.replace(/\?$/, '');
+    
     partsWithGeometry.forEach((part) => {
       // Preload mid-poly if available
       if (part.mid_poly_url) {
-        useGLTF.preload(part.mid_poly_url);
+        useGLTF.preload(sanitizeUrl(part.mid_poly_url));
       }
       // Always preload low-poly
       if (part.low_poly_url) {
-        useGLTF.preload(part.low_poly_url);
+        useGLTF.preload(sanitizeUrl(part.low_poly_url));
       }
     });
   }, [partsWithGeometry]);

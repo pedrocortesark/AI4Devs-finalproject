@@ -13,6 +13,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useGLTF, Html } from '@react-three/drei';
+import * as THREE from 'three';
 import { Group, Box3, Vector3 } from 'three';
 import { BBoxProxy } from './Dashboard/BBoxProxy';
 import { getPartDetail } from '@/services/upload.service';
@@ -159,12 +160,49 @@ export const ModelLoader: React.FC<ModelLoaderProps> = ({
  * Renders 3D model from GLB file using Three.js useGLTF hook from @react-three/drei.
  * The model is loaded asynchronously and cached by useGLTF.
  * 
+ * CRITICAL: Error Boundary Protection
+ * - useGLTF suspends during loading (handled by parent Suspense boundary)
+ * - Throws error BEFORE render if scene is invalid (prevents R3F crash)
+ * - NEVER allows undefined to reach <primitive object={...}>
+ * - Sanitizes URLs to remove trailing '?' (database bug causing cache issues)
+ * 
  * @param url - CDN presigned URL to GLB file (S3 + CloudFront)
  * @returns Three.js primitive object rendered in the scene
+ * @throws Error if URL is invalid or scene fails to load
  */
 const GLBModel: React.FC<{ url: string }> = ({ url }) => {
-  const { scene } = useGLTF(url);
+  // Validate URL before attempting load (throw early)
+  if (!url || typeof url !== 'string' || url.trim() === '') {
+    const msg = `[GLBModel] Invalid URL: ${url}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
   
+  // BUG FIX: Remove trailing '?' from URLs (database has invalid query strings)
+  // URLs like "https://...glb?" cause useGLTF cache issues
+  const sanitizedUrl = url.replace(/\?$/, '');
+  
+  // Load model - useGLTF suspends until loaded
+  // IMPORTANT: useGLTF is a hook, cannot be inside try/catch or conditionals
+  const gltf = useGLTF(sanitizedUrl);
+  
+  // CRITICAL: Validate scene exists BEFORE attempting to render
+  // R3F will crash with "Cannot read 'testid'" if we pass undefined to <primitive>
+  const scene = gltf?.scene;
+  if (!scene) {
+    const msg = `[GLBModel] Scene missing for URL: ${sanitizedUrl}`;
+    console.error(msg, { gltf });
+    throw new Error(msg);
+  }
+  
+  // Final safety check: ensure scene is a valid Three.js Object3D
+  if (!scene.isObject3D) {
+    const msg = `[GLBModel] Scene is not a valid Three.js Object3D: ${sanitizedUrl}`;
+    console.error(msg, { scene });
+    throw new Error(msg);
+  }
+  
+  // Safe to render - scene is guaranteed to be a valid THREE.Object3D
   return <primitive object={scene} />;
 };
 
