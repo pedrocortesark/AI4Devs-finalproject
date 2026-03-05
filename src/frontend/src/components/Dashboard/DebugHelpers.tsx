@@ -85,33 +85,6 @@ export function DebugHelpers({ parts, enabled = false }: DebugHelpersProps) {
 
   return (
     <group name="debug-helpers">
-      {/* Origin marker - Sphere at (0, 0, 0) */}
-      <mesh position={[0, 0, 0]} name="origin-marker">
-        <sphereGeometry args={[1, 16, 16]} />
-        <meshStandardMaterial 
-          color="#ff0000" 
-          emissive="#ff0000" 
-          emissiveIntensity={0.5}
-          opacity={0.8}
-          transparent
-        />
-      </mesh>
-
-      {/* Centroid marker - Shows center of all parts */}
-      <mesh 
-        position={bounds.center as [number, number, number]} 
-        name="centroid-marker"
-      >
-        <sphereGeometry args={[2, 16, 16]} />
-        <meshStandardMaterial 
-          color="#00ff00" 
-          emissive="#00ff00" 
-          emissiveIntensity={0.5}
-          opacity={0.8}
-          transparent
-        />
-      </mesh>
-
       {/* Line from origin to centroid */}
       <line>
         <bufferGeometry>

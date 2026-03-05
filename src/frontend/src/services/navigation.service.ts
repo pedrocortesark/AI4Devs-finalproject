@@ -13,7 +13,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
  * Fetch adjacent parts for prev/next navigation
  * 
  * @remarks
- * Integrates with T-1003-BACK GET /api/parts/{id}/navigation endpoint
+ * Integrates with T-1003-BACK GET /api/parts/{id}/adjacent endpoint
  * - Supports filter query params (status, tipologia, workshop_id)
  * - Returns prev_id/next_id (null if first/last), current_index, total_count
  * - Backend uses Redis caching (300s TTL, <50ms cache hit)
@@ -55,7 +55,7 @@ export async function getPartNavigation(
   }
   
   const queryString = params.toString();
-  const url = `${API_BASE_URL}/api/parts/${partId}/navigation${queryString ? `?${queryString}` : ''}`;
+  const url = `${API_BASE_URL}/api/parts/${partId}/adjacent${queryString ? `?${queryString}` : ''}`;
   
   try {
     const response = await fetch(url, {

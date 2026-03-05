@@ -26,6 +26,7 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
   cameraConfig 
 }) => {
   const clearSelection = usePartsStore((state: any) => state.clearSelection);
+  const selectedId = usePartsStore((state: any) => state.selectedId);
   const parts = usePartsStore((state: any) => state.parts); // reactive: re-renders when parts load
   const getFilteredParts = usePartsStore((state: any) => state.getFilteredParts);
   const filteredParts = useMemo(() => getFilteredParts(), [parts, getFilteredParts]);
@@ -133,8 +134,8 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           <GizmoViewcube />
         </GizmoHelper>
 
-        {/* Parts Scene (camera fitting is handled internally by ManualCameraFit) */}
-        <PartsScene parts={filteredParts} />
+        {/* Parts Scene with professional camera controls */}
+        <PartsScene parts={filteredParts} selectedId={selectedId} />
 
         {/* Debug Helpers — TEMPORARILY ENABLED for diagnosis */}
         <DebugHelpers parts={filteredParts} enabled={true} />

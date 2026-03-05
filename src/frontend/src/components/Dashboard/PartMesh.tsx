@@ -133,9 +133,9 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   // GLB geometry is already centred at origin by geometry_processing.py
   // (_extract_and_merge_meshes subtracts the mesh centroid before export).
   // No per-part JavaScript offset calculation is needed.
-  const lowPolyClone = useMemo(() => lowPolyScene.clone(), [lowPolyScene]);
-  const midPolyClone = useMemo(() => midPolyScene.clone(), [midPolyScene]);
-  const lod2Clone    = useMemo(() => lowPolyScene.clone(), [lowPolyScene]);
+  const lowPolyClone = useMemo(() => lowPolyScene.clone(true), [lowPolyScene]);
+  const midPolyClone = useMemo(() => midPolyScene.clone(true), [midPolyScene]);
+  const lod2Clone    = useMemo(() => lowPolyScene.clone(true), [lowPolyScene]);
 
   // Preload LOD assets on mount for smoother transitions
   useEffect(() => {
@@ -171,33 +171,40 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
     matchesFilters
   );
 
-  // Create material props (shared across all LOD levels)
-  // NOTE: data-testid intentionally excluded — Three.js objects don't support HTML attributes
-  const materialProps = {
-    color,
-    emissive,
-    emissiveIntensity,
-    opacity: opacity,
-    transparent: true,
-  };
+  // Apply material properties to cloned objects
+  // Traverse clones and update existing materials (GLTF objects already have materials)
+  useEffect(() => {
+    [lowPolyClone, midPolyClone, lod2Clone].forEach(clone => {
+      clone.traverse((child: any) => {
+        if (child.isMesh && child.material) {
+          child.material.color.set(color);
+          child.material.emissive.set(emissive);
+          child.material.emissiveIntensity = emissiveIntensity;
+          child.material.opacity = opacity;
+          child.material.transparent = true;
+          child.material.needsUpdate = true;
+        }
+      });
+    });
+  }, [color, emissive, emissiveIntensity, opacity, lowPolyClone, midPolyClone, lod2Clone]);
 
   // Backward compatibility: Single-level rendering when enableLod=false
   if (!enableLod) {
     return (
       // GLB is positioned at part's real building coordinates (from bbox center).
       // Z→Y rotation already applied during backend GLB export.
-      <group name={`part-${part.iso_code}`} position={position}>
+      // userData stores partId for camera focus functionality ('F' key)
+      <group 
+        name={`part-${part.iso_code}`} 
+        position={position}
+        userData={{ partId: part.id }}
+      >
         <primitive
           object={lowPolyClone}
           onClick={handleClick}
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
-        >
-          <meshStandardMaterial
-            attach="material"
-            {...materialProps}
-          />
-        </primitive>
+        />
 
         {/* Tooltip on hover or selection */}
         {(hovered || isSelected) && (
@@ -218,7 +225,12 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   return (
     // GLB is positioned at part's real building coordinates (from bbox center).
     // Z→Y rotation already applied during backend GLB export.
-    <group name={`part-${part.iso_code}`} position={position}>
+    // userData stores partId for camera focus functionality ('F' key)
+    <group 
+      name={`part-${part.iso_code}`} 
+      position={position}
+      userData={{ partId: part.id }}
+    >
       {/* Tooltip on hover or selection (shared across all LOD levels) */}
       {(hovered || isSelected) && (
         <Html>
@@ -239,12 +251,7 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
             onClick={handleClick}
             onPointerOver={() => setHovered(true)}
             onPointerOut={() => setHovered(false)}
-          >
-            <meshStandardMaterial
-              attach="material"
-              {...materialProps}
-            />
-          </primitive>
+          />
         </group>
 
         {/* Level 1: Low-poly geometry (20-50 km) */}
@@ -255,12 +262,7 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
             onClick={handleClick}
             onPointerOver={() => setHovered(true)}
             onPointerOut={() => setHovered(false)}
-          >
-            <meshStandardMaterial
-              attach="material"
-              {...materialProps}
-            />
-          </primitive>
+          />
         </group>
 
         {/* Level 2: BBox proxy (>50 km) or low-poly fallback */}
@@ -282,12 +284,7 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
             // shared across LOD levels (a THREE.Object3D can only have one parent).
             <primitive
               object={lod2Clone}
-            >
-              <meshStandardMaterial
-                attach="material"
-                {...materialProps}
-              />
-            </primitive>
+            />
           )}
         </group>
       </Detailed>

@@ -121,3 +121,17 @@ export const CONTROLS_CONFIG = {
   MAX_DISTANCE: 1000,   // 1 km maximum zoom-out (parts at ~90m from origin)
   MAX_POLAR_ANGLE: Math.PI, // Allow full rotation including below ground
 } as const;
+
+/**
+ * Camera Fitting Configuration (CAD-style controls)
+ */
+export const CAMERA_FIT_CONFIG = {
+  /** Offset multiplier for bounding sphere (1.2 = 20% margin around objects) */
+  FIT_OFFSET: 1.2,
+  /** Default animation duration for camera transitions (seconds) */
+  ANIMATION_DURATION: 0.8,
+  /** GSAP easing function for smooth, professional movement */
+  ANIMATION_EASING: 'power2.inOut',
+  /** Key code for "Focus Selected" action */
+  FOCUS_KEY: 'f',
+} as const;

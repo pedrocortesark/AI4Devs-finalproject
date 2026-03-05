@@ -14354,3 +14354,13 @@ Creación de `scripts/reprocess_parts_with_bbox.py` que:
 IDs afectados: 5201e50d, c2fe5121, 9f510eb2, 61d7256d, a42eb99c, eca59e49
 
 ---
+
+## [201] - Mecánicas de Cámara "Fit All" y "Focus Selected" en Three.js
+**Fecha:** 2026-03-05 12:00
+
+**Prompt Original:**
+> Implementar controles profesionales de cámara Three.js estilo CAD (Rhino/Blender) con: 1) Zoom Extends automático al cargar escena usando Box3, 2) Focus Selected con tecla F, 3) Cálculo trigonométrico correcto basado en FOV/aspect/boundingSphere, 4) Actualización de OrbitControls.target, 5) Transiciones suaves (GSAP o lerp). Los objetos pueden estar en coordenadas negativas extremas.
+
+**Resumen de la Respuesta/Acción:**
+Crear función reutilizable fitCameraToObject() con matemáticas correctas Three.js + transiciones smooth + listener tecla F integrado con usePartsStore.
+---

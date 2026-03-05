@@ -17,6 +17,9 @@ import { PartCanvasItem, BoundingBox } from '@/types/parts';
 export interface PartsSceneProps {
   /** Array of parts to render in 3D scene */
   parts: PartCanvasItem[];
+  
+  /** Currently selected part ID (for 'F' key focus functionality) */
+  selectedId?: string | null;
 }
 
 /**
