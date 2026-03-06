@@ -14466,3 +14466,30 @@ US-013 enriquecido con RBAC completo, matriz de permisos clara, código de refer
 
 **Resultado:** Technical specification production-ready para T-1501-DB. Establece foundation del Epic US-015 (Part→Element refactoring). Incluye rollback plan, constraint validation, test baseline maintenance (108/108 target). Next action: TDD-RED phase (create files, run tests, expect 26 FAIL).
 ---
+
+## [208] - T-1501-DB TDD Fase Roja (RED)
+**Fecha:** 2026-03-06 16:30
+**Prompt Original:**
+> ## Prompt: TDD FASE ROJA - Ticket T-1501-DB
+> **Role:** Actúa como QA Automation Engineer y Software Architect.
+> [Protocolo AGENTS: leer activeContext, systemPatterns, backlog, productContext]
+> [Crear tipos/interfaces, escribir tests que fallan (RED), confirmar ImportError o AssertionError]
+
+**Resumen de la Respuesta/Acción:**
+1. **Lectura de Documentación:** Verificado activeContext (US-015 Phase 0 complete + 6 blocks), systemPatterns (DB Schema Source of Truth), backlog (T-1501-DB: 3 SP migration)
+2. **Creación de Migraciones SQL:** 
+   - UP migration: `supabase/migrations/20260306000001_element_model.sql` (165 líneas, 5 pasos: ADD material_type CHECK, UPDATE 6 blocks, ALTER NOT NULL, DROP workshops, CREATE INDEX)
+   - DOWN migration: `supabase/migrations/20260306000001_element_model_down.sql` (82 líneas, rollback con DATA LOSS warning)
+3. **Creación de Tests de Integración:** `tests/integration/test_t1501_migration.py` (296 líneas, 26 test cases)
+   - Suite 1: Migration Execution (9 tests) — column exists, data updated, constraints active
+   - Suite 2: Constraint Enforcement (7 tests) — CHECK, NOT NULL validation
+   - Suite 3: Data Integrity (5 tests) — 6 blocks preserved
+   - Suite 4: Rollback (2 tests @pytest.mark.skip) — manual only
+   - Suite 5: Baseline Validation (3 tests @pytest.mark.slow) — 108/108 target
+4. **Ejecución de Tests (RED Phase):** 16 FAILED, 7 PASSED, 2 SKIPPED, 7 ERRORS (cleanup expected)
+   - Key failures: "material_type column not found", "workshop_id still exists", "low_poly_url NOT NULL got: YES"
+5. **Confirmación RED State:** Tests fallan por las razones correctas (migración NO ejecutada)
+6. **Archivos Creados:** 3 archivos nuevos (migration UP/DOWN + test file), 542 líneas totales
+
+**Resultado:** TDD RED phase completada exitosamente. 16 tests fallan correctamente porque la migración NO se ha aplicado. Next action: TDD-GREEN phase (apply migration, tests PASS).
+---
