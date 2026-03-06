@@ -14421,3 +14421,29 @@ Usuario solicita ejecutar tests después de cada ticket de US-015 para prevenir 
 **Resultado:**
 Infraestructura de quality gates lista para monitorizar regresiones durante 6 tickets de US-015.
 ---
+
+## 206 - Enriquecimiento de US-013 con Sistema RBAC (4 Roles)
+**Fecha:** 2026-03-06 15:00
+
+**Prompt Original:**
+> Un tema importante a añadir en el backlog es la autenticacion y autorizacion. Creo que este tema se toca en un US posterior, pero quiero hablar de ello porque es importante que haya al menos basicos perfiles... uno de admin con super poderes, otro de arquitecto para hacer la ingesta y modificaciones a mano en la base de datos, otro de visualizador, para solo acceder a la info, y otro de fabricante para cambiar solo cuestiones relativas a la fabricacion
+
+**Contexto:**
+Usuario solicita expandir US-013 (Login/Auth) para incluir sistema completo de Role-Based Access Control (RBAC) con 4 roles claramente diferenciados: Admin, Arquitecto, Visualizador, Fabricante.
+
+**Resumen de la Respuesta/Acción:**
+1. **Expandí US-013** de 3 SP → 17 SP (4 tickets → 7 tickets)
+2. **Definí 4 roles con permisos específicos:**
+   - Admin: Super usuario (CRUD usuarios, modificación BD directa, config sistema)
+   - Arquitecto: Ingesta + validación (upload .3dm, modificar metadatos, aprobar validaciones)
+   - Visualizador: Solo lectura (ver dashboard, descargar reportes, NO editar)
+   - Fabricante: Gestión producción (cambiar estados fabricación, adjuntar evidencias)
+3. **Añadí 6 criterios de aceptación:** Login exitoso, login fallido, acceso sin auth, acción sin permisos, UI basada en rol, admin user management
+4. **Creé matriz de permisos TypeScript:** 14 permisos específicos (elements:create, files:upload, status:to_completed, users:manage, etc.)
+5. **Añadí código de referencia:** Backend decorators FastAPI @require_role(['admin']), Frontend component RequireAuth allowedRoles
+6. **Nuevos tickets técnicos:** T-060 a T-067 (8 tickets, 17 SP total)
+7. **Riesgos identificados:** JWT expiration, role escalation attack, UI bypass, testing complexity con mitigaciones
+
+**Resultado:**
+US-013 enriquecido con RBAC completo, matriz de permisos clara, código de referencia production-ready, y arquitectura de seguridad robusta para soportar segregación de responsabilidades.
+---

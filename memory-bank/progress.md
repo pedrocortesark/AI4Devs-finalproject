@@ -175,6 +175,7 @@
 - Race Condition Fix — DONE 2026-03-06 (2 blocks reprocessed after temp file collision, final status 6/6 validated)
 - Database Integrity Verification — DONE 2026-03-06 (infra/check_bbox_detailed.py executed, 6 blocks with unique BBox values, 0.7m×1.4m spatial cluster confirmed)
 - Test Baseline Established — DONE 2026-03-06 (Backend: 108/108 tests PASS (100%), Frontend: 333/407 tests PASS (81.8%), docs/US-015/BASELINE-TESTS.md created with regression tracking plan)
+- **US-013 RBAC System Designed** — DONE 2026-03-06 (4 roles defined: Admin, Arquitecto, Visualizador, Fabricante, 14 permissions matrix, 8 tickets (17 SP), code reference with FastAPI decorators + React guards, security notes documented)
 
 **Next: T-1501-DB** — Element model database migration (ADD material_type, DROP workshops, ADD constraint, UPDATE 6 existing blocks)
 

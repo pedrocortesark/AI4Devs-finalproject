@@ -9,9 +9,11 @@ Sprint 6 — Tech Debt & Documentation (2026-02-27 COMPLETADO) | Próximo: Next 
 ### Context
 Epic User Story para refactorizar el flujo de ingesta 3D completo (.3dm → GLB → Three.js) usando el PoC funcional como referencia. Enfoque TDD estricto (RED-GREEN-REFACTOR) en 6 baby-step tickets (21 SP total).
 
-**⚠️ IMPORTANT:** Database cleaned (1,356 obsolete test elements deleted). System ready for fresh ingestion with 6 real Rhino pieces before T-1501-DB migration.
+**⚠️ IMPORTANT:** Database cleaned (1,356 obsolete test elements deleted). System ready with 6 real Sagrada Família pieces ingested (GLPER.B-PAE0720.0701-0706) before T-1501-DB migration.
 
-### Current Status: Phase 0 Complete ✅ + Database Cleaned ✅
+**🔐 CROSS-CUTTING CONCERN:** US-013 (Authentication & RBAC) expanded with 4-role system (Admin, Arquitecto, Visualizador, Fabricante). This is a transversal requirement that affects all features. While not blocking T-1501-DB, RBAC implementation should be prioritized early in sprint to enable role-based testing. See updated backlog for 17 SP across 8 tickets (T-060 to T-067).
+
+### Current Status: Phase 0 Complete ✅ + Fresh Ingestion ✅ + RBAC System Designed ✅
 - ✅ **POC-ANALYSIS.md** (10,800 words) — Comparative analysis PoC vs Current implementation
   - PoC Architecture: 1 .3dm → 1 merged GLB → Static files → Simple useGLTF
   - Current Architecture: 1 .3dm → N Celery tasks → N GLBs → Supabase Storage → Complex state
@@ -472,8 +474,40 @@ After user uploads 6 pieces and verifies they render in canvas:
 - T-0507-FRONT: LOD system complexity — first time implementing distance-based geometry swapping
 - Binary .3dm fixtures: May require Rhino/Grasshopper for generation
 
+## Cross-Cutting Concerns
+
+### US-013: Authentication & Role-Based Access Control (RBAC) [Updated 2026-03-06]
+**Status:** Backlog enriched with 4-role system, 17 SP across 8 tickets  
+**Priority:** High (transversal requirement affecting all features)
+
+**4 Roles Defined:**
+- 🔴 **Admin** (super user): User management, database direct edit, system config, delete elements, full audit access
+- 🔵 **Arquitecto** (BIM Manager): Upload .3dm, modify metadata manually, approve/reject validations, change element status, UPDATE database records
+- 🟢 **Visualizador** (read-only consultant): View dashboard 3D, filter/search, download reports, NO editing capabilities
+- 🟡 **Fabricante** (workshop manager): Change status to in_fabrication/completed, upload evidence photos, report fabrication issues, NO geometry/validation edits
+
+**Implementation Plan:**
+- **T-060-FRONT:** AuthProvider Context + Role State (2 SP)
+- **T-061-FRONT:** Protected Route + Role Guards (3 SP)
+- **T-062-BACK:** Auth Middleware + get_current_user (2 SP)
+- **T-063-BACK:** Role-Based Authorization Decorators (3 SP)
+- **T-064-DB:** Users & Roles Schema (2 SP)
+- **T-065-INFRA:** Supabase Auth + JWT Claims Config (2 SP)
+- **T-066-FRONT:** Admin User Management UI (3 SP)
+- **T-067-FRONT:** Role-Based UI Component Library (2 SP)
+
+**Permissions Matrix:** 14 permissions defined (elements:create, files:upload, status:to_completed, users:manage, database:direct_edit, etc.)
+
+**Security Notes:**
+- NEVER trust JWT role claim from frontend, always validate in backend with signature verification
+- UI guards are UX (not security), all endpoints MUST validate roles with `@require_role()` decorator
+- JWT expiration: implement refresh token with Supabase, show alert 5 min before expiry
+
+**Recommendation:** Implement T-060, T-061, T-062 early in sprint to enable role-based testing for US-015 tickets (e.g., only Arquitecto can upload .3dm, only Admin can delete elements).
+
 ## Quick Links
 - Full backlog: [docs/09-mvp-backlog.md](../docs/09-mvp-backlog.md)
 - US-005 specs: [docs/US-005/](../docs/US-005/)
+- US-013 RBAC: [docs/09-mvp-backlog.md#us-013-authentication--role-based-access-control-rbac](../docs/09-mvp-backlog.md#us-013-authentication--role-based-access-control-rbac)
 - T-0500 Tech Spec: [T-0500-INFRA-TechnicalSpec.md](../docs/US-005/T-0500-INFRA-TechnicalSpec.md)
 - Decisions log: [decisions.md](decisions.md)

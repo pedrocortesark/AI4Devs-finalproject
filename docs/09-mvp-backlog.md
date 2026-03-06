@@ -545,6 +545,186 @@ export function PartsScene({ parts }: { parts: PartCanvasItem[] }) {
 
 ---
 
+### US-015: Element Model Refactoring (Epic) **[IN PROGRESS]** 🔄
+**User Story:** Como **Staff Engineer**, quiero refactorizar el modelo de datos de "Part" a "Element" con nomenclatura en inglés y campos obligatorios, para cumplir con estándares internacionales y garantizar que solo elementos con geometría completa sean visualizables en el canvas 3D.
+
+**Epic Context:** Esta es una **refactorización E2E crítica** que abarca toda la stack (Database → Agent → Backend → Frontend). Surge de la necesidad de:
+1. **Internacionalización:** Traducir enums españoles (`Tipologia`, `Piedra`, `Ceramica`) a inglés (`MaterialType`, `Stone`, `Ceramic`)
+2. **Consistencia de Datos:** Hacer `low_poly_url` y `bbox` campos **requeridos** (filtrar elementos sin geometría procesada)
+3. **Simplificación del Modelo:** Eliminar tabla `workshops` (no usada en MVP, añade complejidad)
+4. **Contratos Estrictos:** Formalizar API contracts con Pydantic (backend) y Zod (frontend) para type-safety end-to-end
+
+**Criterios de Aceptación:**
+*   **Scenario 1 (Backend Contract Compliance):**
+    *   Given el endpoint `GET /api/elements` (renombrado de `/api/parts`).
+    *   When se consultan elementos procesados.
+    *   Then la respuesta incluye `MaterialType` enum con valores `"Stone"` o `"Ceramic"` (no `"Piedra"` ni strings libres).
+    *   And todos los elementos devueltos tienen `low_poly_url` (nunca null) y `bbox` válido.
+    *   And el campo `workshop_id` no existe en la respuesta (eliminado del modelo).
+*   **Scenario 2 (Frontend Type Safety):**
+    *   Given el frontend consume `ElementsListResponse`.
+    *   When TypeScript compila el código.
+    *   Then no existen errores de tipo (Zod valida exactamente el contrato Pydantic).
+    *   And interfaces usan `Element` (no `PartCanvasItem`) con `material_type` (no `tipologia`).
+*   **Scenario 3 (Agent Processing):**
+    *   Given un archivo .3dm con UserString `"Material": "Stone"`.
+    *   When el agente procesa la geometría.
+    *   Then extrae `material_type = "Stone"` del UserString y lo guarda en la DB.
+    *   And valida que el valor esté en enum `["Stone", "Ceramic"]` antes de guardar.
+    *   And rechaza valores inválidos con error descriptivo.
+
+**Desglose de Tickets Técnicos:**
+| ID Ticket | Título | Story Points | Tech Spec | DoD | Status |
+|-----------|--------|--------------|-----------|-----|--------|
+| `T-1501-DB` | **Database Schema & Migration** | 3 | Migration SQL: `ALTER TABLE blocks ADD COLUMN material_type TEXT CHECK (material_type IN ('Stone', 'Ceramic'))`, `DROP COLUMN workshop_id`, `DROP COLUMN workshop_name`, `ALTER COLUMN low_poly_url SET NOT NULL`, `ALTER COLUMN bbox SET NOT NULL`. Update 6 existing blocks with `material_type = 'Stone'` (default architectural). Indexes: Add `idx_blocks_material_type`. | Migration executed, 6 blocks updated, constraints active, test baseline maintained (108/108 backend tests) | 🔜 **NEXT** |
+| `T-1502-INFRA` | **Storage Path Conventions** | 3 | Implement `generate_glb_storage_path(block_id: UUID, timestamp: datetime) -> str` function. Naming convention: `models/low-poly/{uuid}_{ISO8601}.glb`. Write TDD tests: path idempotency, format validation, collision prevention. Update documentation with examples. | Function tested, used in T-1503, documentation complete, 0 regressions | 🔜 READY |
+| `T-1503-AGENT` | **Rhino Parser + GLB Generator** | 5 | Update `geometry_processing.py`: Extract `material_type` from Rhino UserString key `"Material"` (default `"Stone"`). Validate against MaterialType enum before saving. Fix race condition: unique temp filenames `/tmp/sf-pm-agent/{block_id}-{filename}`. Write TDD tests: UserString extraction, enum validation, temp file collision prevention. | Material type extracted from UserString, validated against enum, race condition fixed, 3-5 backend tests updated (UserString mocks) | 🔜 READY |
+| `T-1504-BACK` | **API Integration with Element Contract** | 4 | Rename schemas: `PartCanvasItem` → `Element`, `PartDetail` → `ElementDetail`. Add `MaterialType` enum to `schemas.py`. Update endpoints: `GET /api/parts` → `/api/elements` (or keep both with deprecation). Change required fields: `low_poly_url: HttpUrl` (not Optional), `bbox: BoundingBox` (not Optional). Filter query: `WHERE low_poly_url IS NOT NULL AND bbox IS NOT NULL`. Write TDD tests: Element contract validation, MaterialType enum enforcement. Update OpenAPI docs. | Element contract implemented, endpoints return only processed elements, 30-40 backend tests updated (imports, fixtures), backend baseline maintained | 🔜 BLOCKED (T-1501) |
+| `T-1505-FRONT` | **Zod Validation with Element Schemas** | 3 | Create `src/schemas/elements.schema.ts` with `ElementSchema`, `MaterialTypeSchema`. Rename types: `PartCanvasItem` → `Element` in `src/types/elements.ts`. Refactor components: Update `Dashboard3D`, `ModelLoader`, `PartDetailModal` to use Element interfaces. Remove `workshop_id`/`workshop_name` references from UI. Fix `ModelLoader.test.tsx`: Update Three.js mocks to return valid `Object3D`. Fix canvas positioning: Use `bbox.center` to position 3D models (not hardcoded origin). Write TDD tests: Zod validation, enum enforcement. | Element schemas integrated, 60-80 frontend tests updated, ModelLoader mocks fixed (3 exceptions resolved), canvas positioning working, frontend target 365+/407 (90%+) | 🔜 BLOCKED (T-1504) |
+| `T-1507-TEST` | **E2E Integration Test** | 3 | Write Cypress test: Upload .3dm → Wait for processing → Verify canvas render. Assertions: `material_type` is `"Stone"` or `"Ceramic"` (not null, not free string), `low_poly_url` is absolute HTTPS (not relative), `bbox` exists with `{min: [x,y,z], max: [x,y,z]}` structure, `iso_code` matches UserString `"Codi"`, no `workshop_id` in response. Run FULL test suite: Backend + Frontend baseline. | E2E test passing, Backend 108/108 ✅, Frontend 365+/407 (90%+) ✅, production-ready for deployment | 🔜 BLOCKED (T-1505) |
+
+**Contratos API (Backend ↔ Frontend):**
+```python
+# src/backend/schemas.py
+from pydantic import BaseModel, HttpUrl
+from typing import List, Literal
+from enum import Enum
+
+class MaterialType(str, Enum):
+    STONE = "Stone"
+    CERAMIC = "Ceramic"
+
+class ElementStatus(str, Enum):
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    VALIDATED = "validated"
+    REJECTED = "rejected"
+    ERROR_PROCESSING = "error_processing"
+    IN_FABRICATION = "in_fabrication"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+class BoundingBox(BaseModel):
+    min: List[float]  # [x, y, z]
+    max: List[float]  # [x, y, z]
+
+class Element(BaseModel):
+    """Schema optimizado para renderizado 3D (solo elementos con geometría completa)"""
+    id: str
+    iso_code: str
+    status: ElementStatus
+    material_type: MaterialType        # ✅ Enum required (not free string, not nullable)
+    low_poly_url: HttpUrl              # ✅ REQUIRED absolute HTTPS (not nullable)
+    bbox: BoundingBox                  # ✅ REQUIRED for spatial positioning (not nullable)
+    
+class ElementsListResponse(BaseModel):
+    elements: List[Element]            # ✅ Renamed from 'parts'
+    meta: dict  # { total: int, filtered: int }
+```
+
+```typescript
+// src/frontend/src/types/elements.ts
+export enum MaterialType {
+  Stone = "Stone",
+  Ceramic = "Ceramic",
+}
+
+export enum ElementStatus {
+  Uploaded = "uploaded",
+  Processing = "processing",
+  Validated = "validated",
+  Rejected = "rejected",
+  ErrorProcessing = "error_processing",
+  InFabrication = "in_fabrication",
+  Completed = "completed",
+  Archived = "archived",
+}
+
+export interface BoundingBox {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+export interface Element {
+  id: string;
+  iso_code: string;
+  status: ElementStatus;
+  material_type: MaterialType;   // ✅ Enum (not free string)
+  low_poly_url: string;           // ✅ Absolute HTTPS URL (never null)
+  bbox: BoundingBox;              // ✅ Always present (never null)
+}
+
+export interface ElementsListResponse {
+  elements: Element[];            // ✅ Renamed from 'parts'
+  meta: {
+    total: number;
+    filtered: number;
+  };
+}
+```
+
+**Código de Referencia (Migration SQL):**
+```sql
+-- supabase/migrations/20260306000001_element_model.sql
+BEGIN;
+
+-- Add material_type column with constraint
+ALTER TABLE blocks 
+  ADD COLUMN material_type TEXT 
+  CHECK (material_type IN ('Stone', 'Ceramic'));
+
+-- Update existing blocks with default value
+UPDATE blocks 
+  SET material_type = 'Stone' 
+  WHERE material_type IS NULL;
+
+-- Make geometry fields required (filter incomplete elements)
+ALTER TABLE blocks 
+  ALTER COLUMN low_poly_url SET NOT NULL,
+  ALTER COLUMN bbox SET NOT NULL;
+
+-- Remove workshop references (not used in MVP)
+ALTER TABLE blocks 
+  DROP COLUMN IF EXISTS workshop_id,
+  DROP COLUMN IF EXISTS workshop_name;
+
+-- Add index for material filtering
+CREATE INDEX IF NOT EXISTS idx_blocks_material_type 
+  ON blocks(material_type);
+
+COMMIT;
+```
+
+**Valoración:** 21 Story Points (T-1501: 3 SP + T-1502: 3 SP + T-1503: 5 SP + T-1504: 4 SP + T-1505: 3 SP + T-1507: 3 SP)  
+**Dependencias:** 
+- **Técnica:** US-001 (geometría .3dm ingested), US-005 (Dashboard 3D con canvas), US-010 (Modal detail con 3D viewer)
+- **Infraestructura:** Supabase database with 6 real elements ingested (GLPER.B-PAE0720.0701-0706)
+- **Testing:** Test baseline established (Backend 108/108, Frontend 333/407)
+
+**Riesgos & Mitigaciones:**
+1. **Breaking Changes en Database:** Mitigación: Migration con rollback plan, staging environment test, backup antes de producción.
+2. **Regresiones en 500+ Tests:** Mitigación: Test baseline documentado, quality gates por ticket, fix regressions before DONE.
+3. **Desalineación Pydantic-Zod:** Mitigación: Contract tests automatizados, JSON examples validados en ambos lados.
+4. **Race Condition en Agent:** Mitigación: Unique temp filenames con `block_id`, comprehensive logs para debugging.
+
+**Current Status (Phase 0 Complete - 2026-03-06):**
+- ✅ **JSON Contracts Translation:** [JSON-CONTRACTS.md](US-015/JSON-CONTRACTS.md) fully translated to English (42 replacements: Tipologia→MaterialType, Piedra→Stone, Ceramica→Ceramic)
+- ✅ **Database Cleanup:** [infra/clean_database_full.py](../infra/clean_database_full.py) created, 1,356 obsolete test blocks deleted, clean slate achieved
+- ✅ **Fresh Ingestion:** 6 Sagrada Família pieces uploaded (GLPER.B-PAE0720.0701-0706), all validated with GLB+BBox
+- ✅ **Database Integrity:** [infra/check_bbox_detailed.py](../infra/check_bbox_detailed.py) executed, 6 blocks with unique BBox values, 0.7m×1.4m spatial cluster confirmed
+- ✅ **Test Baseline:** [BASELINE-TESTS.md](US-015/BASELINE-TESTS.md) created — Backend 108/108 (100%), Frontend 333/407 (81.8%), expected regressions per ticket documented
+- ✅ **Quality Gates:** Test execution commitment added to activeContext.md (tests mandatory after each ticket)
+
+**Next Steps:**
+1. 🔜 **T-1501-DB:** Execute Element model migration (ADD material_type, DROP workshops, ADD constraints, UPDATE 6 blocks)
+2. Run test baseline: `make test-unit` should remain 108/108 ✅
+3. Document results in T-1501-DB-HANDOFF.md
+4. Proceed with T-1502-INFRA after T-1501 completion
+
+> 📋 **Planning Note:** This Epic follows TDD methodology strictly. Each ticket will execute RED→GREEN→REFACTOR cycle with test baseline validation before marking as DONE. See [US-015 README](US-015/README.md) for complete technical specification and PoC analysis.
+
+---
+
 ### US-007: Cambio de Estado (Ciclo de Vida)
 **User Story:** Como **BIM Manager**, quiero cambiar el estado de una pieza (ej: de "Validada" a "En Producción") para reflejar su avance real en el flujo de trabajo.
 
@@ -577,35 +757,259 @@ export function PartsScene({ parts }: { parts: PartCanvasItem[] }) {
 
 ---
 
-### US-013: Login/Auth
-**User Story:** Como **Usuario del Sistema**, quiero iniciar sesión con mi cuenta corporativa para acceder de forma segura a la información confidencial del proyecto.
+### US-013: Authentication & Role-Based Access Control (RBAC)
+**User Story:** Como **Usuario del Sistema**, quiero iniciar sesión con mi cuenta corporativa y tener acceso a funcionalidades según mi rol (Admin, Arquitecto, Visualizador, Fabricante), para garantizar seguridad y segregación de responsabilidades en el proyecto.
+
+**Epic Context:** Este US abarca tanto **autenticación** (verificar identidad) como **autorización** (controlar acceso según rol). Es un requisito transversal crítico que afecta a toda la aplicación.
+
+**Sistema de Roles (4 perfiles):**
+
+| Rol | Descripción | Permisos Clave | Casos de Uso |
+|-----|-------------|----------------|--------------|
+| 🔴 **Admin** | Super usuario con control total del sistema | - Gestión de usuarios (CRUD)<br>- Modificación directa de BD<br>- Configuración del sistema<br>- Acceso a auditorías completas<br>- Eliminar elementos | - Provisionar nuevos usuarios<br>- Resolver incidencias críticas<br>- Backup/Restore BD<br>- Configurar integraciones |
+| 🔵 **Arquitecto** | BIM Manager, responsable de ingesta y validación | - Subir archivos .3dm<br>- Modificar metadatos manualmente<br>- Aprobar/Rechazar validaciones<br>- Cambiar estados de elementos<br>- Modificar registros BD (UPDATE)<br>- Acceso total a canvas 3D | - Ingesta de nuevas piezas<br>- Corregir iso_code erróneo<br>- Forzar reprocesamiento<br>- Auditar geometría procesada |
+| 🟢 **Visualizador** | Consultor externo / Cliente (solo lectura) | - Ver dashboard 3D (sin editar)<br>- Ver detalles de elementos<br>- Filtrar y buscar<br>- Descargar reportes read-only<br>- **NO** puede modificar nada | - Revisar estado del proyecto<br>- Consultar avance de piezas<br>- Validar cumplimiento de diseño<br>- Presentaciones a stakeholders |
+| 🟡 **Fabricante** | Responsable de taller, gestiona producción | - Cambiar estado a `in_fabrication` o `completed`<br>- Adjuntar evidencias fotográficas<br>- Marcar incidencias de fabricación<br>- Ver asignaciones de taller<br>- **NO** puede modificar geometría ni validaciones | - Iniciar fabricación de pieza<br>- Subir foto de pieza terminada<br>- Reportar problemas de fabricación<br>- Consultar especificaciones técnicas |
 
 **Criterios de Aceptación:**
-*   **Scenario 1 (Successful Login):**
-    *   Given estoy en `/login`.
-    *   When introduzco credenciales válidas y pulso "Entrar".
-    *   Then recibo un token de sesión.
-    *   And soy redirigido automáticamente al Dashboard.
-*   **Scenario 2 (Login Failed):**
-    *   Given introduzco contraseña errónea.
+
+*   **Scenario 1 (Successful Login + Role Assignment):**
+    *   Given estoy en `/login` sin sesión activa.
+    *   When introduzco credenciales válidas (email/password) de un usuario con rol `Arquitecto`.
+    *   Then recibo un JWT token con claim `role: "arquitecto"`.
+    *   And soy redirigido a `/dashboard`.
+    *   And veo en el header mi nombre y rol asignado.
+    *   And tengo acceso a funcionalidades de Arquitecto (botón "Subir .3dm" visible).
+
+*   **Scenario 2 (Login Failed - Invalid Credentials):**
+    *   Given introduzco contraseña errónea o usuario inexistente.
     *   When intento entrar.
-    *   Then veo mensaje "Credenciales inválidas" (sin revelar si existe el usuario).
-    *   And sigo en la pantalla de login.
-*   **Scenario 3 (Unauthorized Access):**
-    *   Given no estoy logueado.
-    *   When intento entrar a `/dashboard` directamente.
-    *   Then soy interceptado y redirigido a `/login`.
+    *   Then veo mensaje "Credenciales inválidas" (sin revelar si el usuario existe).
+    *   And permanezco en la pantalla de login.
+    *   And el contador de intentos fallidos incrementa (bloqueo tras 5 intentos en 30 min).
+
+*   **Scenario 3 (Unauthorized Access - No Authentication):**
+    *   Given no estoy logueado (sin JWT token).
+    *   When intento acceder a `/dashboard` directamente.
+    *   Then soy interceptado por `<RequireAuth>` y redirigido a `/login`.
+    *   And veo mensaje "Debes iniciar sesión para continuar".
+
+*   **Scenario 4 (Forbidden Action - Insufficient Permissions):**
+    *   Given estoy logueado como `Visualizador`.
+    *   When intento acceder a la acción "Subir .3dm" (solo Arquitecto/Admin).
+    *   Then el botón NO es visible en la UI (escondido según rol).
+    *   And si intento la petición directa (API bypass), recibo `403 Forbidden`.
+    *   And veo mensaje "No tienes permisos para realizar esta acción".
+
+*   **Scenario 5 (Role-Based UI Rendering):**
+    *   Given estoy logueado como `Fabricante`.
+    *   When abro el detalle de una pieza en estado `validated`.
+    *   Then veo botón "Iniciar Fabricación" (permitido).
+    *   And NO veo botón "Eliminar" (solo Admin).
+    *   And NO veo botón "Editar iso_code" (solo Arquitecto/Admin).
+    *   And SÍ veo botón "Adjuntar Evidencia" (cuando estado = `in_fabrication`).
+
+*   **Scenario 6 (Admin User Management):**
+    *   Given estoy logueado como `Admin`.
+    *   When accedo a `/admin/users`.
+    *   Then veo lista de todos los usuarios del sistema.
+    *   And puedo crear nuevo usuario con rol asignado.
+    *   And puedo deshabilitar usuario (soft delete, `is_active = false`).
+    *   And puedo cambiar rol de usuario existente.
 
 **Desglose de Tickets Técnicos:**
-| ID Ticket | Título | Tech Spec | DoD |
-|-----------|--------|-----------|-----|
-| `T-060-FRONT` | **AuthProvider Context** | Contexto React global que inicializa `supabase.auth.onAuthStateChange`. Expone `session`, `user`, `loading`. | Login persiste al recargar página. |
-| `T-061-FRONT` | **Protected Route Wrapper** | Componente `<RequireAuth>` que envuelve rutas privadas. Si `!session`, redirige a Login. | Dashboard inaccesible sin login. |
-| `T-062-BACK` | **Auth Middleware (Guard)** | Dependencia FastAPI `get_current_user` que valida `Authorization: Bearer <token>` verificando firma JWT de Supabase. | Endpoints protegidos devuelven 401 si no hay token. |
-| `T-063-INFRA` | **Supabase Auth Config** | Habilitar Email/Password en panel Supabase. Deshabilitar "Sign Up" público (solo invitación/admin). | Login funciona con usuario seed. |
 
-**Valoración:** 3 Story Points
-**Dependencias:** N/A (Transversal)
+| ID Ticket | Título | Story Points | Tech Spec | DoD |
+|-----------|--------|--------------|-----------|-----|
+| `T-060-FRONT` | **AuthProvider Context + Role State** | 2 | Contexto React global con `supabase.auth.onAuthStateChange`. Expone `session`, `user`, `role`, `loading`. Parse JWT token para extraer `role` claim. Custom hook `useAuth()` para acceder al contexto. Persist session en localStorage. | Login persiste al recargar página. Hook `useAuth()` devuelve `{ user, role, isAdmin, isArquitecto, ... }`. |
+| `T-061-FRONT` | **Protected Route + Role Guards** | 3 | Componente `<RequireAuth allowedRoles={['admin', 'arquitecto']}>` que envuelve rutas privadas. Si no hay sesión → redirect `/login`. Si rol no permitido → render 403 page. HOC `withRoleGuard()` para proteger componentes individuales. | Dashboard inaccesible sin login. Arquitecto NO puede acceder a `/admin/users`. Visualizador NO ve botones de edición. |
+| `T-062-BACK` | **Auth Middleware + get_current_user** | 2 | Dependencia FastAPI que valida `Authorization: Bearer <token>`. Verifica firma JWT con clave pública Supabase. Extrae `user_id` y `role` del JWT. Inyecta `CurrentUser(user_id, role, email)` en endpoints. | Endpoints protegidos devuelven 401 sin token. Endpoints con `@require_role(['admin'])` devuelven 403 si rol incorrecto. |
+| `T-063-BACK` | **Role-Based Authorization Decorators** | 3 | Decoradores Python `@require_role(['admin', 'arquitecto'])` para endpoints. Función `check_permission(user, action, resource)` para lógica compleja. Tabla de permisos en `permissions.py` con matriz Role × Action. Unit tests: Arquitecto puede UPDATE blocks, Visualizador NO puede DELETE. | Tests de autorización cubren 4 roles × 8 acciones (32 casos). Decoradores funcionan en FastAPI endpoints. |
+| `T-064-DB` | **Users & Roles Schema** | 2 | Tabla `users` (id, email, role ENUM, is_active, created_at). Enum `user_role` con valores `['admin', 'arquitecto', 'visualizador', 'fabricante']`. Migration para agregar columna `created_by` (FK a users.id) en tabla `blocks`. RLS policies actualizadas para respetar roles (solo Admin puede DELETE). | Migration ejecutada. Seed con 4 usuarios (1 por rol). RLS policies funcionan: Visualizador NO puede UPDATE. |
+| `T-065-INFRA` | **Supabase Auth + JWT Claims Config** | 2 | Habilitar Email/Password authentication en Supabase dashboard. Deshabilitar "Sign Up" público (solo invitaciones vía Admin). Configurar JWT custom claims para incluir `role` en token. Script SQL para trigger que añade `role` claim automáticamente. | Login funciona con usuario seed. JWT token incluye claim `"role": "arquitecto"`. Token renovable sin re-login. |
+| `T-066-FRONT` | **Admin User Management UI** | 3 | Página `/admin/users` con tabla de usuarios (DataGrid). CRUD completo: Crear usuario con email/password/rol, Editar rol de usuario existente, Deshabilitar usuario (toggle `is_active`). Confirmación modal antes de acciones destructivas. Solo accesible para rol Admin. | Admin puede crear 4 tipos de usuario. Admin puede cambiar Visualizador → Arquitecto. Fabricante NO puede acceder a esta página (403). |
+| `T-067-FRONT` | **Role-Based UI Component Library** | 2 | Componentes reutilizables: `<IfRole allowed={['admin', 'arquitecto']}>`, `<IfAdmin>`, `<IfCanEdit>`. Custom hooks: `useCanEdit()`, `useCanDelete()`, `useCanChangeStatus()`. Lógica centralizada en `permissions.ts`. | Botones se ocultan según rol. Tests unitarios: IfRole no renderiza si rol no permitido. |
+
+**Matriz de Permisos (Referencia):**
+
+```typescript
+// src/frontend/src/config/permissions.ts
+export const PERMISSIONS = {
+  // Gestión de Elementos
+  'elements:create': ['admin', 'arquitecto'],
+  'elements:read': ['admin', 'arquitecto', 'visualizador', 'fabricante'],
+  'elements:update': ['admin', 'arquitecto'],
+  'elements:delete': ['admin'],
+  
+  // Ingesta de Archivos
+  'files:upload': ['admin', 'arquitecto'],
+  'files:download': ['admin', 'arquitecto', 'visualizador', 'fabricante'],
+  
+  // Cambios de Estado
+  'status:to_in_fabrication': ['admin', 'arquitecto', 'fabricante'],
+  'status:to_completed': ['admin', 'fabricante'],
+  'status:to_validated': ['admin', 'arquitecto'],  // Solo tras validación Librarian
+  'status:to_archived': ['admin'],
+  
+  // Evidencias de Fabricación
+  'evidence:upload': ['admin', 'fabricante'],
+  'evidence:view': ['admin', 'arquitecto', 'visualizador', 'fabricante'],
+  
+  // Administración
+  'users:manage': ['admin'],
+  'system:configure': ['admin'],
+  'database:direct_edit': ['admin', 'arquitecto'],  // Modificación manual de BD
+  
+  // Visualización
+  'canvas:view': ['admin', 'arquitecto', 'visualizador', 'fabricante'],
+  'reports:export': ['admin', 'arquitecto', 'visualizador'],
+} as const;
+
+export type Permission = keyof typeof PERMISSIONS;
+export type Role = 'admin' | 'arquitecto' | 'visualizador' | 'fabricante';
+
+export function hasPermission(role: Role, permission: Permission): boolean {
+  return PERMISSIONS[permission].includes(role);
+}
+```
+
+**Código de Referencia (Backend Authorization):**
+
+```python
+# src/backend/auth/dependencies.py
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import List
+import jwt
+
+security = HTTPBearer()
+
+class CurrentUser:
+    def __init__(self, user_id: str, email: str, role: str):
+        self.user_id = user_id
+        self.email = email
+        self.role = role
+    
+    def is_admin(self) -> bool:
+        return self.role == 'admin'
+    
+    def is_arquitecto(self) -> bool:
+        return self.role == 'arquitecto'
+    
+    def can(self, permission: str) -> bool:
+        # Check permission matrix
+        return permission in ROLE_PERMISSIONS.get(self.role, [])
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> CurrentUser:
+    """Validate JWT token and extract user info"""
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(
+            token,
+            SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated"
+        )
+        
+        user_id = payload.get("sub")
+        email = payload.get("email")
+        role = payload.get("role", "visualizador")  # Default role
+        
+        return CurrentUser(user_id=user_id, email=email, role=role)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+
+def require_role(allowed_roles: List[str]):
+    """Decorator to restrict endpoint access by role"""
+    def decorator(func):
+        async def wrapper(*args, current_user: CurrentUser = Depends(get_current_user), **kwargs):
+            if current_user.role not in allowed_roles:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Role '{current_user.role}' not authorized. Required: {allowed_roles}"
+                )
+            return await func(*args, current_user=current_user, **kwargs)
+        return wrapper
+    return decorator
+
+# Usage example:
+# @app.delete("/api/elements/{element_id}")
+# @require_role(['admin'])
+# async def delete_element(element_id: str, current_user: CurrentUser = Depends(get_current_user)):
+#     # Only admins can delete
+#     ...
+```
+
+**Código de Referencia (Frontend Role Guard):**
+
+```typescript
+// src/frontend/src/components/Auth/RequireAuth.tsx
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+
+interface RequireAuthProps {
+  children: React.ReactNode;
+  allowedRoles?: Role[];
+  fallback?: React.ReactNode;
+}
+
+export function RequireAuth({ children, allowedRoles, fallback }: RequireAuthProps) {
+  const { user, role, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+  
+  // Not authenticated
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Not authorized (wrong role)
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return fallback || <ForbiddenPage requiredRoles={allowedRoles} />;
+  }
+  
+  return <>{children}</>;
+}
+
+// Usage in routes:
+// <Route path="/admin" element={
+//   <RequireAuth allowedRoles={['admin']}>
+//     <AdminDashboard />
+//   </RequireAuth>
+// } />
+```
+
+**Valoración:** 17 Story Points (T-060: 2 SP + T-061: 3 SP + T-062: 2 SP + T-063: 3 SP + T-064: 2 SP + T-065: 2 SP + T-066: 3 SP)  
+**Dependencias:** 
+- **Base:** Supabase Auth configurado, Frontend routing establecido
+- **Bloqueante para:** US-007 (Cambio de Estado requiere validar rol), US-009 (Evidencias solo Fabricante)
+
+**Riesgos & Mitigaciones:**
+1. **JWT Token Expiration:** Mitigación: Refresh token automático con Supabase, mostrar alerta 5 min antes de expirar.
+2. **Role Escalation Attack:** Mitigación: NUNCA confiar en claim `role` del frontend, siempre validar en backend con firma JWT.
+3. **Bypass de UI Guards:** Mitigación: Todos los endpoints protegidos con decoradores `@require_role()`, UI guards son UX (no seguridad).
+4. **Complejidad de Testing:** Mitigación: Fixtures con 4 usuarios mock (1 por rol), helpers `login_as_admin()`, `login_as_visualizador()`.
+
+**Next Steps:**
+1. Definir seed inicial de usuarios para cada rol (mínimo 1 Admin)
+2. Documentar matriz de permisos completa en `/docs/RBAC.md`
+3. Implementar T-060 y T-061 primero (autenticación básica)
+4. Después T-062, T-063, T-064 (autorización backend)
+5. Finalmente T-066, T-067 (UI de administración)
+
+> 📋 **Security Note:** Este sistema de roles es crítico para la seguridad del proyecto. La validación de permisos DEBE ocurrir en el backend (no confiar en frontend). Los JWT claims deben firmarse con clave secreta de Supabase que NUNCA se expone al cliente.
 
 ---
 
