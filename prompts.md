@@ -14399,3 +14399,25 @@ Crear función reutilizable fitCameraToObject() con matemáticas correctas Three
 **Resumen de la Respuesta/Acción:**
 Creación de Epic US para refactorización completa del flujo E2E de ingesta 3D (.3dm → GLB → Three.js) con enfoque TDD estricto. Incluye análisis PoC vs estado actual, desglose en 6 sub-tickets, definición de contratos JSON, y protocolo RED-GREEN-REFACTOR obligatorio.
 ---
+
+
+## 205 - Estrategia de Testing y Baseline para US-015 (Element Model Refactoring)
+**Fecha:** 2026-03-06 14:30
+
+**Prompt Original:**
+> Quiero que los ejecutes al final de cada ticket, si
+
+**Contexto:**
+Usuario solicita ejecutar tests después de cada ticket de US-015 para prevenir regresiones durante la refactorización del modelo Element (PartCanvasItem→Element, tipologia→material_type, workshops removal).
+
+**Resumen de la Respuesta/Acción:**
+1. Ejecuté baseline de tests ANTES de US-015: Backend 108/108 (100%), Frontend 333/407 (81.8%)
+2. Creé docs/US-015/BASELINE-TESTS.md documentando estado pre-refactoring y regresiones esperadas por ticket
+3. Actualicé memory-bank/activeContext.md con "Test Execution Commitment": tests obligatorios al final de cada ticket
+4. Documenté comandos específicos (make test-unit, npm test --run)
+5. Establecí targets: Backend mantener 100%, Frontend mejorar a 90%+
+6. Registré issues conocidos: 68 fallos pre-existentes, 3 excepciones ModelLoader (Three.js mocks)
+
+**Resultado:**
+Infraestructura de quality gates lista para monitorizar regresiones durante 6 tickets de US-015.
+---

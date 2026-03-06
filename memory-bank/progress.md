@@ -157,3 +157,24 @@
 - URLs producción: `https://sf-pm.vercel.app` (frontend) | `https://sf-pm.up.railway.app` (backend)
 - Verificaciones: `/health` ✅ | `/ready` `{"database":"ok","redis":"ok"}` ✅ | CORS ✅ | Upload E2E ✅ | Celery worker activo ✅
 - Runbook: `docs/11-deployment-runbook.md` — actualizado con URLs reales y problemas resueltos (CORS typo, 502 por vars faltantes, URLs Railway)
+
+---
+
+## Epic US-015: Refactorización E2E del Flujo de Ingesta 3D (2026-03-05)
+
+### Phase 0: Pre-implementation Analysis (COMPLETE ✅)
+- **POC-ANALYSIS.md** (10,800 words) — Comparative analysis PoC vs Current implementation
+- **JSON-CONTRACTS.md** (1,080 lines) — Canonical API contracts Backend ↔ Frontend with simplified **Element model** (Pydantic + Zod validation, contract testing, MaterialType enum, required geometry)
+- **User validation:** Contracts approved ✅ (MaterialType enum ["Stone", "Ceramic"], workshops removed, iso_code from UserString "Codi")
+- **Database cleanup** (2026-03-06) — 1,356 obsolete test elements deleted, DB ready for fresh ingestion ✅
+
+### Sprint 6 / US-015: Element Model Refactoring (Phase 0 Complete)
+- Phase 0: JSON Contracts Translation — DONE 2026-03-06 (42 replacements: Tipologia→MaterialType, Piedra→Stone, Ceramica→Ceramic, docs/US-015/JSON-CONTRACTS.md fully translated)
+- Database Cleanup — DONE 2026-03-06 (infra/clean_database_full.py created, 1,356 obsolete test blocks deleted, clean slate for fresh ingestion)
+- Fresh Ingestion — DONE 2026-03-06 (6 Sagrada Família pieces uploaded: GLPER.B-PAE0720.0701-0706, all validated with GLB+BBox)
+- Race Condition Fix — DONE 2026-03-06 (2 blocks reprocessed after temp file collision, final status 6/6 validated)
+- Database Integrity Verification — DONE 2026-03-06 (infra/check_bbox_detailed.py executed, 6 blocks with unique BBox values, 0.7m×1.4m spatial cluster confirmed)
+- Test Baseline Established — DONE 2026-03-06 (Backend: 108/108 tests PASS (100%), Frontend: 333/407 tests PASS (81.8%), docs/US-015/BASELINE-TESTS.md created with regression tracking plan)
+
+**Next: T-1501-DB** — Element model database migration (ADD material_type, DROP workshops, ADD constraint, UPDATE 6 existing blocks)
+
