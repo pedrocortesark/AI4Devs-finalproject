@@ -14447,3 +14447,22 @@ Usuario solicita expandir US-013 (Login/Auth) para incluir sistema completo de R
 **Resultado:**
 US-013 enriquecido con RBAC completo, matriz de permisos clara, código de referencia production-ready, y arquitectura de seguridad robusta para soportar segregación de responsabilidades.
 ---
+
+## [207] - T-1501-DB Database Schema Enrichment
+**Fecha:** 2026-03-06 16:00
+**Prompt Original:**
+> ## Prompt: ENRIQUECIMIENTO TÉCNICO - Ticket T-1501-DB
+> **Role:** Actúa como **Senior Software Architect**, **Tech Lead** y **Technical Writer**
+> [Prompt completo con 4 fases de ejecución: Análisis del contexto, Diseño de la Solución, Estrategia de Testing, Definición de Contratos]
+
+**Resumen de la Respuesta/Acción:**
+1. **Lectura de Documentación:** Analizado backlog (US-015 Epic), systemPatterns (API contracts), techContext (PostgreSQL 15), productContext (existing 6 blocks)
+2. **Diseño de Migración SQL:** 5 pasos (ADD material_type CHECK constraint, UPDATE 6 blocks = 'Stone', ALTER low_poly_url/bbox SET NOT NULL, DROP workshop_id/name, CREATE INDEX material_type)
+3. **Definición de Test Cases:** 26 test cases (9 migration execution, 7 constraint enforcement, 5 data integrity, 2 rollback, 3 baseline validation)
+4. **Especificación Técnica Completa:** Creado T-1501-DB-TechnicalSpec-ENRICHED.md con 8 secciones (850+ líneas): Ticket Summary, Data Structures (BEFORE/AFTER schema), API Interface (verification queries), Component Contract (backend/agent/frontend impact), Test Cases Checklist, Files to Create (migration UP/DOWN + test file), Reusable Patterns (migration template), Next Steps (handoff data for TDD-RED)
+5. **Contratos Formalizados:** Enum MaterialType = 'Stone' | 'Ceramic', NOT NULL enforcement para geometría completa, workshop columns removal
+6. **Código SQL Completo:** Migration UP (120 líneas con verificación), DOWN rollback (80 líneas), Integration tests (250 líneas con 26 test cases)
+7. **Handoff Data:** 5 key test cases para TDD-RED, files to create list, DoD validation checklist
+
+**Resultado:** Technical specification production-ready para T-1501-DB. Establece foundation del Epic US-015 (Part→Element refactoring). Incluye rollback plan, constraint validation, test baseline maintenance (108/108 target). Next action: TDD-RED phase (create files, run tests, expect 26 FAIL).
+---
