@@ -8,6 +8,8 @@ to improve maintainability and avoid magic strings.
 # ===== Storage Configuration =====
 STORAGE_BUCKET_RAW_UPLOADS = "raw-uploads"
 STORAGE_BUCKET_PROCESSED = "processed-geometry"
+STORAGE_PATH_PREFIX_MODELS = "models"  # NEW (T-1502-INFRA): Hierarchical prefix for organized storage
+STORAGE_PATH_SUBDIR_LOW_POLY = "low-poly"  # NEW (T-1502-INFRA): Subdirectory for low-poly GLB files
 
 # ===== Event Types =====
 EVENT_TYPE_UPLOAD_CONFIRMED = "upload.confirmed"

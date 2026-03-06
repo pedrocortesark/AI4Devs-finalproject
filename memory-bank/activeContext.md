@@ -4,43 +4,101 @@
 Sprint 6 — Tech Debt & Documentation (2026-02-27 COMPLETADO) | Próximo: Next User Story (TBD)
 
 ## Active Ticket
-**T-1502-INFRA: Storage Path Conventions** — US-015 Implementation (Ticket 2/6) [NEXT]
+**T-1503-AGENT: Rhino Parser + GLB Generator** — US-015 Implementation (Ticket 3/6) [READY TO START]
 
 ### Context
-Second ticket in US-015 Element Model Refactoring Epic. With database schema migration complete (T-1501-DB ✅), now implementing standardized storage path generation for GLB files in Supabase Storage.
+Third ticket in US-015 Element Model Refactoring Epic. With database schema (T-1501-DB ✅) and storage path conventions (T-1502-INFRA ✅) complete, now updating agent to extract material_type from Rhino UserStrings and use standardized GLB paths.
 
 **Dependencies:**
-- ✅ T-1501-DB (material_type column available for path generation)
-- 🔜 T-1503-AGENT (will use this path generator when uploading GLBs)
+- ✅ T-1501-DB (material_type column available)
+- ✅ T-1502-INFRA (storage path generator ready at `utils.storage.generate_glb_storage_path`)
+- 🔜 T-1504-BACK (blocked until agent integration complete)
 
-### Current Status: Ready to Start
-**Function to Implement:**
+### Current Status: READY TO START
+**TDD Workflow:** Step 2/5 — Tests Created, All Failing (Expected)
+
+**Test Results:**
+- **11 FAILED** ✅ — All with `NotImplementedError: TDD-RED: Function not yet implemented`
+- **1 SKIPPED** — Integration test with live Supabase (marked `@pytest.mark.skip`)
+- **0 ERRORS** — No syntax or import errors
+- **Duration:** 0.13s
+
+**Files Created (TDD-RED):**
+1. **`src/backend/utils/__init__.py`** (7 lines) — Package marker with export of `generate_glb_storage_path`
+2. **`src/backend/utils/storage.py`** (53 lines) — Stub function with complete docstring (50+ lines), raises `NotImplementedError`
+3. **`tests/unit/test_storage_utils.py`** (161 lines) — 12 test cases covering:
+   - **Happy Path (4 tests):** Valid UUID+timestamp, no leading slash, default timestamp, idempotency
+   - **Edge Cases (3 tests):** Different timestamps→different paths, UUID uppercase→lowercase, non-UTC→UTC
+   - **Error Handling (3 tests):** Invalid UUID type→ValueError, naive datetime→ValueError, ISO8601 Z suffix
+   - **Integration (2 tests):** Supabase Storage validation (skipped), agent compatibility
+
+**Files Modified (TDD-RED):**
+- **`src/backend/constants.py`** — Added `STORAGE_PATH_PREFIX_MODELS = "models"` constant (line 11)
+
+**Function Signature (Stub):**
 ```python
-def generate_glb_storage_path(block_id: UUID, timestamp: datetime) -> str:
+def generate_glb_storage_path(
+    block_id: UUID,
+    timestamp: Optional[datetime] = None
+) -> str:
     """
     Generate standardized storage path for low-poly GLB files.
-    
     Format: models/low-poly/{uuid}_{ISO8601}.glb
     Example: models/low-poly/550e8400-e29b-41d4-a716-446655440000_2026-03-06T15:30:45Z.glb
-    
-    Args:
-        block_id: Block UUID from database
-        timestamp: Upload timestamp (UTC)
-    
-    Returns:
-        Storage path string (no leading slash, relative to bucket root)
     """
+    raise NotImplementedError("TDD-RED: Function not yet implemented (T-1502-INFRA)")
 ```
 
-**TDD Test Cases (6 tests minimum):**
-1. Valid path format (contains UUID + ISO8601 timestamp)
-2. Idempotency (same inputs → same path)
-3. No path collisions (different timestamps → different paths)
-4. ISO8601 compliance (timestamp format with Z suffix)
-5. No leading slash (Supabase Storage expects relative paths)
-6. Integration with Supabase Storage (verify bucket accepts path)
+**Key Test Cases (Will Guide GREEN Implementation):**
+1. `test_valid_uuid_and_timestamp_generates_correct_path` — Core functionality
+2. `test_path_has_no_leading_slash` — S3 compatibility (relative path)
+3. `test_timestamp_defaults_to_current_utc` — Default parameter behavior
+4. `test_idempotency_same_inputs_same_output` — Pure function guarantee
+5. `test_different_timestamps_different_paths` — Collision prevention
+6. `test_uppercase_uuid_converts_to_lowercase` — Normalization
+7. `test_non_utc_timezone_converts_to_utc` — Timezone handling
+8. `test_invalid_block_id_type_raises_valueerror` — Type validation
+9. `test_naive_datetime_raises_valueerror` — Timezone-aware requirement
+10. `test_iso8601_format_uses_z_suffix` — Format compliance (`Z` not `+00:00`)
+11. `test_format_matches_agent_compatibility` — Integration with `geometry_processing.py`
+
+**Next Step:** TDD-GREEN Phase (Prompt #214) — Implement function logic to make all 11 tests pass
+
+**Estimated GREEN Implementation Time:** 30-45 minutes (UUID validation, timezone handling, ISO8601 formatting, path construction)
+
+**Prompt History:** N/A (not started yet)
 
 ## Recently Completed
+- **T-1502-INFRA: Storage Path Conventions** — ✅ TDD COMPLETE (2026-03-06) | **11 PASSED, 1 SKIPPED, 0 FAILED** | Backend Baseline: **119/119 PASSED** ✅
+  - **Context:** Second ticket in US-015 Element Model Refactoring Epic. Implements standardized storage path generation for GLB files using format `models/low-poly/{uuid}_{ISO8601}.glb`.
+  - **TDD Timeline:**
+    - ENRICH: 2026-03-06 (Technical specification created, 12 test cases defined, path format documented) [Prompt #212]
+    - RED: 2026-03-06 (Test file created, stub function with NotImplementedError → **11 FAILED, 1 SKIPPED** ✅) [Prompt #213]
+    - GREEN: 2026-03-06 (Implementation complete, timezone handling + ISO8601 formatting → **11 PASSED, 1 SKIPPED** ✅) [Prompt #214]
+    - REFACTOR: 2026-03-06 (Constants extracted, docstring improved, full backend suite verified → **119/119 PASSED** ✅) [Prompt #215]
+  - **Implementation Details:**
+    - **Function:** `generate_glb_storage_path(block_id: UUID, timestamp: Optional[datetime]) -> str`
+    - **Validations:** UUID instance check, timezone-aware datetime required, auto-converts to UTC
+    - **Format:** `models/low-poly/{uuid}_{ISO8601}.glb` (no leading slash, microseconds truncated)
+    - **Constants:** `STORAGE_PATH_PREFIX_MODELS = "models"`, `STORAGE_PATH_SUBDIR_LOW_POLY = "low-poly"`
+    - **Files:** `src/backend/utils/storage.py` (77 lines), `src/backend/utils/__init__.py` (export), `src/backend/constants.py` (+1 constant)
+  - **Test Results:**
+    - **Suite 1 (Happy Path):** 4 PASSED — Valid UUID+timestamp, no leading slash, default timestamp, idempotency
+    - **Suite 2 (Edge Cases):** 3 PASSED — Different timestamps→different paths, UUID uppercase→lowercase, non-UTC→UTC
+    - **Suite 3 (Error Handling):** 3 PASSED — Invalid UUID type→ValueError, naive datetime→ValueError, ISO8601 Z suffix
+    - **Suite 4 (Integration):** 1 PASSED, 1 SKIPPED — Agent compatibility verified, Supabase Storage test skipped (requires live connection)
+    - **Suite 5 (Backend Baseline):** 119 PASSED — All existing tests maintained (108 baseline + 11 new)
+  - **Key Decisions:**
+    - **Microsecond Truncation:** ISO8601 format has second precision only, truncate on capture for consistent comparisons
+    - **Constants Extraction:** Introduced `STORAGE_PATH_SUBDIR_LOW_POLY` constant for DRY principle
+    - **Docstring Improvement:** Fixed inconsistency (`datetime.utcnow()` → `datetime.now(timezone.utc)` modern pattern)
+    - **Integration Test:** Intentionally skipped (placeholder for future E2E testing, not required for unit validation)
+  - **Files Created/Modified:**
+    - `src/backend/utils/storage.py` (77 lines implementation + docstring)
+    - `src/backend/utils/__init__.py` (export of generate_glb_storage_path)
+    - `tests/unit/test_storage_utils.py` (161 lines, 12 test cases)
+    - `src/backend/constants.py` (+2 constants: STORAGE_PATH_PREFIX_MODELS, STORAGE_PATH_SUBDIR_LOW_POLY)
+
 - **T-1501-DB: Element Model Database Schema & Migration** — ✅ TDD COMPLETE (2026-03-06) | **17 PASSED, 8 SKIPPED, 0 FAILED** | TDD Workflow (Steps 1-5/5: ENRICH→RED→GREEN→REFACTOR COMPLETE)
   - **Context:** First ticket in US-015 Element Model Refactoring Epic. Transforms database schema from Spanish "Parts" to English "Elements" model with strict geometry validation.
   - **Technical Spec:** `docs/US-015/T-1501-DB-TechnicalSpec-ENRICHED.md` (850+ lines, 8 sections, 26 test cases)
