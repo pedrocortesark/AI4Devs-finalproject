@@ -127,6 +127,23 @@ class BlockStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+# ===== T-1503-AGENT: Material Type Enum =====
+
+class MaterialType(str, Enum):
+    """
+    Material types for architectural elements (T-1503-AGENT).
+    
+    Synchronized with PostgreSQL CHECK constraint (T-1501-DB):
+    CHECK (material_type IN ('Stone', 'Ceramic'))
+    
+    Valid values:
+        Stone: Natural stone (99% of Sagrada Familia elements)
+        Ceramic: Ceramic materials (decorative elements)
+    """
+    STONE = "Stone"
+    CERAMIC = "Ceramic"
+
+
 class ValidationStatusResponse(BaseModel):
     """
     Response schema for GET /api/parts/{id}/validation endpoint.

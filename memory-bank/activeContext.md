@@ -4,71 +4,76 @@
 Sprint 6 — Tech Debt & Documentation (2026-02-27 COMPLETADO) | Próximo: Next User Story (TBD)
 
 ## Active Ticket
-**T-1503-AGENT: Rhino Parser + GLB Generator** — US-015 Implementation (Ticket 3/6) [READY TO START]
+**T-1504-AGENT: Material Type Extraction - Real Stone Dictionary (62 types)** | 5 SP | 🔜 ENRICH COMPLETE → RED NEXT
+
+**Status:** ENRICH phase completed (2026-03-07 18:35) ✅  
+**Current Phase:** RED (write failing tests with 62 real materials)  
+**Blocker:** None  
+**ETA:** RED 30m + GREEN 45m + REFACTOR 30m + AUDIT 20m = ~2 hours total
 
 ### Context
-Third ticket in US-015 Element Model Refactoring Epic. With database schema (T-1501-DB ✅) and storage path conventions (T-1502-INFRA ✅) complete, now updating agent to extract material_type from Rhino UserStrings and use standardized GLB paths.
+Corrects T-1503-AGENT which was implemented with incorrect specification. Material is NOT enum ["Stone", "Ceramic"], but one of **62 real stone types** from Sagrada Família C# dictionary, each with RGB color for canvas rendering.
 
-**Dependencies:**
-- ✅ T-1501-DB (material_type column available)
-- ✅ T-1502-INFRA (storage path generator ready at `utils.storage.generate_glb_storage_path`)
-- 🔜 T-1504-BACK (blocked until agent integration complete)
+### Key Changes from T-1503
+- **Materials:** 2 generic → 62 real types (Montjuïc, Ulldecona, Floresta, etc.)
+- **Extraction:** Document→Layer→Object priority → **Object UserString ONLY**
+- **Default:** "Stone" → "Montjuïc" (most common material)
+- **Color Mapping:** None → RGB tuple per material for frontend
+- **Database:** CHECK constraint Stone/Ceramic → TEXT unconstrained
+- **Tests:** Mock "Stone"/"Ceramic" → Real "Montjuïc"/"Ulldecona"
 
-### Current Status: READY TO START
-**TDD Workflow:** Step 2/5 — Tests Created, All Failing (Expected)
+### ENRICH Phase Deliverables ✅
+- [x] Technical spec created: `docs/US-015/T-1504-AGENT-TechnicalSpec.md` (600+ lines)
+- [x] 10 acceptance criteria defined
+- [x] 62-material dictionary `MATERIAL_COLORS` with RGB colors documented
+- [x] 12 test cases specified (HP:5, EC:4, ERR:3)
+- [x] Database migration planned (remove CHECK, UPDATE Stone→Montjuïc)
+- [x] Backlog updated (T-1503 marked "SPEC INCORRECT", T-1504 added)
+- [x] Registered in prompts.md (#211)
 
-**Test Results:**
-- **11 FAILED** ✅ — All with `NotImplementedError: TDD-RED: Function not yet implemented`
-- **1 SKIPPED** — Integration test with live Supabase (marked `@pytest.mark.skip`)
-- **0 ERRORS** — No syntax or import errors
-- **Duration:** 0.13s
+### Next Steps
+1. **RED Phase:** Create `test_material_extraction_v2.py` with 12 failing tests using real materials
+2. **GREEN Phase:** Update `MATERIAL_COLORS` dict in `constants.py`, modify extraction logic
+3. **REFACTOR Phase:** Extract `get_material_color()` helper, apply migration, update docs
+4. **AUDIT Phase:** Verify 12/12 + 119/119 PASS, generate audit report
 
-**Files Created (TDD-RED):**
-1. **`src/backend/utils/__init__.py`** (7 lines) — Package marker with export of `generate_glb_storage_path`
-2. **`src/backend/utils/storage.py`** (53 lines) — Stub function with complete docstring (50+ lines), raises `NotImplementedError`
-3. **`tests/unit/test_storage_utils.py`** (161 lines) — 12 test cases covering:
-   - **Happy Path (4 tests):** Valid UUID+timestamp, no leading slash, default timestamp, idempotency
-   - **Edge Cases (3 tests):** Different timestamps→different paths, UUID uppercase→lowercase, non-UTC→UTC
-   - **Error Handling (3 tests):** Invalid UUID type→ValueError, naive datetime→ValueError, ISO8601 Z suffix
-   - **Integration (2 tests):** Supabase Storage validation (skipped), agent compatibility
+---
 
-**Files Modified (TDD-RED):**
-- **`src/backend/constants.py`** — Added `STORAGE_PATH_PREFIX_MODELS = "models"` constant (line 11)
+## Recently Completed  
 
-**Function Signature (Stub):**
-```python
-def generate_glb_storage_path(
-    block_id: UUID,
-    timestamp: Optional[datetime] = None
-) -> str:
-    """
-    Generate standardized storage path for low-poly GLB files.
-    Format: models/low-poly/{uuid}_{ISO8601}.glb
-    Example: models/low-poly/550e8400-e29b-41d4-a716-446655440000_2026-03-06T15:30:45Z.glb
-    """
-    raise NotImplementedError("TDD-RED: Function not yet implemented (T-1502-INFRA)")
-```
+- **T-1503-AGENT: Rhino Parser + GLB Generator (Material Type Extraction)** — ✅ TDD COMPLETE (2026-03-07) | **12/12 PASSED, 119/119 baseline, 0 FAILED** | ⚠️ **SPECIFICATION INCORRECT - Superseded by T-1504-AGENT**
+  - **⚠️ CRITICAL DISCOVERY (2026-03-07 18:30):** Implementation based on incorrect specification. Material is NOT enum ["Stone", "Ceramic"] but one of 62 real stone types from C# dictionary. See T-1504-AGENT for corrected implementation.
+  - **Context:** Third ticket in US-015 Element Model Refactoring Epic. Extracts material_type from Rhino UserStrings and saves to database during GLB generation pipeline.
+  - **TDD Timeline:**
+    - ENRICH: 2026-03-07 (Technical specification created, 28 test cases identified, priority search documented) [Prompt #217]
+    - RED: 2026-03-07 (12 unit tests created with MagicMock, ImportError verified → **12 FAILED** ✅) [Prompt #207]
+    - GREEN: 2026-03-07 (Implementation complete, pipeline integration → **12 PASSED** ✅) [Prompt #208]
+    - REFACTOR: 2026-03-07 (Constants extracted, helper function added, docstring improved → **119/119 baseline PASSED** ✅) [Prompt #209]
+  - **Implementation Details:**
+    - **Function:** `_extract_material_type(rhino_file, block_id, iso_code) -> str` (125 lines)
+    - **Priority Search:** document → layer → object → default "Stone"
+    - **Normalization:** `.strip().capitalize()` for case-insensitive matching
+    - **Validation:** Must be in `["Stone", "Ceramic"]`, else defaults to "Stone"
+    - **Helper:** `_validate_and_normalize_material(raw_value) -> str` (10 lines) reduces duplication
+    - **Constants:** `VALID_MATERIALS`, `DEFAULT_MATERIAL`, `MATERIAL_USERSTRING_KEY` extracted to `constants.py`
+    - **Pipeline Integration:** Called after parsing (Step 3b), passed to `_update_block_low_poly_url()` (Step 9)
+    - **Database Update:** `_update_block_low_poly_url()` signature updated to accept `material_type` parameter
+  - **Test Results:**
+    - **Suite 1 (Happy Path):** 5 PASSED — Document/layer/object extraction, default "Stone"
+    - **Suite 2 (Edge Cases):** 4 PASSED — Lowercase/uppercase normalization, whitespace trim, multiple layers
+    - **Suite 3 (Error Handling):** 3 PASSED — Invalid values ("Wood", empty string, "concrete") default to "Stone"
+    - **Suite 4 (Backend Baseline):** 119 PASSED — All existing tests maintained (zero regression)
+  - **Key Refactorings:**
+    - **Constants Extraction:** Moved hardcoded values to `src/agent/constants.py` for maintainability
+    - **Helper Function:** `_validate_and_normalize_material()` eliminates 60+ lines of duplicated code
+    - **Docstring Enhancement:** Added Examples section with realistic usage pattern
+    - **Logging Improvements:** Conditional logging for valid vs invalid materials
+  - **Files Created/Modified:**
+    - `src/agent/tasks/geometry_processing.py` (+145 lines: 125 function + 10 helper + 10 integration)
+    - `src/agent/constants.py` (+3 constants: VALID_MATERIALS, DEFAULT_MATERIAL, MATERIAL_USERSTRING_KEY)
+    - `tests/agent/unit/test_material_extraction.py` (420 lines, 12 test cases - created in RED phase)
+    - `tests/agent/integration/test_low_poly_pipeline.py` (+4 lines material_type assertions - created in RED phase)
 
-**Key Test Cases (Will Guide GREEN Implementation):**
-1. `test_valid_uuid_and_timestamp_generates_correct_path` — Core functionality
-2. `test_path_has_no_leading_slash` — S3 compatibility (relative path)
-3. `test_timestamp_defaults_to_current_utc` — Default parameter behavior
-4. `test_idempotency_same_inputs_same_output` — Pure function guarantee
-5. `test_different_timestamps_different_paths` — Collision prevention
-6. `test_uppercase_uuid_converts_to_lowercase` — Normalization
-7. `test_non_utc_timezone_converts_to_utc` — Timezone handling
-8. `test_invalid_block_id_type_raises_valueerror` — Type validation
-9. `test_naive_datetime_raises_valueerror` — Timezone-aware requirement
-10. `test_iso8601_format_uses_z_suffix` — Format compliance (`Z` not `+00:00`)
-11. `test_format_matches_agent_compatibility` — Integration with `geometry_processing.py`
-
-**Next Step:** TDD-GREEN Phase (Prompt #214) — Implement function logic to make all 11 tests pass
-
-**Estimated GREEN Implementation Time:** 30-45 minutes (UUID validation, timezone handling, ISO8601 formatting, path construction)
-
-**Prompt History:** N/A (not started yet)
-
-## Recently Completed
 - **T-1502-INFRA: Storage Path Conventions** — ✅ TDD COMPLETE (2026-03-06) | **11 PASSED, 1 SKIPPED, 0 FAILED** | Backend Baseline: **119/119 PASSED** ✅
   - **Context:** Second ticket in US-015 Element Model Refactoring Epic. Implements standardized storage path generation for GLB files using format `models/low-poly/{uuid}_{ISO8601}.glb`.
   - **TDD Timeline:**

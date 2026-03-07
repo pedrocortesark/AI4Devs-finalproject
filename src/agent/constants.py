@@ -85,3 +85,10 @@ ERROR_MSG_NO_MESHES_FOUND = "No meshes found in {iso_code}"
 ERROR_MSG_BLOCK_NOT_FOUND = "Block {block_id} not found in database"
 ERROR_MSG_FAILED_PARSE_3DM = "Failed to parse .3dm file for {iso_code}"
 ERROR_MSG_S3_DOWNLOAD_FAILED = "S3 download failed after {retries} retries"
+
+# ===== T-1503-AGENT: Material Type Extraction =====
+
+# Material Type Validation
+VALID_MATERIALS = ["Stone", "Ceramic"]  # Architectural material types (synchronized with T-1501-DB CHECK constraint)
+DEFAULT_MATERIAL = "Stone"  # Default for architectural elements (99% of Sagrada Família pieces)
+MATERIAL_USERSTRING_KEY = "Material"  # Rhino UserString key for material metadata

@@ -243,7 +243,28 @@ Nomenclaturas Uniclass 2015 / IFC, metadatos obligatorios, audit trail completo 
     * Handoff document: T-1009-TEST-FRONT-HANDOFF.md (850+ lines) with complete implementation details, technical decisions, error flow diagrams, deployment checklist
     * Status: TDD cycle complete (ENRICH→RED→GREEN→REFACTOR), ready for final audit
 
+- **US-015: Material Type Automation** 🔄 **WAVE 1 IN PROGRESS** (2/3 tickets complete)
+  - ✅ **T-1501-DB: Element Model Database Schema** (2026-03-06 DONE)
+    * Migration: Added `material_type` TEXT NOT NULL column with CHECK constraint (Stone/Ceramic)
+    * Database update: 6 production blocks set to "Stone" default
+    * Performance: idx_blocks_material_type index for material-based queries
+    * Test coverage: 17/17 tests PASS (schema validation + nullable columns design)
+  - ✅ **T-1502-INFRA: Storage Path Conventions** (2026-03-06 DONE)
+    * Function: `generate_glb_storage_path(block_id, timestamp) -> str` format `models/low-poly/{uuid}_{ISO-8601}.glb`
+    * Constants: STORAGE_PATH_PREFIX_MODELS + STORAGE_PATH_SUBDIR_LOW_POLY extracted to constants.py
+    * Test coverage: 11/11 tests PASS, anti-regression: 119/119 backend tests PASS
+  - ✅ **T-1503-AGENT: Material Type Extraction from Rhino UserStrings** (2026-03-07 DONE)
+    * Function: `_extract_material_type(rhino_file, block_id, iso_code) -> str` (125 lines)
+    * Priority search: Document UserStrings → Layer UserStrings → Object UserStrings → Default "Stone"
+    * Validation: Case-insensitive matching, must be in ["Stone", "Ceramic"], auto-normalizes with `.strip().capitalize()`
+    * Helper: `_validate_and_normalize_material(raw_value) -> str` (10 lines) eliminates 60+ lines duplication
+    * Constants: VALID_MATERIALS, DEFAULT_MATERIAL, MATERIAL_USERSTRING_KEY extracted to constants.py
+    * Pipeline integration: Called after parsing (Step 3b) + passed to `_update_block_low_poly_url()` (Step 9)
+    * Database update: Function signature updated to accept material_type parameter + SQL query updated
+    * Test coverage: 12/12 unit tests PASS (HP 5, EC 4, ERR 3), anti-regression: 119/119 backend tests PASS
+
 ### 📋 Next Milestones
+- US-015: Material Type Automation — Wave 1 complete (T-1501/1502/1503), ready for audit
 - US-010: Wave 3 COMPLETE ✅ — Ready for final audit or next User Story
 - US-007: Lifecycle state machine (block status transitions)
 - US-013: Authentication (Supabase Auth)

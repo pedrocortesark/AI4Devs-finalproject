@@ -142,3 +142,29 @@ class FileProcessingResult(BaseModel):
             }
         }
     )
+
+
+# ===== T-1503-AGENT: Material Extraction Result =====
+
+class MaterialExtractionResult(BaseModel):
+    """
+    Result of material type extraction from Rhino UserStrings (T-1503-AGENT).
+    
+    Attributes:
+        material_type: Validated MaterialType enum value ("Stone" or "Ceramic")
+        source: Where the value was found (document/layer/object/default)
+        raw_value: Original string before validation (for debugging)
+    """
+    material_type: str = Field(..., description="Validated MaterialType enum value")
+    source: str = Field(..., description="Extraction source: document/layer/object/default")
+    raw_value: Optional[str] = Field(None, description="Original UserString value")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "material_type": "Stone",
+                "source": "document",
+                "raw_value": "Stone"
+            }
+        }
+    )

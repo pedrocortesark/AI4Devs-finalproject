@@ -34,6 +34,9 @@ try:
         DRACO_QUANTIZE_POSITION_BITS,
         DRACO_QUANTIZE_NORMAL_BITS,
         DRACO_QUANTIZE_TEXCOORD_BITS,
+        VALID_MATERIALS,
+        DEFAULT_MATERIAL,
+        MATERIAL_USERSTRING_KEY,
     )
 except ImportError:
     # Fallback for test environment
@@ -55,6 +58,9 @@ except ImportError:
         DRACO_QUANTIZE_POSITION_BITS,
         DRACO_QUANTIZE_NORMAL_BITS,
         DRACO_QUANTIZE_TEXCOORD_BITS,
+        VALID_MATERIALS,
+        DEFAULT_MATERIAL,
+        MATERIAL_USERSTRING_KEY,
     )
 
 import rhino3dm
@@ -244,6 +250,143 @@ def _parse_rhino_file(file_path: str, iso_code: str) -> rhino3dm.File3dm:
     logger.info("parse_rhino_file.success",
                iso_code=iso_code, objects_count=len(rhino_file.Objects))
     return rhino_file
+
+
+def _validate_and_normalize_material(raw_value: str) -> str:
+    """Validate and normalize material string.
+    
+    Args:
+        raw_value: Raw material string from UserString
+    
+    Returns:
+        Normalized material ("Stone" or "Ceramic") or DEFAULT_MATERIAL if invalid
+    """
+    normalized = raw_value.strip().capitalize()
+    return normalized if normalized in VALID_MATERIALS else DEFAULT_MATERIAL
+
+
+def _extract_material_type(rhino_file: rhino3dm.File3dm, block_id: str, iso_code: str) -> str:
+    """Extract material type from Rhino UserString with priority search (T-1503-AGENT).
+    
+    Searches for "Material" UserString in priority order:
+      1. Document-level (rhino_file.Strings)
+      2. Layer-level (layer.GetUserStrings())
+      3. Object-level (object.Attributes.GetUserStrings())
+      4. Default to "Stone" (architectural elements)
+    
+    Normalization: .strip().capitalize() for case-insensitive matching
+    Validation: Must be in VALID_MATERIALS, else defaults to DEFAULT_MATERIAL
+    
+    Args:
+        rhino_file: Parsed rhino3dm.File3dm object
+        block_id: UUID of the block (for logging)
+        iso_code: ISO code of the block (for logging)
+    
+    Returns:
+        Validated material_type: "Stone" or "Ceramic"
+    
+    Example:
+        >>> rhino_file = rhino3dm.File3dm.Read("GLPER.B-PAE0720.0701.3dm")
+        >>> material = _extract_material_type(rhino_file, block_id, "GLPER.B-PAE0720.0701")
+        >>> print(material)  # "Stone"
+    """
+    
+    # Priority 1: Document-level UserString
+    if hasattr(rhino_file, 'Strings') and rhino_file.Strings is not None:
+        try:
+            if hasattr(rhino_file.Strings, 'Keys') and MATERIAL_USERSTRING_KEY in rhino_file.Strings.Keys:
+                raw_value = rhino_file.Strings[MATERIAL_USERSTRING_KEY]
+                material_type = _validate_and_normalize_material(raw_value)
+                
+                if material_type != DEFAULT_MATERIAL or raw_value.strip().capitalize() in VALID_MATERIALS:
+                    logger.info("extract_material_type.success",
+                              block_id=block_id,
+                              material_type=material_type,
+                              source="document",
+                              raw_value=raw_value)
+                else:
+                    logger.warning("extract_material_type.invalid_value",
+                                 block_id=block_id,
+                                 raw_value=raw_value,
+                                 normalized=raw_value.strip().capitalize(),
+                                 source="document",
+                                 defaulting_to=DEFAULT_MATERIAL)
+                return material_type
+        except Exception as e:
+            logger.warning("extract_material_type.document_error",
+                         block_id=block_id,
+                         error=str(e))
+    
+    # Priority 2: Layer-level UserString
+    if hasattr(rhino_file, 'Layers') and rhino_file.Layers is not None:
+        for layer in rhino_file.Layers:
+            try:
+                if hasattr(layer, 'GetUserStrings'):
+                    layer_strings = layer.GetUserStrings()
+                    if layer_strings is not None and hasattr(layer_strings, 'Keys'):
+                        if MATERIAL_USERSTRING_KEY in layer_strings.Keys:
+                            raw_value = layer_strings[MATERIAL_USERSTRING_KEY]
+                            material_type = _validate_and_normalize_material(raw_value)
+                            
+                            if material_type != DEFAULT_MATERIAL or raw_value.strip().capitalize() in VALID_MATERIALS:
+                                logger.info("extract_material_type.success",
+                                          block_id=block_id,
+                                          material_type=material_type,
+                                          source="layer",
+                                          layer_name=layer.Name if hasattr(layer, 'Name') else None,
+                                          raw_value=raw_value)
+                            else:
+                                logger.warning("extract_material_type.invalid_value",
+                                             block_id=block_id,
+                                             raw_value=raw_value,
+                                             normalized=raw_value.strip().capitalize(),
+                                             source="layer",
+                                             defaulting_to=DEFAULT_MATERIAL)
+                            return material_type
+            except Exception as e:
+                logger.warning("extract_material_type.layer_error",
+                             block_id=block_id,
+                             error=str(e))
+                continue
+    
+    # Priority 3: Object-level UserString
+    if hasattr(rhino_file, 'Objects') and rhino_file.Objects is not None:
+        for obj in rhino_file.Objects:
+            try:
+                if hasattr(obj, 'Attributes') and hasattr(obj.Attributes, 'GetUserStrings'):
+                    obj_strings = obj.Attributes.GetUserStrings()
+                    if obj_strings is not None and hasattr(obj_strings, 'Keys'):
+                        if MATERIAL_USERSTRING_KEY in obj_strings.Keys:
+                            raw_value = obj_strings[MATERIAL_USERSTRING_KEY]
+                            material_type = _validate_and_normalize_material(raw_value)
+                            
+                            if material_type != DEFAULT_MATERIAL or raw_value.strip().capitalize() in VALID_MATERIALS:
+                                logger.info("extract_material_type.success",
+                                          block_id=block_id,
+                                          material_type=material_type,
+                                          source="object",
+                                          raw_value=raw_value)
+                            else:
+                                logger.warning("extract_material_type.invalid_value",
+                                             block_id=block_id,
+                                             raw_value=raw_value,
+                                             normalized=raw_value.strip().capitalize(),
+                                             source="object",
+                                             defaulting_to=DEFAULT_MATERIAL)
+                            return material_type
+            except Exception as e:
+                logger.warning("extract_material_type.object_error",
+                             block_id=block_id,
+                             error=str(e))
+                continue
+    
+    # Priority 4: Default
+    logger.info("extract_material_type.default",
+               block_id=block_id,
+               material_type=DEFAULT_MATERIAL,
+               source="default",
+               reason="No Material UserString found at any level")
+    return DEFAULT_MATERIAL
 
 
 def _extract_and_merge_meshes(
@@ -643,24 +786,25 @@ def _export_and_upload_glb(
     return low_poly_url, file_size_kb
 
 
-def _update_block_low_poly_url(block_id: str, url: str, bbox: dict) -> None:
-    """Update database with low_poly_url and bbox for processed block.
+def _update_block_low_poly_url(block_id: str, url: str, bbox: dict, material_type: str) -> None:
+    """Update database with low_poly_url, bbox, and material_type for processed block.
 
     Args:
         block_id: UUID of the block to update
         url: Public URL of the uploaded GLB file
         bbox: Bounding box in centred coordinates: {"min": [x,y,z], "max": [x,y,z]}
+        material_type: Validated material type ("Stone" or "Ceramic")
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE blocks SET low_poly_url = %s, bbox = %s WHERE id = %s",
-            (url, json.dumps(bbox), block_id)
+            "UPDATE blocks SET low_poly_url = %s, bbox = %s, material_type = %s WHERE id = %s",
+            (url, json.dumps(bbox), material_type, block_id)
         )
         conn.commit()
 
     logger.info("update_db.success", block_id=block_id, low_poly_url=url,
-                bbox_min=bbox["min"], bbox_max=bbox["max"])
+                bbox_min=bbox["min"], bbox_max=bbox["max"], material_type=material_type)
 
 
 @celery_app.task(
@@ -735,6 +879,9 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 3: Parse .3dm file
         rhino_file = _parse_rhino_file(temp_3dm_path, iso_code)
 
+        # Step 3b: Extract material type from UserStrings (T-1503-AGENT)
+        material_type = _extract_material_type(rhino_file, block_id, iso_code)
+
         # Step 4-5: Extract and merge meshes (returns bbox in centred coords)
         merged_mesh, original_faces_count, bbox = _extract_and_merge_meshes(
             rhino_file, block_id, iso_code
@@ -748,8 +895,8 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 7-8: Export and upload GLB
         low_poly_url, file_size_kb = _export_and_upload_glb(decimated_mesh, block_id)
 
-        # Step 9: Update database (low_poly_url + bbox in centred coordinates)
-        _update_block_low_poly_url(block_id, low_poly_url, bbox)
+        # Step 9: Update database (low_poly_url + bbox + material_type)
+        _update_block_low_poly_url(block_id, low_poly_url, bbox, material_type)
 
         # Step 10: Cleanup temp .3dm file
         if temp_3dm_path and os.path.exists(temp_3dm_path):
