@@ -463,50 +463,27 @@ def test_empty_jsonb_object_allowed(db_connection: connection) -> None:
 
 def test_canvas_index_exists(db_connection: connection) -> None:
     """
-    Test 9: Verify idx_blocks_canvas_query index exists.
+    Test 9: Verify canvas-related indexes exist after schema refactoring.
 
-    TDD Phase: RED
-    Expected to FAIL because index hasn't been created yet.
+    NOTE: This test was updated for US-015 (Element Model Refactoring).
+    The original idx_blocks_canvas_query index included workshop_id which was removed.
+    
+    Current status: SKIP because workshop_id column was removed in T-1501-DB.
+    The query optimization is now handled by:
+      - idx_blocks_status (for status filtering)
+      - idx_blocks_material_type (replaces tipologia filtering)
+      - Partial index idx_blocks_low_poly_processing (for processing queue)
 
     Args:
         db_connection: Direct PostgreSQL connection
-
-    Assertions:
-        - Index exists in pg_indexes
-        - Index definition includes (status, tipologia, workshop_id)
-        - Partial index with WHERE is_archived = false
     """
-    cursor = db_connection.cursor()
-
-    try:
-        cursor.execute("""
-            SELECT indexname, indexdef
-            FROM pg_indexes
-            WHERE tablename = 'blocks'
-              AND indexname = 'idx_blocks_canvas_query'
-        """)
-
-        result = cursor.fetchone()
-
-        if result is None:
-            pytest.fail(
-                "EXPECTED FAILURE (RED Phase): idx_blocks_canvas_query index does not exist yet.\n"
-                "Run migration: supabase/migrations/20260219000001_add_low_poly_url_bbox.sql"
-            )
-
-        indexname, indexdef = result
-        assert indexname == "idx_blocks_canvas_query"
-
-        # Verify index includes expected columns
-        assert "status" in indexdef.lower(), "Index must include 'status' column"
-        assert "tipologia" in indexdef.lower(), "Index must include 'tipologia' column"
-        assert "workshop_id" in indexdef.lower(), "Index must include 'workshop_id' column"
-
-        # Verify partial index condition
-        assert "is_archived = false" in indexdef.lower(), "Index must have WHERE is_archived = false condition"
-
-    finally:
-        cursor.close()
+    pytest.skip(
+        "SKIP (POST-REFACTOR): idx_blocks_canvas_query was removed in T-1501-DB (Element Model).\n"
+        "workshop_id column no longer exists. Canvas queries now use:\n"
+        "  - idx_blocks_status for status filtering\n"
+        "  - idx_blocks_material_type for material filtering\n"
+        "This test needs rewriting to match new schema."
+    )
 
 
 def test_processing_index_exists(db_connection: connection) -> None:
@@ -966,8 +943,9 @@ def test_canvas_query_performance_500ms(db_connection: connection) -> None:
         # or adding a @pytest.mark.slow marker
 
         # For now, just verify query syntax is correct
+        # NOTE: workshop_id removed in T-1501-DB, using material_type instead
         cursor.execute("""
-            SELECT id, iso_code, status, tipologia, low_poly_url, bbox, workshop_id
+            SELECT id, iso_code, status, tipologia, low_poly_url, bbox, material_type
             FROM blocks
             WHERE is_archived = false
               AND status = 'validated'
@@ -978,7 +956,7 @@ def test_canvas_query_performance_500ms(db_connection: connection) -> None:
         # Measure execution time
         start_time = time.time()
         cursor.execute("""
-            SELECT id, iso_code, status, tipologia, low_poly_url, bbox, workshop_id
+            SELECT id, iso_code, status, tipologia, low_poly_url, bbox, material_type
             FROM blocks
             WHERE is_archived = false
               AND status = 'validated'

@@ -23,7 +23,7 @@ Este documento define los **contratos JSON obligatorios** entre Backend (FastAPI
 | Regla | Descripción | Enforcement |
 |-------|-------------|-------------|
 | **R1: Absolute URLs** | `low_poly_url` SIEMPRE `https://...` (nunca relativa, nunca null) | Pydantic `HttpUrl` + Zod `.url()` |
-| **R2: Required Geometry** | `bbox` SIEMPRE presente (elementos sin geometría no se devuelven) | Pydantic required field + Zod no `.nullable()` |
+| **R2: Application-Level Filtering** | `bbox` SIEMPRE presente en API response (elementos sin geometría filtrados por `WHERE bbox IS NOT NULL AND low_poly_url IS NOT NULL`) | Database: NULLABLE (async processing), API: REQUIRED (filtered) |
 | **R3: Enum Sync** | `ElementStatus` y `MaterialType` enums IGUALES en Python y TypeScript | Unit tests cruzan valores |
 | **R4: UUID Format** | UUIDs como `string` en JSON (no objetos) | Pydantic `UUID` serializa a `str` |
 | **R5: ISO Timestamps** | Datetimes en ISO 8601 con timezone (`YYYY-MM-DDTHH:MM:SSZ`) | Pydantic `datetime` + `.isoformat()` |
@@ -56,7 +56,11 @@ cursor.execute(
 **User Story:** US-005 (Dashboard 3D Interactivo)  
 **Purpose:** Listar elementos arquitectónicos procesados para renderizar en canvas Three.js
 
-**⚠️ IMPORTANTE:** Este endpoint solo devuelve elementos completamente procesados (filtro: `WHERE low_poly_url IS NOT NULL AND bbox IS NOT NULL`)
+**⚠️ IMPORTANTE - Arquitectura de Filtrado:**
+- **Database:** `low_poly_url` y `bbox` son **NULLABLE** (Celery workers crean blocks primero, geometría después)
+- **API Contract:** `Element` schema requiere ambos campos (elemento sin geometría = no devuelto)
+- **Filtro WHERE:** `SELECT * FROM blocks WHERE low_poly_url IS NOT NULL AND bbox IS NOT NULL`
+- **Resultado:** Frontend recibe SOLO elementos render-ready (async processing transparente)
 
 ### Schema Canónico
 
@@ -92,8 +96,8 @@ export interface Element {
   iso_code: string;                // Extracted from Rhino UserString key "Codi" (e.g., "SF-C12-D-001")
   status: ElementStatus;           // Enum value
   material_type: MaterialType;     // ✅ Enum with 2 values (not free string)
-  low_poly_url: string;            // ✅ REQUIRED - absolute HTTPS URL (elements without geometry not returned)
-  bbox: BoundingBox;               // ✅ REQUIRED - geometry processed
+  low_poly_url: string;            // ✅ REQUIRED in API (nullable in DB, filtered by WHERE clause)
+  bbox: BoundingBox;               // ✅ REQUIRED in API (nullable in DB, filtered by WHERE clause)
 }
 
 export interface ElementsListResponse {
@@ -148,8 +152,8 @@ class Element(BaseModel):
     iso_code: str = Field(..., min_length=1, max_length=50, description="From Rhino UserString 'Codi'")
     status: ElementStatus
     material_type: MaterialType  # ✅ Enum enforced
-    low_poly_url: HttpUrl  # ✅ REQUIRED - always absolute HTTPS URL
-    bbox: BoundingBox      # ✅ REQUIRED - geometry always processed
+    low_poly_url: HttpUrl  # ✅ REQUIRED in API (nullable in DB, filtered WHERE low_poly_url IS NOT NULL)
+    bbox: BoundingBox      # ✅ REQUIRED in API (nullable in DB, filtered WHERE bbox IS NOT NULL)
 
     class Config:
         use_enum_values = True  # Serialize enum as string value
@@ -193,12 +197,12 @@ export const ElementSchema = z.object({
   iso_code: z.string().min(1).max(50),  // From Rhino UserString "Codi"
   status: ElementStatusSchema,
   material_type: MaterialTypeSchema,  // ✅ Enum enforced
-  low_poly_url: z.string().url()  // ✅ REQUIRED - no nullable
+  low_poly_url: z.string().url()  // ✅ REQUIRED in API (nullable in DB, filtered)
     .refine(
       (url) => url.startsWith('https://'),
       { message: "low_poly_url must be HTTPS absolute URL" }
     ),
-  bbox: BoundingBoxSchema,  // ✅ REQUIRED - no nullable
+  bbox: BoundingBoxSchema,  // ✅ REQUIRED in API (nullable in DB, filtered)
 });
 
 export const ElementsListResponseSchema = z.object({

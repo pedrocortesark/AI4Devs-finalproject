@@ -110,9 +110,10 @@ def generate_glb_storage_path(
   - **Migration Changes:**
     - **ADDED:** `material_type TEXT NOT NULL CHECK (material_type IN ('Stone', 'Ceramic'))` — Material classifier with enum constraint
     - **DROPPED:** `workshop_id` (uuid, nullable), `workshop_name` (never existed, JOIN artifact)
-    - **SET NOT NULL:** `low_poly_url` (HttpUrl), `bbox` (JSONB) — Enforce geometry completeness
+    - **ADD CHECK CONSTRAINT:** `blocks_bbox_structure_check` — Validates bbox structure when present (nullable for async Celery worker processing)
     - **INDEX:** `idx_blocks_material_type` — Optimize material filtering queries
     - **DATA UPDATE:** 6 existing Sagrada Família blocks SET `material_type = 'Stone'` (default architectural)
+    - **ARCHITECTURAL DECISION:** `low_poly_url` and `bbox` remain NULLABLE (Celery creates blocks first, geometry populated asynchronously)
   - **Test Results:** 
     - **Suite 1 (Migration Execution):** 7 PASSED — Schema verification (column exists, NOT NULL active, workshops dropped, index created)
     - **Suite 2 (Constraint Enforcement):** 7 PASSED — CHECK accepts Stone/Ceramic, rejects Piedra/Metal/NULL, NOT NULL rejects NULL geometry

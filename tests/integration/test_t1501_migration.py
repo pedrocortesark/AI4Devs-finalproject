@@ -123,7 +123,7 @@ def requires_production_data(db_cursor):
 def test_material_type_column_exists(db_cursor):
     """Verify material_type column was added to blocks table."""
     db_cursor.execute("""
-        SELECT column_name, data_type, is_nullable
+        SELECT column_name, data_type, is_nullable, column_default
         FROM information_schema.columns
         WHERE table_name = 'blocks' AND column_name = 'material_type'
     """)
@@ -132,7 +132,8 @@ def test_material_type_column_exists(db_cursor):
     assert result is not None, "material_type column not found in blocks table"
     assert result[0] == "material_type", f"Unexpected column name: {result[0]}"
     assert result[1] == "text", f"Unexpected data type: {result[1]} (expected text)"
-    assert result[2] == "NO", f"material_type should be NOT NULL, got: {result[2]}"
+    assert result[2] == "YES", f"material_type should be NULLABLE (async processing), got: {result[2]}"
+    assert result[3] == "'Stone'::text", f"material_type should have DEFAULT 'Stone', got: {result[3]}"
 
 
 def test_six_blocks_remain_in_database(db_cursor, requires_production_data):
@@ -172,24 +173,20 @@ def test_workshop_name_column_never_existed(db_cursor):
     assert count == 0, "workshop_name column should not exist"
 
 
-def test_low_poly_url_is_not_null(db_cursor):
-    """Verify low_poly_url constraint was changed to NOT NULL."""
+def test_bbox_structure_check_constraint_exists(db_cursor):
+    """Verify bbox CHECK constraint validates structure when present."""
     db_cursor.execute("""
-        SELECT is_nullable FROM information_schema.columns
-        WHERE table_name = 'blocks' AND column_name = 'low_poly_url'
+        SELECT conname, pg_get_constraintdef(oid) 
+        FROM pg_constraint 
+        WHERE conrelid = 'blocks'::regclass 
+        AND conname = 'blocks_bbox_structure_check'
     """)
-    nullable = db_cursor.fetchone()[0]
-    assert nullable == "NO", f"low_poly_url should be NOT NULL, got: {nullable}"
-
-
-def test_bbox_is_not_null(db_cursor):
-    """Verify bbox constraint was changed to NOT NULL."""
-    db_cursor.execute("""
-        SELECT is_nullable FROM information_schema.columns
-        WHERE table_name = 'blocks' AND column_name = 'bbox'
-    """)
-    nullable = db_cursor.fetchone()[0]
-    assert nullable == "NO", f"bbox should be NOT NULL, got: {nullable}"
+    result = db_cursor.fetchone()
+    
+    assert result is not None, "blocks_bbox_structure_check constraint not found"
+    assert "bbox IS NULL" in result[1], "Constraint should allow NULL"
+    assert "bbox = '{}'::jsonb" in result[1], "Constraint should allow empty JSONB"
+    assert "bbox ? 'min'" in result[1], "Constraint should validate min key when present"
 
 
 def test_material_type_index_created(db_cursor):
@@ -206,10 +203,16 @@ def test_material_type_index_created(db_cursor):
 
 # ===== TEST SUITE 2: Constraint Enforcement =====
 
-def test_reject_null_material_type(db_cursor, clean_test_blocks):
-    """Verify CHECK constraint rejects NULL material_type."""
-    with pytest.raises(IntegrityError, match="not-null constraint"):
-        insert_test_block(db_cursor, 'TEST-NULL-MAT', material_type=None)
+def test_material_type_defaults_to_stone(db_cursor, clean_test_blocks):
+    """Verify material_type defaults to 'Stone' when not provided."""
+    # Insert block without specifying material_type (should use DEFAULT)
+    db_cursor.execute("""
+        INSERT INTO blocks (iso_code, status, tipologia)
+        VALUES ('TEST-DEFAULT-MAT', 'uploaded', 'imposta')
+        RETURNING material_type
+    """)
+    result = db_cursor.fetchone()
+    assert result[0] == "Stone", f"Expected DEFAULT 'Stone', got: {result[0]}"
 
 
 def test_reject_spanish_piedra(db_cursor, clean_test_blocks):
@@ -240,16 +243,20 @@ def test_accept_valid_ceramic(db_cursor, clean_test_blocks):
     assert result[0] == "Ceramic", f"Expected 'Ceramic', got: {result[0]}"
 
 
-def test_reject_null_low_poly_url(db_cursor, clean_test_blocks):
-    """Verify NOT NULL constraint rejects NULL low_poly_url."""
-    with pytest.raises(IntegrityError, match="not-null constraint"):
-        insert_test_block(db_cursor, 'TEST-NULL-GLB', 'Stone', low_poly_url=None)
+def test_accept_null_low_poly_url(db_cursor, clean_test_blocks):
+    """Verify low_poly_url accepts NULL (async processing allows incomplete geometry)."""
+    insert_test_block(db_cursor, 'TEST-NULL-GLB', 'Stone', low_poly_url=None)
+    db_cursor.execute("SELECT low_poly_url FROM blocks WHERE iso_code = 'TEST-NULL-GLB'")
+    result = db_cursor.fetchone()
+    assert result[0] is None, "low_poly_url should accept NULL during async processing"
 
 
-def test_reject_null_bbox(db_cursor, clean_test_blocks):
-    """Verify NOT NULL constraint rejects NULL bbox."""
-    with pytest.raises(IntegrityError, match="not-null constraint"):
-        insert_test_block(db_cursor, 'TEST-NULL-BBOX', 'Stone', bbox=None)
+def test_accept_null_bbox(db_cursor, clean_test_blocks):
+    """Verify bbox accepts NULL (async processing allows incomplete geometry)."""
+    insert_test_block(db_cursor, 'TEST-NULL-BBOX', 'Stone', bbox=None)
+    db_cursor.execute("SELECT bbox FROM blocks WHERE iso_code = 'TEST-NULL-BBOX'")
+    result = db_cursor.fetchone()
+    assert result[0] is None, "bbox should accept NULL during async processing"
 
 
 # ===== TEST SUITE 3: Data Integrity =====

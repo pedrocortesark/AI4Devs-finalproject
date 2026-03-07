@@ -6,11 +6,17 @@
 -- Purpose: Transform Spanish "Parts" model to English "Elements" model
 --          ADD material_type, DROP workshops, enforce geometry completeness
 --
+-- ⚠️ IMPORTANT: PARTIALLY SUPERSEDED by 20260307000002_fix_element_model_constraints.sql
+--    The NOT NULL constraints on low_poly_url/bbox/material_type were REVERTED in the
+--    subsequent migration to support async geometry processing workflow.
+--    Current schema: These columns are NULLABLE with CHECK constraints for validation.
+--
 -- Prerequisites:
 --   - 20260211155000_create_blocks_table.sql (blocks table exists)
 --   - 20260219000001_add_low_poly_url_bbox.sql (low_poly_url/bbox columns exist)
 --
 -- Downstream dependencies:
+--   - 20260307000002_fix_element_model_constraints.sql (REVERTS NOT NULL constraints)
 --   - T-1502-INFRA: Storage path conventions (will use material_type)
 --   - T-1503-AGENT: Rhino parser (will extract material_type from UserString)
 --   - T-1504-BACK: API integration (will expose MaterialType enum)
@@ -23,8 +29,10 @@
 -- Breaking Changes:
 --   - workshop_id column REMOVED (workshops table not implemented in MVP)
 --   - workshop_name column REMOVED (was never a real column, JOIN artifact)
---   - low_poly_url is now REQUIRED (blocks without GLB are filtered from canvas)
---   - bbox is now REQUIRED (blocks without bounding box cannot be positioned)
+--   ⚠️  NOTE: The following constraints were REVERTED in migration 20260307000002:
+--   - low_poly_url: Set NOT NULL → REVERTED to NULLABLE (async processing)
+--   - bbox: Set NOT NULL → REVERTED to NULLABLE (async processing)
+--   - material_type: Set NOT NULL → REVERTED to NULLABLE with DEFAULT 'Stone'
 
 BEGIN;
 
@@ -57,9 +65,17 @@ WHERE material_type IS NULL;
 
 -- ============================================
 -- STEP 3: Enforce geometry completeness (NOT NULL constraints)
+-- ⚠️  SUPERSEDED: These constraints were REVERTED in 20260307000002_fix_element_model_constraints.sql
 -- ============================================
--- Purpose: Filter incomplete elements from 3D canvas (blocks without GLB or BBox cannot render)
--- Impact: All future INSERTs must provide low_poly_url + bbox (agent generates these in T-0502-AGENT)
+-- Original Purpose: Filter incomplete elements from 3D canvas (blocks without GLB or BBox cannot render)
+-- Original Impact: All future INSERTs must provide low_poly_url + bbox (agent generates these in T-0502-AGENT)
+--
+-- Current State (after 20260307000002):
+--   - Columns are NULLABLE (async Celery workers create blocks before geometry ready)
+--   - Application layer filters incomplete blocks (WHERE low_poly_url IS NOT NULL AND bbox IS NOT NULL)
+--   - CHECK constraints validate structure when data is present
+--
+-- The code below executes but is immediately reverted by the next migration:
 ALTER TABLE blocks 
   ALTER COLUMN low_poly_url SET NOT NULL,
   ALTER COLUMN bbox SET NOT NULL,

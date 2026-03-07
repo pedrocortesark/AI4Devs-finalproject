@@ -87,6 +87,9 @@ def db_connection():
     to execute raw SQL or verify database schema directly.
     Useful for DB migration tests (e.g., T-020-DB).
 
+    Uses autocommit=True to prevent cascading transaction failures when
+    one test aborts its transaction.
+
     Yields None when the local database is not available (e.g. when running
     cloud-only tests with --no-deps), allowing tests that don't need the
     local DB to proceed normally.
@@ -102,7 +105,7 @@ def db_connection():
     conn = None
     try:
         conn = psycopg2.connect(database_url, connect_timeout=3)
-        conn.autocommit = False
+        conn.autocommit = True  # Prevent cascading transaction failures
     except Exception:
         pass  # DB not available; yield None so callers can skip gracefully
 

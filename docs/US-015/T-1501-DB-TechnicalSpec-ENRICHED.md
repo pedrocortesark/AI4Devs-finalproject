@@ -18,14 +18,14 @@ Execute a **critical database migration** to transform the Spanish-nomenclature 
 ### Critical Requirements
 1. **ADD COLUMN** `material_type TEXT CHECK (material_type IN ('Stone', 'Ceramic'))` — Enum constraint for material classification
 2. **DROP COLUMNS** `workshop_id`, `workshop_name` — Remove unused workshop references (workshops table not implemented in MVP)
-3. **ALTER COLUMNS** `low_poly_url SET NOT NULL`, `bbox SET NOT NULL` — Enforce geometry completeness (filter incomplete elements from 3D rendering)
+3. **ADD CHECK CONSTRAINTS** `blocks_bbox_structure_check` — Validate bbox structure when present (nullable for async processing)
 4. **UPDATE DATA** Set `material_type = 'Stone'` for 6 existing blocks (GLPER.B-PAE0720.0701-0706) — Default architectural material
 5. **CREATE INDEX** `idx_blocks_material_type` — Optimize material filtering in dashboard queries
 
 ### Success Criteria
 - Migration executes without errors in local Supabase instance
 - 6 blocks updated with `material_type = 'Stone'` (no data loss)
-- NOT NULL constraints enforce geometry completeness (reject NULL low_poly_url/bbox)
+- CHECK constraints validate bbox structure when present (nullable allows async processing)
 - Test baseline maintained: `make test-unit` returns 108/108 ✅
 - Rollback plan documented (DOWN migration)
 - Handoff document created for T-1502-INFRA
@@ -82,8 +82,12 @@ CREATE TABLE blocks (
     updated_at timestamptz NOT NULL DEFAULT now(),
     is_archived boolean NOT NULL DEFAULT false,
     validation_report jsonb,
-    low_poly_url TEXT NOT NULL,                      -- ✅ NOW REQUIRED (filter incomplete geometry)
-    bbox JSONB NOT NULL                              -- ✅ NOW REQUIRED (filter incomplete geometry)
+    low_poly_url TEXT NULL,                          -- ✅ NULLABLE: Populated asynchronously by worker
+    bbox JSONB NULL,                                 -- ✅ NULLABLE: Populated asynchronously by worker
+    CONSTRAINT blocks_bbox_structure_check CHECK (
+        bbox IS NULL OR bbox = '{}'::jsonb OR 
+        (bbox ? 'min' AND bbox ? 'max')
+    )                                                -- ✅ NEW: Validate bbox structure when present
 );
 
 -- New index for material filtering
@@ -226,8 +230,8 @@ class PartCanvasItem(BaseModel):
     iso_code: str
     status: BlockStatus
     tipologia: str
-    low_poly_url: Optional[str] = None          # ❌ BREAKS: Now NOT NULL in DB
-    bbox: Optional[BoundingBox] = None          # ❌ BREAKS: Now NOT NULL in DB
+    low_poly_url: Optional[str] = None          # ✅ OK: Still nullable (async processing)
+    bbox: Optional[BoundingBox] = None          # ✅ OK: Still nullable (async processing)
     workshop_id: Optional[UUID] = None          # ❌ BREAKS: Column dropped in DB
 ```
 
@@ -254,7 +258,7 @@ async def list_parts(...) -> PartsListResponse:
 
 **T-1501-DB Impact:**
 - Query will return `workshop_id = NULL` for all rows (column doesn't exist)
-- `low_poly_url` and `bbox` will never be NULL (satisfied by NOT NULL constraint)
+- `low_poly_url` and `bbox` are filtered at application level (`WHERE low_poly_url IS NOT NULL`)
 - **No code changes required** — service handles NULL workshop_id gracefully
 
 ### 4.2 Affected Agent Components
@@ -273,7 +277,7 @@ supabase.table("blocks").update(block_data).eq("id", block_id).execute()
 ```
 
 **T-1501-DB Impact:**
-- ✅ **No breaking changes** — agent already provides `low_poly_url` and `bbox` (satisfies NOT NULL)
+- ✅ **No breaking changes** — agent already provides `low_poly_url` and `bbox` (values populated after creation)
 - ❌ **Missing:** Agent does NOT extract `material_type` yet (T-1503-AGENT will implement)
 - **Interim Behavior:** Manual UPDATE required in T-1501-DB to set `material_type = 'Stone'` for 6 existing blocks
 
@@ -545,7 +549,7 @@ Before marking T-1501-DB as DONE, verify:
 
 - ✅ Migration executed successfully (COMMIT confirmed)
 - ✅ 6 blocks updated with `material_type = 'Stone'` (no data loss)
-- ✅ Constraints active (CHECK, NOT NULL, INDEX verified)
+- ✅ Constraints active (CHECK for bbox structure, INDEX verified)
 - ✅ 26 integration tests PASS (100% success rate)
 - ✅ Backend test baseline maintained: `make test-unit` returns 108/108 ✅
 - ✅ Rollback plan tested (DOWN migration functional)
@@ -617,13 +621,16 @@ WHERE material_type IS NULL;
 -- SELECT COUNT(*) FROM blocks WHERE material_type = 'Stone'; -- Should return 6
 
 -- ============================================
--- STEP 3: Enforce geometry completeness (NOT NULL constraints)
+-- STEP 3: Add CHECK constraints for geometry structure validation
 -- ============================================
--- Purpose: Filter incomplete elements from 3D canvas (blocks without GLB or BBox cannot render)
--- Impact: All future INSERTs must provide low_poly_url + bbox (agent generates these in T-0502-AGENT)
+-- Purpose: Validate bbox structure when present, while allowing NULL during async processing
+-- Rationale: Celery workers create blocks first, then populate geometry asynchronously
+-- Impact: bbox remains NULLABLE but validated when non-NULL (prevents malformed data)
 ALTER TABLE blocks 
-  ALTER COLUMN low_poly_url SET NOT NULL,
-  ALTER COLUMN bbox SET NOT NULL;
+  ADD CONSTRAINT blocks_bbox_structure_check CHECK (
+    bbox IS NULL OR bbox = '{}'::jsonb OR 
+    (bbox ? 'min' AND bbox ? 'max')
+  );
 
 -- ============================================
 -- STEP 4: Remove workshop references (not used in MVP)
