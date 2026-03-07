@@ -4,12 +4,11 @@
 Sprint 6 — Tech Debt & Documentation (2026-02-27 COMPLETADO) | Próximo: Next User Story (TBD)
 
 ## Active Ticket
-**T-1504-AGENT: Material Type Extraction - Real Stone Dictionary (62 types)** | 5 SP | 🔜 ENRICH COMPLETE → RED NEXT
+**None** — Ready for next ticket
 
-**Status:** ENRICH phase completed (2026-03-07 18:35) ✅  
-**Current Phase:** RED (write failing tests with 62 real materials)  
-**Blocker:** None  
-**ETA:** RED 30m + GREEN 45m + REFACTOR 30m + AUDIT 20m = ~2 hours total
+**Status:** Sprint 6 completed, awaiting next User Story assignment  
+**Last Completed:** T-1504-AGENT (Material Type Extraction - Real Stone Dictionary)  
+**Blocker:** None
 
 ### Context
 Corrects T-1503-AGENT which was implemented with incorrect specification. Material is NOT enum ["Stone", "Ceramic"], but one of **62 real stone types** from Sagrada Família C# dictionary, each with RGB color for canvas rendering.
@@ -31,15 +30,51 @@ Corrects T-1503-AGENT which was implemented with incorrect specification. Materi
 - [x] Backlog updated (T-1503 marked "SPEC INCORRECT", T-1504 added)
 - [x] Registered in prompts.md (#211)
 
-### Next Steps
-1. **RED Phase:** Create `test_material_extraction_v2.py` with 12 failing tests using real materials
-2. **GREEN Phase:** Update `MATERIAL_COLORS` dict in `constants.py`, modify extraction logic
-3. **REFACTOR Phase:** Extract `get_material_color()` helper, apply migration, update docs
-4. **AUDIT Phase:** Verify 12/12 + 119/119 PASS, generate audit report
+### RED Phase Deliverables ✅
+- [x] Test file created: `tests/agent/unit/test_material_extraction_v2.py` (320 lines)
+- [x] 12 test cases implemented (5 HP + 4 EC + 3 ERR)
+- [x] Tests use real materials: Montjuïc, Ulldecona, Floresta (not Stone/Ceramic)
+- [x] All tests fail correctly: **12 FAILED, 0 PASSED** ✅
+- [x] Failure reason: AssertionError - expects "Montjuïc" but gets "Stone"
+- [x] Registered in prompts.md (#212)
+
+### GREEN Phase Deliverables ✅
+- [x] Updated `src/agent/constants.py`: Added MATERIAL_COLORS dict (62 entries)
+- [x] Updated `VALID_MATERIALS = list(MATERIAL_COLORS.keys())` (62 materials)
+- [x] Updated `DEFAULT_MATERIAL = "Montjuïc"`
+- [x] Simplified `_extract_material_type()`: Removed document/layer search, only object-level
+- [x] Tests passing: **12/12 T-1504 PASS** ✅
+- [x] Baseline preserved: **119/119 backend tests PASS** ✅ (zero regression)
+- [x] Registered in prompts.md (#213)
+
+### Next Steps (REFACTOR Phase)
+1. **Add helper function:** `get_material_color(material: str) -> tuple[int, int, int]`
+2. **Remove obsolete test file:** `tests/agent/unit/test_material_extraction.py` (T-1503)
+3. **Database migration:** Apply `supabase/migrations/20260307000003_material_real_types.sql`
+4. **Update documentation:** 5 files (backlog, activeContext, progress, productContext, prompts)
+5. **Comprehensive docstrings:** Add examples to _extract_material_type()
+6. **Verify all tests:** Confirm 12/12 + 119/119 still pass after refactoring
 
 ---
 
 ## Recently Completed  
+
+- **T-1504-AGENT: Material Type Extraction - Real Stone Dictionary (62 types)** — ✅ TDD COMPLETE (2026-03-07 20:00) | **12/12 PASSED, 119/119 baseline, 0 FAILED** | Corrects T-1503 specification error
+  - **Context:** Supersedes T-1503-AGENT which used incorrect enum ["Stone", "Ceramic"]. Implemented 62 real stone types from MATERIAL_COLORS dictionary with RGB colors.
+  - **TDD Timeline:**
+    - ENRICH: 2026-03-07 18:30 (Technical spec docs/US-015/T-1504-AGENT-TechnicalSpec.md, 62-material dict, 12 test cases, migration planned) [Prompt #211]
+    - RED: 2026-03-07 18:45 (test_material_extraction_v2.py created 320 lines, 12 tests FAILED correctly) [Prompt #212]
+    - GREEN: 2026-03-07 18:55 (MATERIAL_COLORS 62 entries added, _extract_material_type() simplified object-only, 12/12 PASSED, 119/119 baseline PASSED) [Prompt #213]
+    - REFACTOR: 2026-03-07 20:00 (get_material_color() helper added, enhanced docstrings, migration 20260307000003 applied, obsolete test_material_extraction.py removed, docs updated) [Prompt #214]
+  - **Implementation Details:**
+    - **Constants:** MATERIAL_COLORS dict (62 materials: "Montjuïc", "Ulldecona", "Floresta", etc. with RGB tuples)
+    - **Extraction:** Object-level UserString ONLY (no document/layer search), validates against 62 materials, defaults "Montjuïc"
+    - **Helper:** get_material_color(material) -> tuple[int, int, int] for frontend RGB rendering
+    - **Migration:** 20260307000003_material_real_types.sql (DROP CHECK constraint, UPDATE Stone→Montjuïc)
+    - **Cleanup:** Removed obsolete test_material_extraction.py (T-1503, 420 lines with Stone/Ceramic)
+  - **Test Results:** 12/12 T-1504 PASSED ✅, 119/119 backend baseline PASSED ✅, zero regression
+  - **Files Modified:** src/agent/constants.py (+91 lines), src/agent/tasks/geometry_processing.py (+45 helper +enhanced docstrings), tests/agent/unit/test_material_extraction_v2.py (320 lines), supabase/migrations/20260307000003_material_real_types.sql (40 lines)
+  - **Production-Ready:** Clean Architecture, Google Style docstrings, zero technical debt
 
 - **T-1503-AGENT: Rhino Parser + GLB Generator (Material Type Extraction)** — ✅ TDD COMPLETE (2026-03-07) | **12/12 PASSED, 119/119 baseline, 0 FAILED** | ⚠️ **SPECIFICATION INCORRECT - Superseded by T-1504-AGENT**
   - **⚠️ CRITICAL DISCOVERY (2026-03-07 18:30):** Implementation based on incorrect specification. Material is NOT enum ["Stone", "Ceramic"] but one of 62 real stone types from C# dictionary. See T-1504-AGENT for corrected implementation.
