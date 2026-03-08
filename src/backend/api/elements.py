@@ -241,7 +241,7 @@ async def get_element_navigation(
 
     # Initialize service and fetch adjacent elements
     service = NavigationService()
-    
+
     # Call navigation service with material_type filter
     success, data, error = service.get_adjacent_parts(
         part_id=element_id,

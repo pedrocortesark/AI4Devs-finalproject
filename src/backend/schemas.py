@@ -132,10 +132,10 @@ class BlockStatus(str, Enum):
 class MaterialType(str, Enum):
     """
     Material types for architectural elements (T-1503-AGENT).
-    
+
     Synchronized with PostgreSQL CHECK constraint (T-1501-DB):
     CHECK (material_type IN ('Stone', 'Ceramic'))
-    
+
     Valid values:
         Stone: Natural stone (99% of Sagrada Familia elements)
         Ceramic: Ceramic materials (decorative elements)
@@ -413,14 +413,14 @@ class ElementStatus(str, Enum):
 class Element(BaseModel):
     """
     Element schema optimized for 3D canvas rendering (US-005).
-    
+
     Contract: Must match TypeScript interface Element exactly (T-1505-FRONT).
-    
+
     Breaking Changes from PartCanvasItem:
     - Removed: workshop_id, workshop_name (workshops not used in MVP)
     - Renamed: tipologia → material_type (internationalization)
     - Changed: material_type from enum to str (validated against 62 real materials)
-    
+
     Attributes:
         id: Element UUID
         iso_code: ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)
@@ -433,35 +433,35 @@ class Element(BaseModel):
     iso_code: str = Field(..., description="ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)")
     status: ElementStatus = Field(..., description="Lifecycle state")
     material_type: str = Field(
-        ..., 
+        ...,
         description="Stone material type (one of 62 real materials: Montjuïc, Ulldecona, etc.)"
     )
     low_poly_url: Optional[str] = Field(
-        None, 
+        None,
         description="Presigned CDN URL for GLB file (NULL if async processing incomplete)"
     )
     bbox: Optional[BoundingBox] = Field(
-        None, 
+        None,
         description="3D bounding box (NULL if async processing incomplete)"
     )
-    
+
     @field_validator('material_type')
     @classmethod
     def validate_material_type(cls, v: str) -> str:
         """
         Validate material_type against MATERIAL_COLORS dictionary (62 real materials).
-        
+
         Args:
             v: Material type string from database
-            
+
         Returns:
             Validated material type
-            
+
         Raises:
             ValueError: If material not in VALID_MATERIALS list
         """
         from agent.constants import VALID_MATERIALS
-        
+
         if v not in VALID_MATERIALS:
             raise ValueError(
                 f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} "
@@ -469,7 +469,7 @@ class Element(BaseModel):
                 f"See agent.constants.MATERIAL_COLORS for full list."
             )
         return v
-    
+
     model_config = ConfigDict(
         json_schema_extra={
         "example": {
@@ -485,11 +485,11 @@ class Element(BaseModel):
 class ElementsListResponse(BaseModel):
     """
     Response for GET /api/elements endpoint.
-    
+
     Breaking Changes from PartsListResponse:
     - Renamed: parts → elements
     - Removed: count (redundant, use len(elements))
-    
+
     Attributes:
         elements: Array of all elements matching filters
         filters_applied: Echo of query parameters for transparency
@@ -501,7 +501,7 @@ class ElementsListResponse(BaseModel):
         default_factory=lambda: {"total": 0, "filtered": 0},
         description="Response metadata"
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
         "example": {
@@ -523,13 +523,13 @@ class ElementsListResponse(BaseModel):
 class ElementDetail(BaseModel):
     """
     Detailed element info for 3D viewer modal (US-010).
-    
+
     Contract: Must match TypeScript interface ElementDetail exactly (T-1505-FRONT).
-    
+
     Breaking Changes from PartDetailResponse:
     - Removed: workshop_id, workshop_name, tipologia
     - Added: material_type (str validated against 62 materials)
-    
+
     Attributes:
         id: Element UUID
         iso_code: ISO-19650 identifier
@@ -552,17 +552,17 @@ class ElementDetail(BaseModel):
     validation_report: Optional[ValidationReport] = Field(None, description="Validation results")
     glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
     triangle_count: Optional[int] = Field(None, description="Triangle count (performance)")
-    
+
     @field_validator('material_type')
     @classmethod
     def validate_material_type(cls, v: str) -> str:
         """Validate material_type against 62 real materials."""
         from agent.constants import VALID_MATERIALS
-        
+
         if v not in VALID_MATERIALS:
             raise ValueError(f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} valid materials.")
         return v
-    
+
     model_config = ConfigDict(
         json_schema_extra={
         "example": {
@@ -586,14 +586,14 @@ class ElementDetail(BaseModel):
 class ElementNavigationResponse(BaseModel):
     """
     Response for GET /api/elements/{id}/navigation endpoint.
-    
+
     No breaking changes in structure, only renamed class for consistency.
     """
     prev_id: Optional[UUID] = Field(None, description="Previous element UUID (None if first)")
     next_id: Optional[UUID] = Field(None, description="Next element UUID (None if last)")
     current_index: int = Field(..., ge=1, description="1-based index of current element")
     total_count: int = Field(..., ge=0, description="Total elements in filtered set")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
         "example": {
