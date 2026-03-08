@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
@@ -169,29 +169,28 @@ class ValidationStatusResponse(BaseModel):
         description="Celery task ID for tracking (only if status=processing)"
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "block_id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "PENDING-a1b2c3d4",
-                "status": "validated",
-                "validation_report": {
-                    "is_valid": True,
-                    "errors": [],
-                    "metadata": {
-                        "total_objects": 42,
-                        "valid_objects": 42,
-                        "invalid_objects": 0,
-                        "user_strings_extracted": 15
-                    },
-                    "validated_at": "2026-02-14T23:15:00Z",
-                    "validated_by": "librarian-v1.0.0"
-                },
-                "job_id": None
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "block_id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "PENDING-a1b2c3d4",
+        "status": "validated",
+        "validation_report": {
+        "is_valid": True,
+        "errors": [],
+        "metadata": {
+        "total_objects": 42,
+        "valid_objects": 42,
+        "invalid_objects": 0,
+        "user_strings_extracted": 15
+        },
+        "validated_at": "2026-02-14T23:15:00Z",
+        "validated_by": "librarian-v1.0.0"
+        },
+        "job_id": None
         }
-
-
+        }
+    )
 # ===== T-0501-BACK: Parts Canvas API Schemas =====
 
 class BoundingBox(BaseModel):
@@ -215,15 +214,14 @@ class BoundingBox(BaseModel):
             raise ValueError('Must contain exactly 3 coordinates [x, y, z]')
         return v
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "min": [-2.5, 0.0, -2.5],
-                "max": [2.5, 5.0, 2.5]
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "min": [-2.5, 0.0, -2.5],
+        "max": [2.5, 5.0, 2.5]
         }
-
-
+        }
+    )
 class PartCanvasItem(BaseModel):
     """
     Minimal part info optimized for 3D canvas rendering.
@@ -248,20 +246,19 @@ class PartCanvasItem(BaseModel):
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
     workshop_id: Optional[UUID] = Field(None, description="Assigned workshop UUID")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "SF-C12-D-001",
-                "status": "validated",
-                "tipologia": "capitel",
-                "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
-                "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-                "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "SF-C12-D-001",
+        "status": "validated",
+        "tipologia": "capitel",
+        "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
+        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
+        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
         }
-
-
+        }
+    )
 class PartsListResponse(BaseModel):
     """
     Response for GET /api/parts endpoint.
@@ -275,30 +272,29 @@ class PartsListResponse(BaseModel):
     count: int = Field(..., description="Total count of parts returned")
     filters_applied: Dict[str, Any] = Field(default_factory=dict, description="Applied filters (for debugging)")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "parts": [
-                    {
-                        "id": "550e8400-e29b-41d4-a716-446655440000",
-                        "iso_code": "SF-C12-D-001",
-                        "status": "validated",
-                        "tipologia": "capitel",
-                        "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
-                        "bbox": {"min": [-2.5, 0, -2.5], "max": [2.5, 5, 2.5]},
-                        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
-                    }
-                ],
-                "count": 1,
-                "filters_applied": {
-                    "status": "validated",
-                    "tipologia": "capitel",
-                    "workshop_id": None
-                }
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "parts": [
+        {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "SF-C12-D-001",
+        "status": "validated",
+        "tipologia": "capitel",
+        "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
+        "bbox": {"min": [-2.5, 0, -2.5], "max": [2.5, 5, 2.5]},
+        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
         }
-
-
+        ],
+        "count": 1,
+        "filters_applied": {
+        "status": "validated",
+        "tipologia": "capitel",
+        "workshop_id": None
+        }
+        }
+        }
+    )
 # ===== T-1002-BACK: Get Part Detail API Schemas =====
 
 class PartDetailResponse(BaseModel):
@@ -335,29 +331,28 @@ class PartDetailResponse(BaseModel):
     glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
     triangle_count: Optional[int] = Field(None, description="Triangle count (for performance)")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "SF-C12-D-001",
-                "status": "validated",
-                "tipologia": "capitel",
-                "created_at": "2026-02-15T10:30:00Z",
-                "low_poly_url": "https://d1234abcd.cloudfront.net/low-poly/550e8400.glb?X-Amz-Expires=300&...",
-                "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-                "workshop_id": "123e4567-e89b-12d3-a456-426614174000",
-                "workshop_name": "Taller Granollers",
-                "validation_report": {
-                    "is_valid": True,
-                    "errors": [],
-                    "metadata": {"layer_count": 5, "object_count": 12}
-                },
-                "glb_size_bytes": 425984,
-                "triangle_count": 1024
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "SF-C12-D-001",
+        "status": "validated",
+        "tipologia": "capitel",
+        "created_at": "2026-02-15T10:30:00Z",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/low-poly/550e8400.glb?X-Amz-Expires=300&...",
+        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
+        "workshop_id": "123e4567-e89b-12d3-a456-426614174000",
+        "workshop_name": "Taller Granollers",
+        "validation_report": {
+        "is_valid": True,
+        "errors": [],
+        "metadata": {"layer_count": 5, "object_count": 12}
+        },
+        "glb_size_bytes": 425984,
+        "triangle_count": 1024
         }
-
-
+        }
+    )
 # ===== T-1003-BACK: Part Navigation API Schemas =====
 
 class PartNavigationResponse(BaseModel):
@@ -381,17 +376,16 @@ class PartNavigationResponse(BaseModel):
     current_index: int = Field(..., ge=1, description="1-based index of current part")
     total_count: int = Field(..., ge=0, description="Total parts in filtered set")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "prev_id": "123e4567-e89b-12d3-a456-426614174000",
-                "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
-                "current_index": 42,
-                "total_count": 150
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "prev_id": "123e4567-e89b-12d3-a456-426614174000",
+        "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
+        "current_index": 42,
+        "total_count": 150
         }
-
-
+        }
+    )
 # ===== T-1504-BACK: Element API Schemas (US-015 Refactoring) =====
 
 class ElementStatus(str, Enum):
@@ -476,19 +470,18 @@ class Element(BaseModel):
             )
         return v
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "GLPER.B-PAE0720.0701",
-                "status": "validated",
-                "material_type": "Montjuïc",
-                "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400_20260307T120000Z.glb",
-                "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "GLPER.B-PAE0720.0701",
+        "status": "validated",
+        "material_type": "Montjuïc",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400_20260307T120000Z.glb",
+        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
         }
-
-
+        }
+    )
 class ElementsListResponse(BaseModel):
     """
     Response for GET /api/elements endpoint.
@@ -509,25 +502,24 @@ class ElementsListResponse(BaseModel):
         description="Response metadata"
     )
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "elements": [
-                    {
-                        "id": "550e8400-e29b-41d4-a716-446655440000",
-                        "iso_code": "GLPER.B-PAE0720.0701",
-                        "status": "validated",
-                        "material_type": "Montjuïc",
-                        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
-                        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
-                    }
-                ],
-                "filters_applied": {"status": "validated", "material_type": "Montjuïc"},
-                "meta": {"total": 6, "filtered": 6}
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "elements": [
+        {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "GLPER.B-PAE0720.0701",
+        "status": "validated",
+        "material_type": "Montjuïc",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
+        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
         }
-
-
+        ],
+        "filters_applied": {"status": "validated", "material_type": "Montjuïc"},
+        "meta": {"total": 6, "filtered": 6}
+        }
+        }
+    )
 class ElementDetail(BaseModel):
     """
     Detailed element info for 3D viewer modal (US-010).
@@ -571,27 +563,26 @@ class ElementDetail(BaseModel):
             raise ValueError(f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} valid materials.")
         return v
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "GLPER.B-PAE0720.0701",
-                "status": "validated",
-                "material_type": "Montjuïc",
-                "created_at": "2026-03-06T10:30:00Z",
-                "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
-                "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
-                "validation_report": {
-                    "is_valid": True,
-                    "errors": [],
-                    "metadata": {"layer_count": 1, "object_count": 1}
-                },
-                "glb_size_bytes": 312456,
-                "triangle_count": 987
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "GLPER.B-PAE0720.0701",
+        "status": "validated",
+        "material_type": "Montjuïc",
+        "created_at": "2026-03-06T10:30:00Z",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
+        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
+        "validation_report": {
+        "is_valid": True,
+        "errors": [],
+        "metadata": {"layer_count": 1, "object_count": 1}
+        },
+        "glb_size_bytes": 312456,
+        "triangle_count": 987
         }
-
-
+        }
+    )
 class ElementNavigationResponse(BaseModel):
     """
     Response for GET /api/elements/{id}/navigation endpoint.
@@ -603,12 +594,13 @@ class ElementNavigationResponse(BaseModel):
     current_index: int = Field(..., ge=1, description="1-based index of current element")
     total_count: int = Field(..., ge=0, description="Total elements in filtered set")
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "prev_id": "123e4567-e89b-12d3-a456-426614174000",
-                "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
-                "current_index": 42,
-                "total_count": 150
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "prev_id": "123e4567-e89b-12d3-a456-426614174000",
+        "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
+        "current_index": 42,
+        "total_count": 150
         }
+        }
+    )
