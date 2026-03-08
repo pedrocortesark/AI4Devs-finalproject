@@ -3,7 +3,7 @@ name: Security Scan
 # Run on push to main/deploy branches and all PRs
 on:
   push:
-    branches: [main, Deploy, "feature-*"]
+    branches: [main, Deploy, "feature-*", "finalproject-*"]
   pull_request:
     branches: [main, Deploy]
   # Allow manual trigger for security audits
