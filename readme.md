@@ -1,134 +1,211 @@
-## Índice
+# Sagrada Família Parts Manager (SF-PM)
 
-0. [Ficha del proyecto](#0-ficha-del-proyecto)
-1. [Descripción general del producto](#1-descripción-general-del-producto)
-2. [Arquitectura del sistema](#2-arquitectura-del-sistema)
-3. [Modelo de datos](#3-modelo-de-datos)
-4. [Especificación de la API](#4-especificación-de-la-api)
-5. [Historias de usuario](#5-historias-de-usuario)
-6. [Tickets de trabajo](#6-tickets-de-trabajo)
-7. [Pull requests](#7-pull-requests)
+> **Digital Twin Activo para Gestión de Inventario de Piezas CAD con Validación Inteligente**
+
+[![Status](https://img.shields.io/badge/Status-In%20Development-yellow)](./docs/00-index.md)
+[![Documentation](https://img.shields.io/badge/Docs-100%25-green)](./docs/)
+[![License](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
 
 ---
 
-## 0. Ficha del proyecto
+## 🎯 Descripción
 
-### **0.1. Tu nombre completo:**
+Sistema enterprise que transforma archivos CAD estáticos (Rhino .3dm) en un **gemelo digital activo** para la gestión integral del inventario de decenas de miles de piezas únicas de la Sagrada Família de Barcelona.
 
-### **0.2. Nombre del proyecto:**
-
-### **0.3. Descripción breve del proyecto:**
-
-### **0.4. URL del proyecto:**
-
-> Puede ser pública o privada, en cuyo caso deberás compartir los accesos de manera segura. Puedes enviarlos a [alvaro@lidr.co](mailto:alvaro@lidr.co) usando algún servicio como [onetimesecret](https://onetimesecret.com/).
-
-### 0.5. URL o archivo comprimido del repositorio
-
-> Puedes tenerlo alojado en público o en privado, en cuyo caso deberás compartir los accesos de manera segura. Puedes enviarlos a [alvaro@lidr.co](mailto:alvaro@lidr.co) usando algún servicio como [onetimesecret](https://onetimesecret.com/). También puedes compartir por correo un archivo zip con el contenido
-
+**Características clave:**
+- ✅ Búsquedas instantáneas (de 3 horas a 10 minutos)
+- ✅ Validación automática con IA ("The Librarian" Agent)
+- ✅ Trazabilidad completa del ciclo de vida
+- ✅ Visualización 3D en navegador (Three.js)
+- ✅ Eliminación de errores logísticos (40% → 0%)
 
 ---
 
-## 1. Descripción general del producto
+## 📚 Documentación
 
-> Describe en detalle los siguientes aspectos del producto:
+**Documentación completa disponible en [`/docs`](./docs/)**
 
-### **1.1. Objetivo:**
+### Índice de Documentación Técnica
 
-> Propósito del producto. Qué valor aporta, qué soluciona, y para quién.
-
-### **1.2. Características y funcionalidades principales:**
-
-> Enumera y describe las características y funcionalidades específicas que tiene el producto para satisfacer las necesidades identificadas.
-
-### **1.3. Diseño y experiencia de usuario:**
-
-> Proporciona imágenes y/o videotutorial mostrando la experiencia del usuario desde que aterriza en la aplicación, pasando por todas las funcionalidades principales.
-
-### **1.4. Instrucciones de instalación:**
-> Documenta de manera precisa las instrucciones para instalar y poner en marcha el proyecto en local (librerías, backend, frontend, servidor, base de datos, migraciones y semillas de datos, etc.)
-
----
-
-## 2. Arquitectura del Sistema
-
-### **2.1. Diagrama de arquitectura:**
-> Usa el formato que consideres más adecuado para representar los componentes principales de la aplicación y las tecnologías utilizadas. Explica si sigue algún patrón predefinido, justifica por qué se ha elegido esta arquitectura, y destaca los beneficios principales que aportan al proyecto y justifican su uso, así como sacrificios o déficits que implica.
-
-
-### **2.2. Descripción de componentes principales:**
-
-> Describe los componentes más importantes, incluyendo la tecnología utilizada
-
-### **2.3. Descripción de alto nivel del proyecto y estructura de ficheros**
-
-> Representa la estructura del proyecto y explica brevemente el propósito de las carpetas principales, así como si obedece a algún patrón o arquitectura específica.
-
-### **2.4. Infraestructura y despliegue**
-
-> Detalla la infraestructura del proyecto, incluyendo un diagrama en el formato que creas conveniente, y explica el proceso de despliegue que se sigue
-
-### **2.5. Seguridad**
-
-> Enumera y describe las prácticas de seguridad principales que se han implementado en el proyecto, añadiendo ejemplos si procede
-
-### **2.6. Tests**
-
-> Describe brevemente algunos de los tests realizados
+| Fase | Documento | Descripción |
+|------|-----------|-------------|
+| **Índice** | [📑 00-index.md](./docs/00-index.md) | Índice general del proyecto y guía de navegación |
+| **Fase 1** | [📘 01-strategy.md](./docs/01-strategy.md) | Análisis del problema y propuesta de valor |
+| **Fase 2** | [📘 02-prd.md](./docs/02-prd.md) | Product Requirements Document (PRD) completo |
+| **Fase 3** | [📘 03-service-model.md](./docs/03-service-model.md) | Lean Canvas y modelo de negocio |
+| **Fase 4** | [📘 04-use-cases.md](./docs/04-use-cases.md) | Casos de uso maestros y diagramas de flujo |
+| **Fase 5** | [📘 05-data-model.md](./docs/05-data-model.md) | Modelo de datos PostgreSQL/Supabase |
+| **Fase 6** | [📘 06-architecture.md](./docs/06-architecture.md) | Arquitectura Cloud-Native (C4 Model) |
+| **Fase 7** | [📘 07-agent-design.md](./docs/07-agent-design.md) | Diseño del agente IA "The Librarian" |
+| **Fase 8** | [📘 08-roadmap.md](./docs/08-roadmap.md) | Roadmap de implementación |
 
 ---
 
-## 3. Modelo de Datos
+## 🛠️ Stack Tecnológico
 
-### **3.1. Diagrama del modelo de datos:**
-
-> Recomendamos usar mermaid para el modelo de datos, y utilizar todos los parámetros que permite la sintaxis para dar el máximo detalle, por ejemplo las claves primarias y foráneas.
-
-
-### **3.2. Descripción de entidades principales:**
-
-> Recuerda incluir el máximo detalle de cada entidad, como el nombre y tipo de cada atributo, descripción breve si procede, claves primarias y foráneas, relaciones y tipo de relación, restricciones (unique, not null…), etc.
-
----
-
-## 4. Especificación de la API
-
-> Si tu backend se comunica a través de API, describe los endpoints principales (máximo 3) en formato OpenAPI. Opcionalmente puedes añadir un ejemplo de petición y de respuesta para mayor claridad
+```yaml
+Frontend:  React 18 + TypeScript + Three.js / React-Three-Fiber + Zustand + Vite
+Backend:   FastAPI (Python 3.11) + Celery Workers + Redis
+Agent:     rhino3dm 8 + trimesh + open3d (validación y conversión 3D low-poly)
+Database:  PostgreSQL 15 (Docker) + Supabase Cloud (Auth + Realtime)
+Storage:   Supabase Storage (S3-compatible) + CloudFront CDN
+CAD:       rhino3dm + glTF/GLB + pipeline de decimación low-poly
+Infra:     Docker Compose (5 servicios) + GitHub Actions CI/CD
+```
 
 ---
 
-## 5. Historias de Usuario
+## 🚀 Quick Start
 
-> Documenta 3 de las historias de usuario principales utilizadas durante el desarrollo, teniendo en cuenta las buenas prácticas de producto al respecto.
+### Prerrequisitos
 
-**Historia de Usuario 1**
+- Docker (Engine) & Docker Compose
+- GNU Make (o `make` compatible). En Windows puede usarse `test.bat` o WSL.
+- Variables de entorno configuradas en `.env` (ver `.env.example`)
 
-**Historia de Usuario 2**
+### Quick Start (Docker + Make)
 
-**Historia de Usuario 3**
+1. Clonar repositorio y preparar `.env`:
+
+```bash
+git clone https://github.com/sagrada-familia/parts-manager.git
+cd parts-manager
+cp .env.example .env
+# Edita .env con los valores reales (SUPABASE_URL, SUPABASE_KEY, DATABASE_PASSWORD, REDIS_PASSWORD, etc.)
+```
+
+2. Levantar servicios en contenedores (dev):
+
+```bash
+make up-db        # Solo la base de datos
+make up-backend   # Backend + dependencias (db + redis)
+make up-frontend  # Frontend dev server (Vite)
+```
+
+3. Inicializar infra (crear buckets / semillas necesarias):
+
+```bash
+make init-db
+```
+
+4. O levantar todos los servicios a la vez (backend + frontend + agent-worker):
+
+```bash
+make up
+# Frontend:   http://localhost:5173
+# Backend API: http://localhost:8000
+# API Docs:    http://localhost:8000/docs
+```
+
+> **Nota**: Python, Node.js, Redis y PostgreSQL **no son necesarios en el host**. Todo el entorno corre dentro de Docker.
+
+### Testing
+
+Ejecutar la suite de tests:
+
+**Backend:**
+```bash
+make test        # Ejecuta todos los tests backend (unit + integration)
+make test-infra  # Ejecuta tests de infraestructura / integración
+make test-storage # Ejecuta test específico de storage
+```
+
+**Frontend:**
+```bash
+make front-install  # Instala dependencias npm dentro de Docker
+make test-front     # Ejecuta tests de frontend (Vitest)
+make up-frontend    # Inicia servidor de desarrollo Vite
+make front-shell    # Abre shell en contenedor frontend
+```
+
+### Desarrollo Frontend
+
+Para trabajar con el frontend (React + TypeScript + Vite):
+
+1. Instalar dependencias (primera vez):
+```bash
+make front-install
+```
+
+2. Iniciar servidor de desarrollo:
+```bash
+make up-frontend
+# Accede a http://localhost:5173
+```
+
+3. Ejecutar tests en modo watch:
+```bash
+make test-front
+```
+
+### Notas rápidas
+
+- **Node.js NO requerido en el host**: Todo el desarrollo frontend se ejecuta dentro de Docker.
+- Volumen anónimo `/app/node_modules` evita conflictos entre Windows y contenedor.
+- Para crear o resetear la infraestructura de storage use `make init-db`.
+- Las pruebas de integración requieren que las variables `SUPABASE_URL` y `SUPABASE_KEY` estén disponibles en el entorno donde se ejecutan.
+
+**Más información**: Ver [Documentación técnica](./docs)
 
 ---
 
-## 6. Tickets de Trabajo
+## 🤖 Desarrollo Asistido por IA
 
-> Documenta 3 de los tickets de trabajo principales del desarrollo, uno de backend, uno de frontend, y uno de bases de datos. Da todo el detalle requerido para desarrollar la tarea de inicio a fin teniendo en cuenta las buenas prácticas al respecto. 
+Este proyecto utiliza **Claude Code** (claude-sonnet-4-6) como asistente de desarrollo.
 
-**Ticket 1**
+### Guías de Trabajo
+- **[AGENTS.MD](./AGENTS.md)**: Reglas globales del AI Assistant (logging, workflow, definition of done)
+- **[AI Best Practices](./.github/AI-BEST-PRACTICES.md)**: Guía de mejores prácticas para trabajo eficiente con el AI
+- **[prompts.md](./prompts.md)**: Registro completo de todos los prompts utilizados (trazabilidad)
 
-**Ticket 2**
+### CI/CD Pipeline
+- **[CI/CD Guide](./.github/CI-CD-GUIDE.md)**: Documentación completa del pipeline GitHub Actions
+- **[Secrets Setup](./.github/SECRETS-SETUP.md)**: ⚠️ **ACCIÓN REQUERIDA** - Configurar secrets antes de merge
 
-**Ticket 3**
+**Estado del CI/CD**: ✅ **Activo** — 5 jobs: lint, test-backend, test-frontend, security-scan (Trivy + pip-audit + npm audit), build Docker
+Ver configuración en [SECRETS-SETUP.md](./.github/SECRETS-SETUP.md)
+
+### Memory Bank
+Sistema de estado compartido para trabajo multi-agente:
+- **[memory-bank/activeContext.md](./memory-bank/activeContext.md)**: Contexto actual y tareas activas
+- **[memory-bank/systemPatterns.md](./memory-bank/systemPatterns.md)**: Patrones arquitectónicos
+- **[memory-bank/techContext.md](./memory-bank/techContext.md)**: Stack tecnológico completo
+- **[memory-bank/decisions.md](./memory-bank/decisions.md)**: ADRs (Architecture Decision Records)
 
 ---
 
-## 7. Pull Requests
+## 📊 Estado del Proyecto
 
-> Documenta 3 de las Pull Requests realizadas durante la ejecución del proyecto
+✅ **Completado (Entrega 2)**:
+- **US-001**: Upload de archivos .3dm con presigned URLs y validación
+- **US-002**: Validación automática con agente "The Librarian" (Celery + rhino3dm)
+- **US-005**: Dashboard 3D interactivo de piezas (Three.js + LOD + filtros + Zustand)
+- **US-010**: Visor 3D Web (PartDetailModal, ModelLoader, ErrorBoundary, CDN)
+- **Tests**: ~400+ PASS (backend + frontend + agent, cobertura >80%)
+- **DevSecOps**: multi-stage Docker, healthchecks, resource limits, CI/CD (GitHub Actions)
 
-**Pull Request 1**
+🔮 **Pendiente (Entrega 3)**:
+- US-007: Cambio de estado con ciclo de vida completo
+- US-013: Login y autenticación (Supabase Auth)
+- US-009: Evidencia de fabricación (foto en completado)
 
-**Pull Request 2**
+---
 
-**Pull Request 3**
+## 📄 Licencia
 
+Proyecto académico (TFM) con código open-source bajo [MIT License](./LICENSE).  
+Datos reales de la Sagrada Família no incluidos por confidencialidad.
+
+---
+
+## 📞 Contacto
+
+- **Documentación**: [`/docs`](./docs/)
+- **Email**: [Ver repositorio oficial]
+- **GitHub**: [@pedrocortesark](https://github.com/pedrocortesark)
+
+---
+
+<p align="center">
+  <i>Construido con ❤️ para la gestión del patrimonio arquitectónico mundial</i>
+</p>
