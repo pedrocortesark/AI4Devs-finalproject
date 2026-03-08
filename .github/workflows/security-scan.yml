@@ -1,0 +1,193 @@
+name: Security Scan
+
+# Run on push to main/deploy branches and all PRs
+on:
+  push:
+    branches: [main, Deploy, "feature-*", "finalproject-*"]
+  pull_request:
+    branches: [main, Deploy]
+  # Allow manual trigger for security audits
+  workflow_dispatch:
+
+env:
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  trivy-scan-backend:
+    name: Trivy Vulnerability Scan - Backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload to GitHub Security
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image for scanning
+        run: |
+          docker build \
+            --target prod \
+            --tag sf-pm-backend:scan \
+            --file src/backend/Dockerfile \
+            src/backend
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sf-pm-backend:scan'
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'  # Fail build on CRITICAL/HIGH vulnerabilities
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()  # Upload even if scan fails
+        with:
+          sarif_file: 'trivy-backend-results.sarif'
+          category: 'backend-container'
+
+      - name: Generate human-readable report
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sf-pm-backend:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+  trivy-scan-agent:
+    name: Trivy Vulnerability Scan - Agent Worker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build agent image for scanning
+        run: |
+          docker build \
+            --target prod \
+            --tag sf-pm-agent:scan \
+            --file src/agent/Dockerfile \
+            src/agent
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sf-pm-agent:scan'
+          format: 'sarif'
+          output: 'trivy-agent-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-agent-results.sarif'
+          category: 'agent-container'
+
+      - name: Generate human-readable report
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sf-pm-agent:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+  trivy-scan-frontend:
+    name: Trivy Vulnerability Scan - Frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image for scanning
+        run: |
+          docker build \
+            --target prod \
+            --tag sf-pm-frontend:scan \
+            --file src/frontend/Dockerfile \
+            src/frontend
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sf-pm-frontend:scan'
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-frontend-results.sarif'
+          category: 'frontend-container'
+
+      - name: Generate human-readable report
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sf-pm-frontend:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+  dockerfile-linting:
+    name: Hadolint - Dockerfile Best Practices
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Backend Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: src/backend/Dockerfile
+          failure-threshold: warning
+
+      - name: Lint Agent Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: src/agent/Dockerfile
+          failure-threshold: warning
+
+      - name: Lint Frontend Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: src/frontend/Dockerfile
+          failure-threshold: warning
+
+  summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [trivy-scan-backend, trivy-scan-agent, trivy-scan-frontend, dockerfile-linting]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Container | ${{ needs.trivy-scan-backend.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Agent Worker Container | ${{ needs.trivy-scan-agent.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Container | ${{ needs.trivy-scan-frontend.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dockerfile Linting | ${{ needs.dockerfile-linting.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed reports in the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning)." >> $GITHUB_STEP_SUMMARY

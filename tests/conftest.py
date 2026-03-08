@@ -78,6 +78,38 @@ def supabase_client() -> Client:
     return create_client(url, key)
 
 
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_test_blocks(supabase_client: Client):
+    """
+    Clean up test blocks after each test to prevent duplicate key violations.
+
+    This fixture automatically runs after each test function to delete
+    any blocks with iso_codes that match common test patterns:
+    - TEST-*
+    - GLPER.B-PAE0720.*  (test fixtures)
+    - GLPER.B-TEST.*
+
+    Scope: function (runs per test)
+    Autouse: True (runs automatically for all tests)
+    """
+    yield  # Let the test run first
+    
+    # Clean up test data after test completes
+    try:
+        # Delete blocks with test iso_codes
+        test_patterns = [
+            "TEST-%",
+            "GLPER.B-PAE0720%",
+            "GLPER.B-TEST%"
+        ]
+        
+        for pattern in test_patterns:
+            supabase_client.table("blocks").delete().ilike("iso_code", pattern).execute()
+    except Exception:
+        # Ignore cleanup errors (test data may not exist)
+        pass
+
+
 @pytest.fixture(scope="session")
 def db_connection():
     """
@@ -86,6 +118,9 @@ def db_connection():
     This fixture provides a psycopg2 connection for tests that need
     to execute raw SQL or verify database schema directly.
     Useful for DB migration tests (e.g., T-020-DB).
+
+    Uses autocommit=True to prevent cascading transaction failures when
+    one test aborts its transaction.
 
     Yields None when the local database is not available (e.g. when running
     cloud-only tests with --no-deps), allowing tests that don't need the
@@ -102,7 +137,7 @@ def db_connection():
     conn = None
     try:
         conn = psycopg2.connect(database_url, connect_timeout=3)
-        conn.autocommit = False
+        conn.autocommit = True  # Prevent cascading transaction failures
     except Exception:
         pass  # DB not available; yield None so callers can skip gracefully
 

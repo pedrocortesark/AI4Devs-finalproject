@@ -14,6 +14,40 @@ build:
 build-prod:
 	docker build --target prod -t sf-pm-backend:prod --file src/backend/Dockerfile src/backend
 	docker build --target prod -t sf-pm-frontend:prod --file src/frontend/Dockerfile src/frontend
+	docker build --target prod -t sf-pm-agent:prod --file src/agent/Dockerfile src/agent
+
+# Test production images locally (use docker-compose.prod.yml)
+up-prod:
+	docker compose -f docker-compose.prod.yml up -d
+
+# Stop production test containers
+down-prod:
+	docker compose -f docker-compose.prod.yml down
+
+# Clean production test data
+clean-prod:
+	docker compose -f docker-compose.prod.yml down -v
+
+# Run security scan with Trivy
+scan-security:
+	@echo "🔒 Scanning backend image..."
+	docker build --target prod -t sf-pm-backend:scan --file src/backend/Dockerfile src/backend
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL sf-pm-backend:scan
+	@echo ""
+	@echo "🔒 Scanning agent image..."
+	docker build --target prod -t sf-pm-agent:scan --file src/agent/Dockerfile src/agent
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL sf-pm-agent:scan
+	@echo ""
+	@echo "🔒 Scanning frontend image..."
+	docker build --target prod -t sf-pm-frontend:scan --file src/frontend/Dockerfile src/frontend
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL sf-pm-frontend:scan
+
+# Lint Dockerfiles with Hadolint
+lint-docker:
+	@echo "🔍 Linting Dockerfiles..."
+	docker run --rm -i hadolint/hadolint < src/backend/Dockerfile
+	docker run --rm -i hadolint/hadolint < src/agent/Dockerfile
+	docker run --rm -i hadolint/hadolint < src/frontend/Dockerfile
 
 # Start only the database
 up-db:
@@ -98,14 +132,14 @@ test:
 	@echo "🧪 Running backend tests (includes unit + integration)..."
 	docker compose run --rm backend pytest -v --ignore=tests/integration/test_validate_file_task.py --ignore=tests/integration/test_user_strings_e2e.py --ignore=tests/integration/test_celery_worker.py || true
 	@echo "🤖 Running agent tests (celery/worker-specific)..."
-	docker compose run --rm agent-worker python -m pytest tests/unit/ tests/integration/test_user_strings_e2e.py tests/integration/test_validate_file_task.py tests/integration/test_celery_worker.py --ignore=tests/unit/test_validation_service.py --ignore=tests/unit/test_validation_report_service.py --ignore=tests/unit/test_upload_service_enqueue.py --ignore=tests/unit/test_validate_file_red.py --ignore=tests/unit/test_validation_schema_presence.py --ignore=tests/unit/test_parts_service.py --ignore=tests/unit/test_navigation_service.py --ignore=tests/unit/test_part_detail_service.py -v
+	docker compose run --rm agent-worker python -m pytest tests/unit/ tests/integration/test_user_strings_e2e.py tests/integration/test_validate_file_task.py tests/integration/test_celery_worker.py --ignore=tests/unit/test_validation_service.py --ignore=tests/unit/test_validation_report_service.py --ignore=tests/unit/test_upload_service_enqueue.py --ignore=tests/unit/test_validate_file_red.py --ignore=tests/unit/test_validation_schema_presence.py --ignore=tests/unit/test_parts_service.py --ignore=tests/unit/test_rhino_parser_service.py --ignore=tests/unit/test_navigation_service.py --ignore=tests/unit/test_part_detail_service.py --ignore=tests/unit/test_elements_service.py --ignore=tests/unit/test_storage_utils.py -v
 
 # Run only agent tests (unit + agent-specific integration)
 # Note: Excludes backend-specific unit tests that require src/backend/services/ imports
-# (validation_service, validation_report_service, upload_service_enqueue, parts_service, navigation_service, part_detail_service)
+# (validation_service, validation_report_service, upload_service_enqueue, parts_service, navigation_service, part_detail_service, elements_service, storage_utils)
 # These tests run in 'make test-unit' using backend container where imports work correctly
 test-agent:
-	docker compose run --rm agent-worker python -m pytest tests/unit/ tests/integration/test_user_strings_e2e.py tests/integration/test_validate_file_task.py tests/integration/test_celery_worker.py --ignore=tests/unit/test_validation_service.py --ignore=tests/unit/test_validation_report_service.py --ignore=tests/unit/test_upload_service_enqueue.py --ignore=tests/unit/test_validate_file_red.py --ignore=tests/unit/test_validation_schema_presence.py --ignore=tests/unit/test_parts_service.py --ignore=tests/unit/test_rhino_parser_service.py --ignore=tests/unit/test_navigation_service.py --ignore=tests/unit/test_part_detail_service.py -v
+	docker compose run --rm agent-worker python -m pytest tests/unit/ tests/integration/test_user_strings_e2e.py tests/integration/test_validate_file_task.py tests/integration/test_celery_worker.py --ignore=tests/unit/test_validation_service.py --ignore=tests/unit/test_validation_report_service.py --ignore=tests/unit/test_upload_service_enqueue.py --ignore=tests/unit/test_validate_file_red.py --ignore=tests/unit/test_validation_schema_presence.py --ignore=tests/unit/test_parts_service.py --ignore=tests/unit/test_rhino_parser_service.py --ignore=tests/unit/test_navigation_service.py --ignore=tests/unit/test_part_detail_service.py --ignore=tests/unit/test_elements_service.py --ignore=tests/unit/test_storage_utils.py -v
 
 # Run only integration tests (backend)
 test-infra:
@@ -160,12 +194,19 @@ help:
 	@echo ""
 	@echo "  Docker lifecycle:"
 	@echo "    make build         - Build Docker images (dev)"
-	@echo "    make build-prod    - Build production images"
+	@echo "    make build-prod    - Build production images (all services)"
 	@echo "    make up-db         - Start only the database"
 	@echo "    make up-backend    - Start backend + its dependencies (db + redis)"
-	@echo "    make up            - Start all services"
+	@echo "    make up            - Start all services (dev mode)"
+	@echo "    make up-prod       - Start all services (prod images, local test)"
 	@echo "    make down          - Stop all services"
-	@echo "    make clean         - Stop + remove volumes + prune"
+	@echo "    make down-prod     - Stop production test containers"
+	@echo "    make clean         - Stop + remove volumes + prune (dev)"
+	@echo "    make clean-prod    - Stop + remove volumes (prod test)"
+	@echo ""
+	@echo "  Security & Quality:"
+	@echo "    make scan-security - Run Trivy vulnerability scan on all images"
+	@echo "    make lint-docker   - Lint all Dockerfiles with Hadolint"
 	@echo ""
 	@echo "  Backend:"
 	@echo "    make init-db       - Initialize DB infrastructure (buckets, policies)"

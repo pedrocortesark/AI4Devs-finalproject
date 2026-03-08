@@ -1,12 +1,58 @@
+# Python cache and bytecode
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
+
+# Testing and coverage
 .pytest_cache/
-.env
-.env.*
-.git/
-.gitignore
-*.md
-tests/
 htmlcov/
 .coverage
+.coverage.*
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Environment files (secrets should never be in image)
+.env
+.env.*
+.envrc
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (not needed in runtime)
+*.md
+docs/
+
+# Test files (not needed in prod image)
+tests/
+test_*.py
+*_test.py
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

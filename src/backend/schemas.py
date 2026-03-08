@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
@@ -127,6 +127,23 @@ class BlockStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+# ===== T-1503-AGENT: Material Type Enum =====
+
+class MaterialType(str, Enum):
+    """
+    Material types for architectural elements (T-1503-AGENT).
+    
+    Synchronized with PostgreSQL CHECK constraint (T-1501-DB):
+    CHECK (material_type IN ('Stone', 'Ceramic'))
+    
+    Valid values:
+        Stone: Natural stone (99% of Sagrada Familia elements)
+        Ceramic: Ceramic materials (decorative elements)
+    """
+    STONE = "Stone"
+    CERAMIC = "Ceramic"
+
+
 class ValidationStatusResponse(BaseModel):
     """
     Response schema for GET /api/parts/{id}/validation endpoint.
@@ -152,29 +169,28 @@ class ValidationStatusResponse(BaseModel):
         description="Celery task ID for tracking (only if status=processing)"
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "block_id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "PENDING-a1b2c3d4",
-                "status": "validated",
-                "validation_report": {
-                    "is_valid": True,
-                    "errors": [],
-                    "metadata": {
-                        "total_objects": 42,
-                        "valid_objects": 42,
-                        "invalid_objects": 0,
-                        "user_strings_extracted": 15
-                    },
-                    "validated_at": "2026-02-14T23:15:00Z",
-                    "validated_by": "librarian-v1.0.0"
-                },
-                "job_id": None
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "block_id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "PENDING-a1b2c3d4",
+        "status": "validated",
+        "validation_report": {
+        "is_valid": True,
+        "errors": [],
+        "metadata": {
+        "total_objects": 42,
+        "valid_objects": 42,
+        "invalid_objects": 0,
+        "user_strings_extracted": 15
+        },
+        "validated_at": "2026-02-14T23:15:00Z",
+        "validated_by": "librarian-v1.0.0"
+        },
+        "job_id": None
         }
-
-
+        }
+    )
 # ===== T-0501-BACK: Parts Canvas API Schemas =====
 
 class BoundingBox(BaseModel):
@@ -198,15 +214,14 @@ class BoundingBox(BaseModel):
             raise ValueError('Must contain exactly 3 coordinates [x, y, z]')
         return v
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "min": [-2.5, 0.0, -2.5],
-                "max": [2.5, 5.0, 2.5]
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "min": [-2.5, 0.0, -2.5],
+        "max": [2.5, 5.0, 2.5]
         }
-
-
+        }
+    )
 class PartCanvasItem(BaseModel):
     """
     Minimal part info optimized for 3D canvas rendering.
@@ -231,20 +246,19 @@ class PartCanvasItem(BaseModel):
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
     workshop_id: Optional[UUID] = Field(None, description="Assigned workshop UUID")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "SF-C12-D-001",
-                "status": "validated",
-                "tipologia": "capitel",
-                "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
-                "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-                "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "SF-C12-D-001",
+        "status": "validated",
+        "tipologia": "capitel",
+        "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
+        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
+        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
         }
-
-
+        }
+    )
 class PartsListResponse(BaseModel):
     """
     Response for GET /api/parts endpoint.
@@ -258,30 +272,29 @@ class PartsListResponse(BaseModel):
     count: int = Field(..., description="Total count of parts returned")
     filters_applied: Dict[str, Any] = Field(default_factory=dict, description="Applied filters (for debugging)")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "parts": [
-                    {
-                        "id": "550e8400-e29b-41d4-a716-446655440000",
-                        "iso_code": "SF-C12-D-001",
-                        "status": "validated",
-                        "tipologia": "capitel",
-                        "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
-                        "bbox": {"min": [-2.5, 0, -2.5], "max": [2.5, 5, 2.5]},
-                        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
-                    }
-                ],
-                "count": 1,
-                "filters_applied": {
-                    "status": "validated",
-                    "tipologia": "capitel",
-                    "workshop_id": None
-                }
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "parts": [
+        {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "SF-C12-D-001",
+        "status": "validated",
+        "tipologia": "capitel",
+        "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
+        "bbox": {"min": [-2.5, 0, -2.5], "max": [2.5, 5, 2.5]},
+        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
         }
-
-
+        ],
+        "count": 1,
+        "filters_applied": {
+        "status": "validated",
+        "tipologia": "capitel",
+        "workshop_id": None
+        }
+        }
+        }
+    )
 # ===== T-1002-BACK: Get Part Detail API Schemas =====
 
 class PartDetailResponse(BaseModel):
@@ -318,29 +331,28 @@ class PartDetailResponse(BaseModel):
     glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
     triangle_count: Optional[int] = Field(None, description="Triangle count (for performance)")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "iso_code": "SF-C12-D-001",
-                "status": "validated",
-                "tipologia": "capitel",
-                "created_at": "2026-02-15T10:30:00Z",
-                "low_poly_url": "https://d1234abcd.cloudfront.net/low-poly/550e8400.glb?X-Amz-Expires=300&...",
-                "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-                "workshop_id": "123e4567-e89b-12d3-a456-426614174000",
-                "workshop_name": "Taller Granollers",
-                "validation_report": {
-                    "is_valid": True,
-                    "errors": [],
-                    "metadata": {"layer_count": 5, "object_count": 12}
-                },
-                "glb_size_bytes": 425984,
-                "triangle_count": 1024
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "SF-C12-D-001",
+        "status": "validated",
+        "tipologia": "capitel",
+        "created_at": "2026-02-15T10:30:00Z",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/low-poly/550e8400.glb?X-Amz-Expires=300&...",
+        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
+        "workshop_id": "123e4567-e89b-12d3-a456-426614174000",
+        "workshop_name": "Taller Granollers",
+        "validation_report": {
+        "is_valid": True,
+        "errors": [],
+        "metadata": {"layer_count": 5, "object_count": 12}
+        },
+        "glb_size_bytes": 425984,
+        "triangle_count": 1024
         }
-
-
+        }
+    )
 # ===== T-1003-BACK: Part Navigation API Schemas =====
 
 class PartNavigationResponse(BaseModel):
@@ -364,12 +376,231 @@ class PartNavigationResponse(BaseModel):
     current_index: int = Field(..., ge=1, description="1-based index of current part")
     total_count: int = Field(..., ge=0, description="Total parts in filtered set")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "prev_id": "123e4567-e89b-12d3-a456-426614174000",
-                "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
-                "current_index": 42,
-                "total_count": 150
-            }
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "prev_id": "123e4567-e89b-12d3-a456-426614174000",
+        "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
+        "current_index": 42,
+        "total_count": 150
         }
+        }
+    )
+# ===== T-1504-BACK: Element API Schemas (US-015 Refactoring) =====
+
+class ElementStatus(str, Enum):
+    """
+    Lifecycle states for elements (renamed from BlockStatus for internationalization).
+
+    Synchronized with PostgreSQL ENUM block_status (T-021-DB).
+
+    Valid transitions:
+        uploaded -> processing -> validated | rejected | error_processing
+        validated -> in_fabrication -> completed -> archived
+        rejected -> uploaded (after fixes)
+        error_processing -> uploaded (after manual review)
+    """
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    VALIDATED = "validated"
+    REJECTED = "rejected"
+    ERROR_PROCESSING = "error_processing"
+    IN_FABRICATION = "in_fabrication"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
+class Element(BaseModel):
+    """
+    Element schema optimized for 3D canvas rendering (US-005).
+    
+    Contract: Must match TypeScript interface Element exactly (T-1505-FRONT).
+    
+    Breaking Changes from PartCanvasItem:
+    - Removed: workshop_id, workshop_name (workshops not used in MVP)
+    - Renamed: tipologia → material_type (internationalization)
+    - Changed: material_type from enum to str (validated against 62 real materials)
+    
+    Attributes:
+        id: Element UUID
+        iso_code: ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)
+        status: Lifecycle state (ElementStatus enum)
+        material_type: Stone material type (validated against 62 MATERIAL_COLORS)
+        low_poly_url: Presigned CDN URL to GLB file (~1000 triangles)
+        bbox: 3D bounding box for camera centering
+    """
+    id: UUID = Field(..., description="Element UUID")
+    iso_code: str = Field(..., description="ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)")
+    status: ElementStatus = Field(..., description="Lifecycle state")
+    material_type: str = Field(
+        ..., 
+        description="Stone material type (one of 62 real materials: Montjuïc, Ulldecona, etc.)"
+    )
+    low_poly_url: Optional[str] = Field(
+        None, 
+        description="Presigned CDN URL for GLB file (NULL if async processing incomplete)"
+    )
+    bbox: Optional[BoundingBox] = Field(
+        None, 
+        description="3D bounding box (NULL if async processing incomplete)"
+    )
+    
+    @field_validator('material_type')
+    @classmethod
+    def validate_material_type(cls, v: str) -> str:
+        """
+        Validate material_type against MATERIAL_COLORS dictionary (62 real materials).
+        
+        Args:
+            v: Material type string from database
+            
+        Returns:
+            Validated material type
+            
+        Raises:
+            ValueError: If material not in VALID_MATERIALS list
+        """
+        from agent.constants import VALID_MATERIALS
+        
+        if v not in VALID_MATERIALS:
+            raise ValueError(
+                f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} "
+                f"valid materials (e.g., Montjuïc, Ulldecona, Floresta). "
+                f"See agent.constants.MATERIAL_COLORS for full list."
+            )
+        return v
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "GLPER.B-PAE0720.0701",
+        "status": "validated",
+        "material_type": "Montjuïc",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400_20260307T120000Z.glb",
+        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
+        }
+        }
+    )
+class ElementsListResponse(BaseModel):
+    """
+    Response for GET /api/elements endpoint.
+    
+    Breaking Changes from PartsListResponse:
+    - Renamed: parts → elements
+    - Removed: count (redundant, use len(elements))
+    
+    Attributes:
+        elements: Array of all elements matching filters
+        filters_applied: Echo of query parameters for transparency
+        meta: Metadata (total count, filtered count)
+    """
+    elements: List[Element] = Field(..., description="Array of canvas-ready elements")
+    filters_applied: dict = Field(default_factory=dict, description="Applied filters (debugging)")
+    meta: dict = Field(
+        default_factory=lambda: {"total": 0, "filtered": 0},
+        description="Response metadata"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "elements": [
+        {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "GLPER.B-PAE0720.0701",
+        "status": "validated",
+        "material_type": "Montjuïc",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
+        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
+        }
+        ],
+        "filters_applied": {"status": "validated", "material_type": "Montjuïc"},
+        "meta": {"total": 6, "filtered": 6}
+        }
+        }
+    )
+class ElementDetail(BaseModel):
+    """
+    Detailed element info for 3D viewer modal (US-010).
+    
+    Contract: Must match TypeScript interface ElementDetail exactly (T-1505-FRONT).
+    
+    Breaking Changes from PartDetailResponse:
+    - Removed: workshop_id, workshop_name, tipologia
+    - Added: material_type (str validated against 62 materials)
+    
+    Attributes:
+        id: Element UUID
+        iso_code: ISO-19650 identifier
+        status: Lifecycle state
+        material_type: Stone material type
+        created_at: Row creation timestamp (ISO 8601)
+        low_poly_url: Presigned CDN URL (TTL 5min)
+        bbox: 3D bounding box
+        validation_report: Validation results from The Librarian
+        glb_size_bytes: GLB file size (optional)
+        triangle_count: Triangle count (optional)
+    """
+    id: UUID = Field(..., description="Element UUID")
+    iso_code: str = Field(..., description="ISO-19650 identifier")
+    status: ElementStatus = Field(..., description="Lifecycle state")
+    material_type: str = Field(..., description="Stone material type (62 options)")
+    created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
+    low_poly_url: Optional[str] = Field(None, description="Presigned CDN URL (TTL 5min)")
+    bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
+    validation_report: Optional[ValidationReport] = Field(None, description="Validation results")
+    glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
+    triangle_count: Optional[int] = Field(None, description="Triangle count (performance)")
+    
+    @field_validator('material_type')
+    @classmethod
+    def validate_material_type(cls, v: str) -> str:
+        """Validate material_type against 62 real materials."""
+        from agent.constants import VALID_MATERIALS
+        
+        if v not in VALID_MATERIALS:
+            raise ValueError(f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} valid materials.")
+        return v
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "iso_code": "GLPER.B-PAE0720.0701",
+        "status": "validated",
+        "material_type": "Montjuïc",
+        "created_at": "2026-03-06T10:30:00Z",
+        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
+        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
+        "validation_report": {
+        "is_valid": True,
+        "errors": [],
+        "metadata": {"layer_count": 1, "object_count": 1}
+        },
+        "glb_size_bytes": 312456,
+        "triangle_count": 987
+        }
+        }
+    )
+class ElementNavigationResponse(BaseModel):
+    """
+    Response for GET /api/elements/{id}/navigation endpoint.
+    
+    No breaking changes in structure, only renamed class for consistency.
+    """
+    prev_id: Optional[UUID] = Field(None, description="Previous element UUID (None if first)")
+    next_id: Optional[UUID] = Field(None, description="Next element UUID (None if last)")
+    current_index: int = Field(..., ge=1, description="1-based index of current element")
+    total_count: int = Field(..., ge=0, description="Total elements in filtered set")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+        "example": {
+        "prev_id": "123e4567-e89b-12d3-a456-426614174000",
+        "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
+        "current_index": 42,
+        "total_count": 150
+        }
+        }
+    )

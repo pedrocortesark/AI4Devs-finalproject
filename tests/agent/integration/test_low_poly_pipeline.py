@@ -148,6 +148,11 @@ class TestLowPolyPipeline:
             assert block.data['low_poly_url'] is not None, "low_poly_url not populated in DB"
             assert block.data['low_poly_url'].endswith('.glb'), "Invalid GLB URL format"
             assert f'{block_id}.glb' in block.data['low_poly_url'], "URL doesn't contain block_id"
+            
+            # T-1503-AGENT: Verify material_type extracted and saved
+            assert block.data.get('material_type') is not None, "material_type not populated in DB (T-1503)"
+            assert block.data['material_type'] in ['Stone', 'Ceramic'], \
+                f"Invalid material_type: {block.data.get('material_type')} (expected 'Stone' or 'Ceramic')"
 
             # Step 5: Verify GLB file exists in S3
             glb_key = f"low-poly/{block_id}.glb"

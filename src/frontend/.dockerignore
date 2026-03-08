@@ -1,9 +1,53 @@
+# Node.js dependencies (reinstalled in Dockerfile)
 node_modules/
+
+# Build outputs
 dist/
+build/
+.next/
+out/
+
+# Environment files (secrets should never be in image)
 .env
 .env.*
+.envrc
+
+# Version control
 .git/
 .gitignore
-*.md
+.gitattributes
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing and coverage
 coverage/
 .cache/
+.nyc_output/
+cypress/videos/
+cypress/screenshots/
+
+# Documentation (not needed in runtime)
+*.md
+docs/
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+.tmp/
+temp/
