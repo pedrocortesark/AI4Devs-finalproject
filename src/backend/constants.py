@@ -48,8 +48,16 @@ QUERY_FIELD_IS_ARCHIVED = "is_archived"
 QUERY_FIELD_CREATED_AT = "created_at"
 QUERY_ORDER_DESC = True
 
+# ===== Element API Query Fields (T-1504-BACK) =====
+ELEMENTS_LIST_SELECT_FIELDS = "id, iso_code, status, material_type, low_poly_url, bbox"
+ELEMENT_DETAIL_SELECT_FIELDS = ("id, iso_code, status, material_type, created_at, "
+                                 "low_poly_url, bbox, validation_report")
+
 # ===== Validation Error Messages =====
 ERROR_MSG_INVALID_STATUS = "Invalid status value. Must be one of: {valid_values}"
 ERROR_MSG_INVALID_UUID = "Invalid workshop_id format. Must be a valid UUID."
 ERROR_MSG_FETCH_PARTS_FAILED = "Failed to fetch parts: {error}"
-ERROR_MSG_FETCH_PARTS_FAILED = "Failed to fetch parts: {error}"
+ERROR_MSG_ELEMENT_NOT_FOUND = "Element not found"
+ERROR_MSG_INVALID_UUID_FORMAT = "Invalid UUID format"
+ERROR_MSG_DATABASE_ERROR = "Database error: {error}"
+ERROR_MSG_FETCH_ELEMENTS_FAILED = "Failed to fetch elements: {error}"

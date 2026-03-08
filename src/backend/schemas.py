@@ -390,3 +390,225 @@ class PartNavigationResponse(BaseModel):
                 "total_count": 150
             }
         }
+
+
+# ===== T-1504-BACK: Element API Schemas (US-015 Refactoring) =====
+
+class ElementStatus(str, Enum):
+    """
+    Lifecycle states for elements (renamed from BlockStatus for internationalization).
+
+    Synchronized with PostgreSQL ENUM block_status (T-021-DB).
+
+    Valid transitions:
+        uploaded -> processing -> validated | rejected | error_processing
+        validated -> in_fabrication -> completed -> archived
+        rejected -> uploaded (after fixes)
+        error_processing -> uploaded (after manual review)
+    """
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    VALIDATED = "validated"
+    REJECTED = "rejected"
+    ERROR_PROCESSING = "error_processing"
+    IN_FABRICATION = "in_fabrication"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
+class Element(BaseModel):
+    """
+    Element schema optimized for 3D canvas rendering (US-005).
+    
+    Contract: Must match TypeScript interface Element exactly (T-1505-FRONT).
+    
+    Breaking Changes from PartCanvasItem:
+    - Removed: workshop_id, workshop_name (workshops not used in MVP)
+    - Renamed: tipologia → material_type (internationalization)
+    - Changed: material_type from enum to str (validated against 62 real materials)
+    
+    Attributes:
+        id: Element UUID
+        iso_code: ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)
+        status: Lifecycle state (ElementStatus enum)
+        material_type: Stone material type (validated against 62 MATERIAL_COLORS)
+        low_poly_url: Presigned CDN URL to GLB file (~1000 triangles)
+        bbox: 3D bounding box for camera centering
+    """
+    id: UUID = Field(..., description="Element UUID")
+    iso_code: str = Field(..., description="ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)")
+    status: ElementStatus = Field(..., description="Lifecycle state")
+    material_type: str = Field(
+        ..., 
+        description="Stone material type (one of 62 real materials: Montjuïc, Ulldecona, etc.)"
+    )
+    low_poly_url: Optional[str] = Field(
+        None, 
+        description="Presigned CDN URL for GLB file (NULL if async processing incomplete)"
+    )
+    bbox: Optional[BoundingBox] = Field(
+        None, 
+        description="3D bounding box (NULL if async processing incomplete)"
+    )
+    
+    @field_validator('material_type')
+    @classmethod
+    def validate_material_type(cls, v: str) -> str:
+        """
+        Validate material_type against MATERIAL_COLORS dictionary (62 real materials).
+        
+        Args:
+            v: Material type string from database
+            
+        Returns:
+            Validated material type
+            
+        Raises:
+            ValueError: If material not in VALID_MATERIALS list
+        """
+        from agent.constants import VALID_MATERIALS
+        
+        if v not in VALID_MATERIALS:
+            raise ValueError(
+                f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} "
+                f"valid materials (e.g., Montjuïc, Ulldecona, Floresta). "
+                f"See agent.constants.MATERIAL_COLORS for full list."
+            )
+        return v
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "iso_code": "GLPER.B-PAE0720.0701",
+                "status": "validated",
+                "material_type": "Montjuïc",
+                "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400_20260307T120000Z.glb",
+                "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
+            }
+        }
+
+
+class ElementsListResponse(BaseModel):
+    """
+    Response for GET /api/elements endpoint.
+    
+    Breaking Changes from PartsListResponse:
+    - Renamed: parts → elements
+    - Removed: count (redundant, use len(elements))
+    
+    Attributes:
+        elements: Array of all elements matching filters
+        filters_applied: Echo of query parameters for transparency
+        meta: Metadata (total count, filtered count)
+    """
+    elements: List[Element] = Field(..., description="Array of canvas-ready elements")
+    filters_applied: dict = Field(default_factory=dict, description="Applied filters (debugging)")
+    meta: dict = Field(
+        default_factory=lambda: {"total": 0, "filtered": 0},
+        description="Response metadata"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "elements": [
+                    {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "iso_code": "GLPER.B-PAE0720.0701",
+                        "status": "validated",
+                        "material_type": "Montjuïc",
+                        "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
+                        "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
+                    }
+                ],
+                "filters_applied": {"status": "validated", "material_type": "Montjuïc"},
+                "meta": {"total": 6, "filtered": 6}
+            }
+        }
+
+
+class ElementDetail(BaseModel):
+    """
+    Detailed element info for 3D viewer modal (US-010).
+    
+    Contract: Must match TypeScript interface ElementDetail exactly (T-1505-FRONT).
+    
+    Breaking Changes from PartDetailResponse:
+    - Removed: workshop_id, workshop_name, tipologia
+    - Added: material_type (str validated against 62 materials)
+    
+    Attributes:
+        id: Element UUID
+        iso_code: ISO-19650 identifier
+        status: Lifecycle state
+        material_type: Stone material type
+        created_at: Row creation timestamp (ISO 8601)
+        low_poly_url: Presigned CDN URL (TTL 5min)
+        bbox: 3D bounding box
+        validation_report: Validation results from The Librarian
+        glb_size_bytes: GLB file size (optional)
+        triangle_count: Triangle count (optional)
+    """
+    id: UUID = Field(..., description="Element UUID")
+    iso_code: str = Field(..., description="ISO-19650 identifier")
+    status: ElementStatus = Field(..., description="Lifecycle state")
+    material_type: str = Field(..., description="Stone material type (62 options)")
+    created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
+    low_poly_url: Optional[str] = Field(None, description="Presigned CDN URL (TTL 5min)")
+    bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
+    validation_report: Optional[ValidationReport] = Field(None, description="Validation results")
+    glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
+    triangle_count: Optional[int] = Field(None, description="Triangle count (performance)")
+    
+    @field_validator('material_type')
+    @classmethod
+    def validate_material_type(cls, v: str) -> str:
+        """Validate material_type against 62 real materials."""
+        from agent.constants import VALID_MATERIALS
+        
+        if v not in VALID_MATERIALS:
+            raise ValueError(f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} valid materials.")
+        return v
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "iso_code": "GLPER.B-PAE0720.0701",
+                "status": "validated",
+                "material_type": "Montjuïc",
+                "created_at": "2026-03-06T10:30:00Z",
+                "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
+                "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
+                "validation_report": {
+                    "is_valid": True,
+                    "errors": [],
+                    "metadata": {"layer_count": 1, "object_count": 1}
+                },
+                "glb_size_bytes": 312456,
+                "triangle_count": 987
+            }
+        }
+
+
+class ElementNavigationResponse(BaseModel):
+    """
+    Response for GET /api/elements/{id}/navigation endpoint.
+    
+    No breaking changes in structure, only renamed class for consistency.
+    """
+    prev_id: Optional[UUID] = Field(None, description="Previous element UUID (None if first)")
+    next_id: Optional[UUID] = Field(None, description="Next element UUID (None if last)")
+    current_index: int = Field(..., ge=1, description="1-based index of current element")
+    total_count: int = Field(..., ge=0, description="Total elements in filtered set")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "prev_id": "123e4567-e89b-12d3-a456-426614174000",
+                "next_id": "987fcdeb-51a2-43e7-9876-543210fedcba",
+                "current_index": 42,
+                "total_count": 150
+            }
+        }

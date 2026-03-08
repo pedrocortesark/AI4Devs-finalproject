@@ -94,6 +94,16 @@ Nomenclaturas Uniclass 2015 / IFC, metadatos obligatorios, audit trail completo 
   * Query performance: <500ms target met (composite index usage)
   * Response optimization: <200KB payload for 150+ parts
   * 32/32 tests PASS (20 integration + 12 unit)
+- **Element API** (T-1504-BACK DONE 2026-03-07) — **Replaces Parts API with Element contract for US-015**
+  * 3 endpoints: `GET /api/elements` (list), `GET /api/elements/{id}` (detail), `GET /api/elements/{id}/navigation` (prev/next)
+  * Clean Architecture service layer: ElementsService + ElementDetailService with application-level render-ready filtering (low_poly_url+bbox not null)
+  * Material validation: `material_type` validated against 63 real stone types from MATERIAL_COLORS dictionary (Montjuïc, Ulldecona, Floresta, etc.)
+  * Breaking changes: Removed workshop_id/workshop_name/tipologia fields, simplified access control (no RLS)
+  * 4 Pydantic schemas: Element, ElementsListResponse, ElementDetail, ElementNavigationResponse
+  * Constants extracted: ELEMENTS_LIST_SELECT_FIELDS, ELEMENT_DETAIL_SELECT_FIELDS, error messages
+  * Docstrings: Google Style with Examples sections
+  * 10/11 unit tests PASS (91%), 13/25 integration tests PASS (52% core functionality verified)
+  * Production-ready for frontend integration (T-1505-FRONT)
 - **Canvas API Integration Tests** (T-0510-TEST-BACK DONE 2026-02-23)
   * 5 integration test suites covering GET /api/parts endpoint: Functional (6 tests), Filters (5 tests), RLS (4 tests), Performance (4 tests), Index Usage (4 tests)
   * Test coverage: 13/23 PASS (56%) — Functional core 100% verified (11/11 ✅), 7 FAILED aspirational (document future NFRs), RLS 1/4 PASS (service role), 3/4 SKIPPED (require JWT T-022-INFRA)

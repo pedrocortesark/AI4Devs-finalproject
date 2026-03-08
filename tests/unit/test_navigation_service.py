@@ -80,7 +80,7 @@ class TestFetchOrderedIds:
     def test_nav_06_fetch_with_empty_filters(self):
         """
         NAV-06 EDGE CASE: No filters applied, all workshop parts returned
-        Scenario: Only workshop_id filter, no status/tipologia → full set
+        Scenario: Only workshop_id filter, no status/material_type → full set
         """
         mock_client = Mock()
         mock_table = Mock()
@@ -111,8 +111,8 @@ class TestFetchOrderedIds:
     
     def test_nav_07_fetch_with_multiple_filters(self):
         """
-        NAV-07 EDGE CASE: Multiple filters applied (status + tipologia)
-        Scenario: status=validated, tipologia=capitel → subset returned
+        NAV-07 EDGE CASE: Multiple filters applied (status + material_type)
+        Scenario: status=validated, material_type=Montjuïc → subset returned
         """
         mock_client = Mock()
         mock_table = Mock()
@@ -127,18 +127,18 @@ class TestFetchOrderedIds:
         mock_client.table.return_value = mock_table
         mock_table.select.return_value = mock_select
         mock_select.eq.return_value = mock_eq  # is_archived filter
-        mock_eq.eq.return_value = mock_eq  # Chainable for workshop_id, status, tipologia
+        mock_eq.eq.return_value = mock_eq  # Chainable for workshop_id, status, material_type
         mock_eq.order.return_value = mock_order
         mock_order.execute.return_value = MagicMock(data=db_response)
         
         service = NavigationService(mock_client)
         ids = service._fetch_ordered_ids(
             workshop_id="ws1", 
-            filters={"status": "validated", "tipologia": "capitel"}
+            filters={"status": "validated", "material_type": "Montjuïc"}
         )
         
         assert len(ids) == 1
-        # Verify .eq() called for each filter: is_archived + workshop_id + status + tipologia
+        # Verify .eq() called for each filter: is_archived + workshop_id + status + material_type
         assert mock_select.eq.call_count == 1  # First .eq() on select
         assert mock_eq.eq.call_count == 3  # Three chained .eq() calls
 
@@ -237,21 +237,21 @@ class TestBuildCacheKey:
     
     def test_nav_08_cache_key_with_filters(self):
         """
-        NAV-08: Cache key generation with status + tipologia filters
-        Scenario: ws1 + status=validated + tipologia=capitel → unique key
+        NAV-08: Cache key generation with status + material_type filters
+        Scenario: ws1 + status=validated + material_type=Montjuïc → unique key
         """
         mock_client = Mock()
         service = NavigationService(mock_client)
         
         key = service._build_cache_key(
             workshop_id="ws1",
-            filters={"status": "validated", "tipologia": "capitel"}
+            filters={"status": "validated", "material_type": "Montjuïc"}
         )
         
         # Key should include all filter values in deterministic order
         assert "ws1" in key
         assert "validated" in key
-        assert "capitel" in key
+        assert "Montjuïc" in key
         assert key.startswith("nav:")  # Namespace prefix
     
     def test_nav_cache_key_no_filters(self):
