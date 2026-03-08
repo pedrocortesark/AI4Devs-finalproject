@@ -38,8 +38,8 @@ FROM nginxinc/nginx-unprivileged:alpine AS prod
 # Copy compiled assets from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration if it exists (default otherwise)
-COPY nginx.conf /etc/nginx/conf.d/default.conf 2>/dev/null || true
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080
 
