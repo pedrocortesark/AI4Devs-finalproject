@@ -28,7 +28,7 @@ TABLE_BLOCKS = "blocks"
 # ===== File Validation =====
 ALLOWED_EXTENSION = ".3dm"
 MAX_FILE_SIZE_MB = 500
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024  # 500MB converted to bytes for Pydantic validation
 
 # ===== Upload Configuration =====
 STORAGE_UPLOAD_PATH_PREFIX = "uploads"
@@ -50,8 +50,8 @@ QUERY_ORDER_DESC = True
 
 # ===== Element API Query Fields (T-1504-BACK) =====
 ELEMENTS_LIST_SELECT_FIELDS = "id, iso_code, status, material_type, low_poly_url, bbox"
-ELEMENT_DETAIL_SELECT_FIELDS = ("id, iso_code, status, material_type, created_at, "
-                                 "low_poly_url, bbox, validation_report")
+ELEMENT_DETAIL_SELECT_FIELDS = ("id, iso_code, status, material_type, created_at, updated_at, "
+                                 "low_poly_url, bbox, validation_report, rhino_metadata")
 
 # ===== Validation Error Messages =====
 ERROR_MSG_INVALID_STATUS = "Invalid status value. Must be one of: {valid_values}"
