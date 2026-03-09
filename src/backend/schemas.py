@@ -17,13 +17,13 @@ class UploadRequest(BaseModel):
     filename: str = Field(..., description="Name of the file to upload (must be .3dm)")
     size: int = Field(..., gt=0, description="Size in bytes")
     checksum: Optional[str] = Field(None, description="Optional checksum for validation")
-    
+
     @field_validator('size')
     @classmethod
     def validate_file_size(cls, v: int) -> int:
         """
         Validate file size does not exceed 500MB (max upload limit).
-        
+
         Raises:
             ValueError: If file size exceeds MAX_FILE_SIZE_BYTES constant.
         """
