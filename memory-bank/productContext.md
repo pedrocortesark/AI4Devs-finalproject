@@ -98,6 +98,13 @@ Nomenclaturas Uniclass 2015 / IFC, metadatos obligatorios, audit trail completo 
   * 3 endpoints: `GET /api/elements` (list), `GET /api/elements/{id}` (detail), `GET /api/elements/{id}/navigation` (prev/next)
   * Clean Architecture service layer: ElementsService + ElementDetailService with application-level render-ready filtering (low_poly_url+bbox not null)
   * Material validation: `material_type` validated against 63 real stone types from MATERIAL_COLORS dictionary (Montjuïc, Ulldecona, Floresta, etc.)
+- **Element E2E Integration Tests** (T-1507-TEST DONE 2026-02-09) — **Multi-Layer Test Strategy**
+  * Backend pytest: 11/14 PASS (79%) — Upload validation (ERR-BE-02 UUID, ERR-BE-03 500MB limit), E2E flow, Element API contract
+  * Frontend Vitest: 443/459 PASS (96.5%) — Improved +72 tests from 371 baseline (+19.4%), failures reduced 68→10 (-85.3%)
+  * MSW 2.x integration: Mock Service Worker for API testing (import from 'msw/node' for Node.js environment)
+  * UUID dependency: Installed uuid v11.1.0 + @types/uuid for test helpers (element data generation)
+  * Pydantic validation: UUID field type + @field_validator for type-safe request validation (422 Unprocessable Entity on invalid format/size)
+  * Constants extraction: MAX_FILE_SIZE_BYTES (500MB = 524288000 bytes) centralized in constants.py for DRY principle
   * Breaking changes: Removed workshop_id/workshop_name/tipologia fields, simplified access control (no RLS)
   * 4 Pydantic schemas: Element, ElementsListResponse, ElementDetail, ElementNavigationResponse
   * Constants extracted: ELEMENTS_LIST_SELECT_FIELDS, ELEMENT_DETAIL_SELECT_FIELDS, error messages

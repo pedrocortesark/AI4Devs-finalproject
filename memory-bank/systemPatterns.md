@@ -128,6 +128,43 @@ CREATE INDEX idx_blocks_low_poly_processing
 
 **Design Decision**: No pagination on `/api/parts` endpoint — canvas needs all parts loaded at once for proper 3D scene rendering. Response size kept <200KB via field selection (no heavy JSON payloads).
 
+### Pydantic Field Validators with Extracted Constants (T-1507-TEST)
+
+**Pattern**: Use `@field_validator` decorators with centralized constants for business logic validation at the API boundary.
+
+**Implementation** (`src/backend/schemas.py`):
+```python
+from constants import MAX_FILE_SIZE_BYTES  # 500MB = 524,288,000 bytes
+
+class UploadRequest(BaseModel):
+    filename: str
+    size: int = Field(..., gt=0)
+    
+    @field_validator('size')
+    @classmethod
+    def validate_file_size(cls, v: int) -> int:
+        """Validate file size does not exceed 500MB (max upload limit)."""
+        if v > MAX_FILE_SIZE_BYTES:
+            raise ValueError(
+                f"File size {v} bytes exceeds maximum allowed size of "
+                f"500MB ({MAX_FILE_SIZE_BYTES} bytes)"
+            )
+        return v
+```
+
+**Benefits**:
+- **Fail-Fast Validation**: Invalid requests rejected at API boundary (before service layer)
+- **Automatic 422 Responses**: Pydantic validation errors return HTTP 422 Unprocessable Entity
+- **DRY Principle**: Constants in `constants.py` eliminate magic numbers (500 * 1024 * 1024)
+- **Type Safety**: Pydantic UUID field type auto-validates UUID format (rejects "not-a-uuid" strings)
+
+**Use Cases**:
+- File size limits (ERR-BE-03: 500MB max upload)
+- UUID format validation (ERR-BE-02: Pydantic UUID field type)
+- Enum constraints (material_type validated against VALID_MATERIALS list)
+
+**Anti-Pattern**: Do NOT duplicate validation logic in service layer — centralize in schemas.py.
+
 ## Backend Architecture Patterns
 
 ### Clean Architecture (Implemented in T-004-BACK)

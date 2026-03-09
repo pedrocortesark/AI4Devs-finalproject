@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
+from constants import MAX_FILE_SIZE_BYTES
 
 class UploadRequest(BaseModel):
     """
@@ -10,12 +11,28 @@ class UploadRequest(BaseModel):
 
     Attributes:
         filename (str): The name of the file to upload. Must end with .3dm.
-        size (int): The size of the file in bytes. Must be greater than 0.
+        size (int): The size of the file in bytes. Must be greater than 0 and less than 500MB.
         checksum (Optional[str]): optional checksum of the file for integrity verification.
     """
     filename: str = Field(..., description="Name of the file to upload (must be .3dm)")
     size: int = Field(..., gt=0, description="Size in bytes")
     checksum: Optional[str] = Field(None, description="Optional checksum for validation")
+    
+    @field_validator('size')
+    @classmethod
+    def validate_file_size(cls, v: int) -> int:
+        """
+        Validate file size does not exceed 500MB (max upload limit).
+        
+        Raises:
+            ValueError: If file size exceeds MAX_FILE_SIZE_BYTES constant.
+        """
+        if v > MAX_FILE_SIZE_BYTES:
+            raise ValueError(
+                f"File size {v} bytes exceeds maximum allowed size of "
+                f"500MB ({MAX_FILE_SIZE_BYTES} bytes)"
+            )
+        return v
 
 class UploadResponse(BaseModel):
     """
@@ -43,10 +60,10 @@ class ConfirmUploadRequest(BaseModel):
     a file to the presigned URL, to trigger backend processing.
 
     Attributes:
-        file_id (str): The unique identifier returned from the presigned URL request.
+        file_id (UUID): The unique identifier returned from the presigned URL request.
         file_key (str): The S3 object key where the file was uploaded.
     """
-    file_id: str = Field(..., description="UUID of the uploaded file")
+    file_id: UUID = Field(..., description="UUID of the uploaded file")
     file_key: str = Field(..., description="S3 object key (path in bucket)")
 
 
@@ -547,11 +564,13 @@ class ElementDetail(BaseModel):
     status: ElementStatus = Field(..., description="Lifecycle state")
     material_type: str = Field(..., description="Stone material type (62 options)")
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
+    updated_at: Optional[str] = Field(None, description="Last update timestamp (ISO 8601)")
     low_poly_url: Optional[str] = Field(None, description="Presigned CDN URL (TTL 5min)")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
     validation_report: Optional[ValidationReport] = Field(None, description="Validation results")
     glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
     triangle_count: Optional[int] = Field(None, description="Triangle count (performance)")
+    rhino_metadata: Optional[dict] = Field(None, description="Rhino 3DM metadata (JSONB)")
 
     @field_validator('material_type')
     @classmethod
@@ -579,7 +598,11 @@ class ElementDetail(BaseModel):
         "metadata": {"layer_count": 1, "object_count": 1}
         },
         "glb_size_bytes": 312456,
-        "triangle_count": 987
+        "triangle_count": 987,
+        "rhino_metadata": {
+            "userstrings": {"Codi": "GLPER.B-PAE0720.0701", "Material": "Montjuïc"},
+            "geometry_type": "InstanceReference"
+        }
         }
         }
     )

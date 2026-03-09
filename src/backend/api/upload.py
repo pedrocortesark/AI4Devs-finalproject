@@ -76,9 +76,9 @@ async def confirm_upload(request: ConfirmUploadRequest) -> ConfirmUploadResponse
     celery = get_celery_client()
     upload_service = UploadService(supabase, celery_client=celery)
 
-    # Execute confirmation via service
+    # Execute confirmation via service (convert UUID to string)
     success, event_id, task_id, error_msg = upload_service.confirm_upload(
-        file_id=request.file_id,
+        file_id=str(request.file_id),
         file_key=request.file_key
     )
 
