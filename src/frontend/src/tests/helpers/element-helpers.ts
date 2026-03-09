@@ -71,7 +71,7 @@ export async function waitForCanvas(timeout: number = 2000): Promise<void> {
  * 
  * Note: In RED phase, this may not work until Canvas component exists
  */
-export function getRenderedMeshes(canvas: HTMLCanvasElement): number {
+export function getRenderedMeshes(_canvas: HTMLCanvasElement): number {
   // Placeholder: Inspect Three.js scene for mesh count
   // In GREEN phase, implement actual Three.js scene traversal
   return 0;
