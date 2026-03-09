@@ -170,11 +170,11 @@ up-frontend:
 
 # Install frontend dependencies inside Docker
 front-install:
-	docker compose run --rm frontend npm install
+	docker compose run --rm -u root frontend npm install
 
 # Run frontend tests (TDD workflow)
 test-front:
-	docker compose run --rm frontend bash -c "npm install && npm test"
+	docker compose run --rm -u root frontend bash -c "npm install && npm test"
 
 # Open a shell inside the frontend container
 front-shell:

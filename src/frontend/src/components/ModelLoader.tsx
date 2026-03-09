@@ -13,7 +13,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useGLTF, Html } from '@react-three/drei';
-import * as THREE from 'three';
 import { Group, Box3, Vector3 } from 'three';
 import { BBoxProxy } from './Dashboard/BBoxProxy';
 import { getPartDetail } from '@/services/upload.service';
