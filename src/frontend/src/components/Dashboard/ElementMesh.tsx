@@ -1,15 +1,16 @@
 /**
- * PartMesh Component
+ * ElementMesh Component
  * 
  * T-0505-FRONT: Individual part mesh rendering
  * T-0506-FRONT: Added filter-based opacity
  * T-0507-FRONT: Added 3-level LOD system
+ * US-015: Renamed from PartMesh to ElementMesh (aligns with Element Model migration)
  * 
- * Renders parts at their real building coordinates from Rhino (absolute positioning).
+ * Renders elements at their real building coordinates from Rhino (absolute positioning).
  * GLB geometry includes Z→Y rotation applied during backend export.
  * LOD system: Level 0 (mid-poly <20km) → Level 1 (low-poly 20-50km) → Level 2 (bbox >50km)
  * 
- * @module PartMesh
+ * @module ElementMesh
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -19,10 +20,10 @@ import { FILTER_VISUAL_FEEDBACK } from '@/constants/parts.constants';
 import { LOD_DISTANCES } from '@/constants/lod.constants';
 import { usePartsStore } from '@/stores/parts.store';
 import { BBoxProxy } from './BBoxProxy';
-import type { PartMeshProps } from './PartsScene.types';
+import type { ElementMeshProps } from './PartsScene.types';
 
 /**
- * Tooltip styles for part information display
+ * Tooltip styles for element information display
  * Extracted as constant for consistency and maintainability
  */
 const TOOLTIP_STYLES: React.CSSProperties = {
@@ -38,17 +39,17 @@ const TOOLTIP_STYLES: React.CSSProperties = {
  * Calculate opacity value based on selection and filter state
  * 
  * Opacity rules:
- * 1. Selected part: always fully visible (1.0)
- * 2. No filters applied: all parts fully visible (1.0)
+ * 1. Selected element: always fully visible (1.0)
+ * 2. No filters applied: all elements fully visible (1.0)
  * 3. Filters applied + matches: fully visible (1.0)
  * 4. Filters applied + no match: faded out (0.2)
  * 5. Backward compatibility: legacy tests without filter system (0.8)
  * 
- * @param isSelected - Whether part is currently selected
+ * @param isSelected - Whether element is currently selected
  * @param hasFilterSystem - Whether filters object has status/tipologia properties
  * @param hasActiveFilters - Whether any filter is currently applied
- * @param matchesFilters - Whether part matches current filter criteria
- * @returns Opacity value as string ('0.2', '0.8', or '1.0')
+ * @param matchesFilters - Whether element matches current filter criteria
+ * @returns Opacity value as number (0.2, 0.8, or 1.0)
  */
 function calculatePartOpacity(
   isSelected: boolean,
@@ -80,22 +81,22 @@ function calculatePartOpacity(
 }
 
 /**
- * PartMesh: Renders individual part with GLB geometry and optional LOD
+ * ElementMesh: Renders individual element with GLB geometry and optional LOD
  * 
- * @param props.part - Part data (iso_code, status, low_poly_url, mid_poly_url, bbox, etc.)
+ * @param props.part - Element data (iso_code, status, low_poly_url, mid_poly_url, bbox, etc.)
  * @param props.position - 3D position [x, y, z]
  * @param props.enableLod - Enable LOD system (default true). Set false for T-0505 backward compatibility
  * 
  * @example
  * ```tsx
  * // With LOD (default)
- * <PartMesh part={part} position={[10, 0, 5]} />
+ * <ElementMesh part={element} position={[10, 0, 5]} />
  * 
  * // Without LOD (backward compatibility)
- * <PartMesh part={part} position={[10, 0, 5]} enableLod={false} />
+ * <ElementMesh part={element} position={[10, 0, 5]} enableLod={false} />
  * ```
  */
-export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
+export function ElementMesh({ part, position, enableLod = true }: ElementMeshProps) {
   const [hovered, setHovered] = useState(false);
   const store = usePartsStore();
   const { selectPart, selectedId } = store;
@@ -200,7 +201,7 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   // Backward compatibility: Single-level rendering when enableLod=false
   if (!enableLod) {
     return (
-      // GLB is positioned at part's real building coordinates (from bbox center).
+      // GLB is positioned at element's real building coordinates (from bbox center).
       // Z→Y rotation already applied during backend GLB export.
       // userData stores partId for camera focus functionality ('F' key)
       <group 
@@ -232,7 +233,7 @@ export function PartMesh({ part, position, enableLod = true }: PartMeshProps) {
   // LOD System: 3-level distance-based rendering
   // Level 0 (<20 km): mid_poly → Level 1 (20–50 km): low_poly → Level 2 (>50 km): BBoxProxy
   return (
-    // GLB is positioned at part's real building coordinates (from bbox center).
+    // GLB is positioned at element's real building coordinates (from bbox center).
     // Z→Y rotation already applied during backend GLB export.
     // userData stores partId for camera focus functionality ('F' key)
     <group 

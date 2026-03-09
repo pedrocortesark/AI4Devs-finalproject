@@ -3,6 +3,7 @@
  * 
  * T-0505-FRONT: 3D Parts Scene - Low-Poly Meshes
  * T-0507-FRONT: Extended with LOD system props
+ * US-015: Renamed PartMesh → ElementMesh (aligns with Element Model migration)
  * 
  * @module PartsScene.types
  */
@@ -23,11 +24,12 @@ export interface PartsSceneProps {
 }
 
 /**
- * Props for individual PartMesh component
+ * Props for individual ElementMesh component
  * 
- * Renders single part with useGLTF, status color, tooltip
+ * Renders single element with useGLTF, status color, tooltip
+ * US-015: Renamed from PartMeshProps to ElementMeshProps
  */
-export interface PartMeshProps {
+export interface ElementMeshProps {
   /** Part data including low_poly_url, status, iso_code */
   part: PartCanvasItem;
   

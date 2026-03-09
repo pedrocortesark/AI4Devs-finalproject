@@ -135,15 +135,15 @@ class ElementsService:
     def _validate_material_type(self, material_type: str) -> None:
         """
         Validate material_type against MATERIAL_COLORS dictionary (62 real materials).
-        
+
         Args:
             material_type: Material type string to validate
-            
+
         Raises:
             ValueError: If material not in VALID_MATERIALS list
         """
         from agent.constants import VALID_MATERIALS
-        
+
         if material_type not in VALID_MATERIALS:
             raise ValueError(
                 f"Invalid material_type: '{material_type}'. Must be one of {len(VALID_MATERIALS)} "
@@ -185,7 +185,7 @@ class ElementsService:
         Examples:
             >>> from infra.supabase_client import get_supabase_client
             >>> service = ElementsService(get_supabase_client())
-            >>> 
+            >>>
             >>> # Get all render-ready elements
             >>> result = service.list_elements()
             >>> len(result.elements)

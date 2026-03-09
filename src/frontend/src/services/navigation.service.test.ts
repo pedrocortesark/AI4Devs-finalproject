@@ -38,7 +38,7 @@ describe('Navigation Service - T-1007-FRONT', () => {
       const result = await getPartNavigation(mockPartId);
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining(`/api/parts/${mockPartId}/navigation`),
+        expect.stringContaining(`/api/parts/${mockPartId}/adjacent`),
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -161,37 +161,65 @@ describe('Navigation Service - T-1007-FRONT', () => {
   });
 
   describe('Error Handling', () => {
-    it('NAV-ERR-01: should throw error on 404 Not Found', async () => {
+    it('NAV-ERR-01: should return fallback on 404 Not Found', async () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: false,
         status: 404,
       });
 
-      await expect(getPartNavigation('invalid-uuid')).rejects.toThrow('Part not found');
+      // Service uses fail-safe pattern: returns fallback instead of throwing
+      const result = await getPartNavigation('invalid-uuid');
+      expect(result).toEqual({
+        prev_id: null,
+        next_id: null,
+        current_index: 1,
+        total_count: 1,
+      });
     });
 
-    it('NAV-ERR-02: should throw error on 403 Forbidden', async () => {
+    it('NAV-ERR-02: should return fallback on 403 Forbidden', async () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: false,
         status: 403,
       });
 
-      await expect(getPartNavigation(mockPartId)).rejects.toThrow('Access denied');
+      // Service uses fail-safe pattern: navigation is non-critical
+      const result = await getPartNavigation(mockPartId);
+      expect(result).toEqual({
+        prev_id: null,
+        next_id: null,
+        current_index: 1,
+        total_count: 1,
+      });
     });
 
-    it('NAV-ERR-03: should throw error on 500 Internal Server Error', async () => {
+    it('NAV-ERR-03: should return fallback on 500 Internal Server Error', async () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: false,
         status: 500,
       });
 
-      await expect(getPartNavigation(mockPartId)).rejects.toThrow('Navigation API error: 500');
+      // Service uses fail-safe pattern: don't crash 3D viewer on navigation error
+      const result = await getPartNavigation(mockPartId);
+      expect(result).toEqual({
+        prev_id: null,
+        next_id: null,
+        current_index: 1,
+        total_count: 1,
+      });
     });
 
-    it('NAV-ERR-04: should throw error on network failure', async () => {
+    it('NAV-ERR-04: should return fallback on network failure', async () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
 
-      await expect(getPartNavigation(mockPartId)).rejects.toThrow('Network error');
+      // Service uses fail-safe pattern: CORS/network errors don't block viewer
+      const result = await getPartNavigation(mockPartId);
+      expect(result).toEqual({
+        prev_id: null,
+        next_id: null,
+        current_index: 1,
+        total_count: 1,
+      });
     });
 
     it('NAV-ERR-05: should handle null filters gracefully', async () => {

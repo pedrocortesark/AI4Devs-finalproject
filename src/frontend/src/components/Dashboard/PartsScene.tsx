@@ -3,6 +3,7 @@
  * 
  * T-0505-FRONT: Orchestrator component for 3D parts rendering
  * T-0507-FRONT: Added LOD system with preload strategy
+ * US-015: Updated to use ElementMesh (renamed from PartMesh)
  * 
  * Renders N parts with useGLTF(part.low_poly_url), skipping parts without geometry.
  * Preloads all geometry URLs to prevent pop-in during LOD transitions.
@@ -13,7 +14,7 @@
 
 import { useMemo, useEffect } from 'react';
 import { useGLTF } from '@react-three/drei';
-import { PartMesh } from './PartMesh';
+import { ElementMesh } from './ElementMesh';
 import { CameraController } from './CameraController';
 import { usePartsSpatialLayout } from '@/hooks/usePartsSpatialLayout';
 import type { PartsSceneProps } from './PartsScene.types';
@@ -62,9 +63,9 @@ export function PartsScene({ parts, selectedId = null }: PartsSceneProps) {
       {/* Professional CAD-style camera controls */}
       <CameraController parts={partsWithGeometry} selectedId={selectedId} />
       
-      {/* Render individual part meshes with LOD */}
+      {/* Render individual element meshes with LOD */}
       {partsWithGeometry.map((part, index) => (
-        <PartMesh
+        <ElementMesh
           key={part.id}
           part={part}
           position={positions[index]}

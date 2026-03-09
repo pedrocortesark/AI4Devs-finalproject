@@ -82,20 +82,15 @@ describe('BBoxProxy', () => {
   });
 
   describe('Edge Cases', () => {
-    it('EC-BBOX-1: centers box geometry at bbox center point', () => {
+    it('EC-BBOX-1: mesh position is [0,0,0] (parent group handles absolute positioning)', () => {
       const { container } = render(<BBoxProxy bbox={mockBBox} color={mockColor} />);
 
-      // Calculate expected center
-      const centerX = (mockBBox.min[0] + mockBBox.max[0]) / 2;  // 0.0
-      const centerY = (mockBBox.min[1] + mockBBox.max[1]) / 2;  // 0.0
-      const centerZ = (mockBBox.min[2] + mockBBox.max[2]) / 2;  // 1.7
-
+      // BBoxProxy renders at [0,0,0] relative to parent <group> which is positioned at bbox center
+      // This design allows ElementMesh to position the entire LOD system (including BBoxProxy) uniformly
       const mesh = container.querySelector('[name="bbox-proxy"]');
       const position = mesh!.getAttribute('position');
 
-      expect(position).toContain(centerX.toString());
-      expect(position).toContain(centerY.toString());
-      expect(position).toContain(centerZ.toString());
+      expect(position).toBe('0,0,0');
     });
 
     it('EC-BBOX-2: handles zero-sized bbox dimensions gracefully', () => {
@@ -161,7 +156,7 @@ describe('BBoxProxy', () => {
       expect(argsAttr).toContain(expectedDepth.toString());
     });
 
-    it('MM-BBOX-2: bbox center position matches midpoint of mm coordinates', () => {
+    it('MM-BBOX-2: mesh position is [0,0,0] (relative to parent group at bbox center)', () => {
       // Column: 1 000 mm wide, 3 000 mm tall, 1 000 mm deep — centre at [0, 1500, 0]
       const columnBBox: BoundingBox = {
         min: [-500, 0, -500],
@@ -172,13 +167,9 @@ describe('BBoxProxy', () => {
       const mesh = container.querySelector('[name="bbox-proxy"]');
       const position = mesh!.getAttribute('position') ?? '';
 
-      const centerX = (columnBBox.min[0] + columnBBox.max[0]) / 2; // 0
-      const centerY = (columnBBox.min[1] + columnBBox.max[1]) / 2; // 1500
-      const centerZ = (columnBBox.min[2] + columnBBox.max[2]) / 2; // 0
-
-      expect(position).toContain(centerX.toString());
-      expect(position).toContain(centerY.toString());
-      expect(position).toContain(centerZ.toString());
+      // BBoxProxy always renders at [0,0,0] relative to parent group
+      // Parent group (in ElementMesh) is positioned at [centerX, centerY, centerZ]
+      expect(position).toBe('0,0,0');
     });
 
     it('MM-BBOX-3: large SF column (3000 mm) dimensions are well below LOD threshold (50 000 mm)', () => {

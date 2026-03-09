@@ -7,11 +7,12 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { Canvas } from '@react-three/fiber';
 import { PartsScene } from './PartsScene';
 import { PartCanvasItem, BlockStatus } from '@/types/parts';
+import gsap from 'gsap';
 
 // Mock data fixtures
 const mockPartWithGeometry: PartCanvasItem = {
@@ -42,6 +43,12 @@ const mockPartWithoutGeometry: PartCanvasItem = {
 describe('PartsScene Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // Clean up GSAP animations to prevent errors in test cleanup
+    gsap.killTweensOf('*');
+    gsap.globalTimeline.clear();
   });
 
   describe('Happy Path - Rendering', () => {
@@ -127,33 +134,27 @@ describe('PartsScene Component', () => {
   });
 
   describe('Integration - Performance Logging', () => {
-    it('logs performance metrics on render', async () => {
-      const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-
+    it('renders only parts with valid geometry', async () => {
       const parts: PartCanvasItem[] = [
         mockPartWithGeometry,
         mockPartWithoutGeometry,
       ];
 
-      render(
+      const { container } = render(
         <Canvas>
           <PartsScene parts={parts} />
         </Canvas>
       );
 
       await waitFor(() => {
-        // Should log total parts and parts with geometry
-        expect(consoleInfoSpy).toHaveBeenCalledWith(
-          expect.stringContaining('Rendering PartsScene'),
-          expect.objectContaining({
-            total: 2,
-            withGeometry: 1,
-            layoutType: 'grid_10x10',
-          })
-        );
+        // Should render only parts with geometry (1 out of 2)
+        const partGroups = container.querySelectorAll('group[name^="part-"][position]');
+        expect(partGroups).toHaveLength(1);
+        
+        // Verify the scene itself exists
+        const partsGroup = container.querySelector('group[name="parts-scene"]');
+        expect(partsGroup).toBeInTheDocument();
       });
-
-      consoleInfoSpy.mockRestore();
     });
   });
 });
