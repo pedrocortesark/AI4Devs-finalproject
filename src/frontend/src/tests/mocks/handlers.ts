@@ -103,4 +103,25 @@ export const handlers = [
       updated_at: new Date().toISOString(),
     });
   }),
+
+  /**
+   * GET https://example.com/*.glb - Mock GLB file load failures
+   * Used by ERR-FE-02 test to simulate 404 on GLB fetch
+   */
+  http.get('https://example.com/*.glb', () => {
+    return new HttpResponse(null, { status: 404 });
+  }),
+
+  /**
+   * GET https://example.supabase.co/storage/* - Mock successful GLB loads
+   * Returns empty blob for successful GLB loads in tests
+   */
+  http.get('https://example.supabase.co/storage/*', () => {
+    return new HttpResponse(new Blob(), {
+      status: 200,
+      headers: {
+        'Content-Type': 'model/gltf-binary',
+      },
+    });
+  }),
 ];
