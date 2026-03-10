@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockElement, waitForCanvas, MATERIAL_COLORS } from '../helpers/element-helpers';
 import { ElementCanvas } from '../../components/ElementCanvas'; // Placeholder component

@@ -66,12 +66,25 @@ export const handlers = [
 
   /**
    * GET /api/elements/:id - Get element detail
+   * 
+   * Strategy: Return existing element from mockElements if found,
+   * otherwise generate dynamic mock element (allows tests to create elements on-the-fly)
    */
   http.get('/api/elements/:id', ({ params }) => {
     const { id } = params;
-    const element = mockElements.find(el => el.id === id);
-
-    if (!element) {
+    
+    // Check if element exists in predefined mocks
+    let element = mockElements.find(el => el.id === id);
+    
+    // If not found and id is valid UUID (not '00000000...'), generate dynamic mock
+    const isInvalidId = id === '00000000-0000-0000-0000-000000000000';
+    
+    if (!element && !isInvalidId) {
+      // Generate dynamic element for test-created IDs
+      element = mockElement({ id: id as string });
+    }
+    
+    if (!element || isInvalidId) {
       return HttpResponse.json(
         { detail: 'Element not found' },
         { status: 404 }

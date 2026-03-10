@@ -43,7 +43,7 @@ export function ElementCanvas({ elementId }: ElementCanvasProps) {
     return <div>Element not found</div>;
   }
   
-  // Minimal canvas to satisfy queryByRole('img') in tests
-  // Canvas has implicit ARIA role="img"
-  return <canvas />;
+  // Canvas with explicit role="img" for accessibility and testing
+  // aria-label provides context for screen readers
+  return <canvas role="img" aria-label="3D Element Viewer" />;
 }
