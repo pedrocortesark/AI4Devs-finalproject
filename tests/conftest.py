@@ -32,22 +32,65 @@ def celery_eager_mode():
 
     This makes validate_file.apply_async() execute synchronously,
     allowing tests to run without a background worker.
+
+    CRITICAL: Also monkeypatches Celery.send_task() because it ignores
+    task_always_eager. This ensures tasks sent via backend's send_task()
+    are executed immediately with registered tasks from agent app.
     """
     from src.agent.celery_app import celery_app
+    import infra.celery_client
 
-    # Store original config
+    # Force import of tasks to register them (Celery doesn't auto-load in tests)
+    try:
+        from src.agent.tasks import file_validation, geometry_processing  # noqa: F401
+    except ImportError:
+        pass  # Some tests may not have access to agent tasks
+
+    # Store original config for agent app
     original_always_eager = celery_app.conf.task_always_eager
     original_eager_propagates = celery_app.conf.task_eager_propagates
 
-    # Enable eager mode
+    # Enable eager mode for agent app
     celery_app.conf.task_always_eager = True
     celery_app.conf.task_eager_propagates = True
 
+    # Store original send_task method
+    from celery import Celery
+    original_send_task = Celery.send_task
+
+    def eager_send_task(self, name, args=None, kwargs=None, **options):
+        """
+        Monkeypatched send_task that executes tasks immediately.
+        
+        Because send_task() ignores task_always_eager, we intercept it
+        and call the task directly if it's registered.
+        """
+        if name in celery_app.tasks:
+            # Task is registered, execute it directly
+            task = celery_app.tasks[name]
+            return task.apply(args=args or [], kwargs=kwargs or {})
+        else:
+            # Task not registered, fall back to original behavior
+            return original_send_task(self, name, args, kwargs, **options)
+
+    # Apply monkeypatch
+    Celery.send_task = eager_send_task
+
+    # Also patch backend Celery client to use agent app (so tasks are registered)
+    original_backend_client = infra.celery_client._celery_client
+    infra.celery_client._celery_client = celery_app
+
     yield
 
-    # Restore original config
+    # Restore original send_task
+    Celery.send_task = original_send_task
+
+    # Restore original config for agent app
     celery_app.conf.task_always_eager = original_always_eager
     celery_app.conf.task_eager_propagates = original_eager_propagates
+
+    # Restore backend client
+    infra.celery_client._celery_client = original_backend_client
 
 
 @pytest.fixture(scope="session")

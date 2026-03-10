@@ -2,7 +2,7 @@
 Integration tests for T-029-BACK: Trigger Validation from Confirm Endpoint
 
 TDD Phase: GREEN — These tests verify the full endpoint flow:
-  POST /api/upload/confirm → block created → task enqueued → task_id returned
+  POST /api/upload/confirm → blocks created → task enqueued → task_id returned
 
 Requires:
   - PostgreSQL (db service) for blocks table
@@ -11,9 +11,14 @@ Requires:
 
 Tests:
   1. Endpoint returns task_id (not null) on happy path
-  2. Block record created in DB with PENDING iso_code
+  2. Block records created in DB (one per InstanceDefinition in test-model.3dm)
   3. Payload validation still returns 422 (no-regression)
   4. File not found returns 404, no block created
+
+Architecture Note:
+  As of register_3dm_blocks refactor, blocks are created asynchronously by 
+  parsing the .3dm file and creating one block per InstanceDefinition. 
+  The test-model.3dm fixture contains 6 InstanceDefinitions (GLPER.B-PAE0720.070X).
 """
 
 from pathlib import Path
@@ -26,12 +31,22 @@ client = TestClient(app)
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 test_3dm_content = (FIXTURE_DIR / "test-model.3dm").read_bytes()
 
+# Expected InstanceDefinitions in test-model.3dm
+EXPECTED_ISO_CODES = [
+    "GLPER.B-PAE0720.0702",
+    "GLPER.B-PAE0720.0704",
+    "GLPER.B-PAE0720.0706",
+    "GLPER.B-PAE0720.0701",
+    "GLPER.B-PAE0720.0703",
+    "GLPER.B-PAE0720.0705",
+]
 
-def _cleanup_pending_blocks(supabase_client, iso_prefix: str):
-    """Helper to remove PENDING blocks from Supabase."""
+
+def _cleanup_test_blocks(supabase_client):
+    """Helper to remove test fixture blocks from Supabase."""
     try:
-        supabase_client.table("blocks").delete().like(
-            "iso_code", f"PENDING-{iso_prefix}%"
+        supabase_client.table("blocks").delete().in_(
+            "iso_code", EXPECTED_ISO_CODES
         ).execute()
     except Exception:
         pass
@@ -61,7 +76,7 @@ def test_confirm_upload_returns_task_id(supabase_client):
         supabase_client.storage.from_(bucket_name).remove([test_file_key])
     except Exception:
         pass
-    _cleanup_pending_blocks(supabase_client, file_id[:8])
+    _cleanup_test_blocks(supabase_client)
 
     supabase_client.storage.from_(bucket_name).upload(
         path=test_file_key,
@@ -89,21 +104,25 @@ def test_confirm_upload_returns_task_id(supabase_client):
 
     # Cleanup
     supabase_client.storage.from_(bucket_name).remove([test_file_key])
-    _cleanup_pending_blocks(supabase_client, file_id[:8])
+    _cleanup_test_blocks(supabase_client)
 
 
 def test_confirm_upload_creates_block_record(supabase_client):
     """
     T-029-BACK Integration Test 2:
-    When confirming a valid upload, a block record should be created
-    in the blocks table with temporary PENDING iso_code.
+    When confirming a valid upload, block records should be created
+    in the blocks table (one per InstanceDefinition in the .3dm file).
 
-    Given: A file exists in Supabase Storage
+    Given: A file exists in Supabase Storage (test-model.3dm with 6 InstanceDefinitions)
     When: POST /api/upload/confirm
     Then:
-        - A row exists in blocks table with iso_code starting with "PENDING-"
-        - Block tipologia is "pending"
-        - Block url_original matches the file_key
+        - 6 rows exist in blocks table with iso_codes from InstanceDefinitions
+        - Blocks have correct url_original matching the file_key
+    
+    Architecture Note:
+        The register_3dm_blocks task (runs eagerly in tests) parses the .3dm file
+        and creates one block per InstanceDefinition. The PENDING-{file_id} pattern
+        was deprecated in favor of actual iso_codes from block definitions.
     """
     # Arrange
     bucket_name = "raw-uploads"
@@ -116,7 +135,7 @@ def test_confirm_upload_creates_block_record(supabase_client):
         supabase_client.storage.from_(bucket_name).remove([test_file_key])
     except Exception:
         pass
-    _cleanup_pending_blocks(supabase_client, file_id[:8])
+    _cleanup_test_blocks(supabase_client)
 
     supabase_client.storage.from_(bucket_name).upload(
         path=test_file_key,
@@ -134,23 +153,30 @@ def test_confirm_upload_creates_block_record(supabase_client):
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json()}"
 
     # Assert: Query blocks table via Supabase
-    expected_iso = f"PENDING-{file_id[:8]}"
     result = supabase_client.table("blocks").select(
         "id, iso_code, status, tipologia, url_original"
-    ).eq("iso_code", expected_iso).execute()
+    ).in_("iso_code", EXPECTED_ISO_CODES).execute()
 
-    assert len(result.data) > 0, (
-        f"Block with iso_code '{expected_iso}' not found in blocks table. "
-        "T-029-BACK should create a block record during confirm upload."
+    assert len(result.data) == 6, (
+        f"Expected 6 blocks (one per InstanceDefinition in test-model.3dm), "
+        f"but found {len(result.data)}. T-029-BACK should create blocks via register_3dm_blocks task."
     )
 
-    block = result.data[0]
-    assert block["iso_code"] == expected_iso
-    assert block["tipologia"] == "pending", f"Expected tipologia 'pending', got '{block['tipologia']}'"
-    assert block["url_original"] == test_file_key
+    # Verify all expected iso_codes are present
+    created_iso_codes = {block["iso_code"] for block in result.data}
+    assert created_iso_codes == set(EXPECTED_ISO_CODES), (
+        f"Expected iso_codes {set(EXPECTED_ISO_CODES)}, got {created_iso_codes}"
+    )
+
+    # Verify all blocks point to the uploaded file
+    for block in result.data:
+        assert block["url_original"] == test_file_key, (
+            f"Block {block['iso_code']} url_original mismatch: "
+            f"expected '{test_file_key}', got '{block['url_original']}'"
+        )
 
     # Cleanup
-    _cleanup_pending_blocks(supabase_client, file_id[:8])
+    _cleanup_test_blocks(supabase_client)
     supabase_client.storage.from_(bucket_name).remove([test_file_key])
 
 
@@ -186,10 +212,10 @@ def test_confirm_upload_file_not_found_returns_404_no_block(supabase_client):
         "file_key": "non-existent/t029-phantom.3dm"
     }
 
-    # Count blocks before
+    # Count blocks before (test fixture blocks)
     result_before = supabase_client.table("blocks").select(
         "id", count="exact"
-    ).like("iso_code", f"PENDING-{file_id[:8]}%").execute()
+    ).in_("iso_code", EXPECTED_ISO_CODES).execute()
     count_before = result_before.count or 0
 
     # Act
@@ -200,7 +226,7 @@ def test_confirm_upload_file_not_found_returns_404_no_block(supabase_client):
 
     result_after = supabase_client.table("blocks").select(
         "id", count="exact"
-    ).like("iso_code", f"PENDING-{file_id[:8]}%").execute()
+    ).in_("iso_code", EXPECTED_ISO_CODES).execute()
     count_after = result_after.count or 0
 
     assert count_after == count_before, (
