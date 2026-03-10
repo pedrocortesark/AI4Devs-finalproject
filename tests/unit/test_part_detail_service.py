@@ -16,10 +16,10 @@ class TestPartDetailService:
     
     def test_get_part_detail_success_with_rls(self):
         """
-        UNIT-01: Regular user can fetch assigned part.
+        UNIT-01: User can fetch part.
         
-        Given: User with workshop_id='workshop-123'
-        When: Request GET /api/parts/{part_id} for part assigned to workshop-123
+        Given: Valid part ID
+        When: Request GET /api/parts/{part_id}
         Then: Returns PartDetailResponse with status 200
         """
         mock_client = Mock()
@@ -34,24 +34,20 @@ class TestPartDetailService:
             'created_at': '2026-02-15T10:30:00Z',
             'low_poly_url': 'https://cdn.cloudfront.net/low-poly/550e8400.glb',
             'bbox': {'min': [-2.5, 0, -2.5], 'max': [2.5, 5, 2.5]},
-            'workshop_id': 'workshop-123',
-            'workshops': {'name': 'Taller Granollers'},
             'validation_report': None
         }]
         
         # Chain the mock methods
-        mock_client.from_.return_value.select.return_value.eq.return_value.or_.return_value.execute.return_value = mock_response
+        mock_client.from_.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
         
         service = PartDetailService(supabase_client=mock_client)
         success, data, error = service.get_part_detail(
-            '550e8400-e29b-41d4-a716-446655440000',
-            'workshop-123'
+            '550e8400-e29b-41d4-a716-446655440000'
         )
         
         assert success is True
         assert data is not None
         assert data['iso_code'] == 'SF-C12-D-001'
-        assert data['workshop_name'] == 'Taller Granollers'
         assert error is None
     
     def test_get_part_detail_invalid_uuid_format(self):
@@ -63,7 +59,7 @@ class TestPartDetailService:
         Then: Returns success=False with appropriate error message
         """
         service = PartDetailService()
-        success, data, error = service.get_part_detail('invalid-uuid', 'workshop-123')
+        success, data, error = service.get_part_detail('invalid-uuid')
         
         assert success is False
         assert data is None
@@ -81,21 +77,23 @@ class TestPartDetailService:
         mock_response = Mock()
         mock_response.data = []  # Empty response
         
-        mock_client.from_.return_value.select.return_value.eq.return_value.or_.return_value.execute.return_value = mock_response
+        mock_client.from_.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
         
         service = PartDetailService(supabase_client=mock_client)
         success, data, error = service.get_part_detail(
-            '550e8400-e29b-41d4-a716-446655440000',
-            'workshop-123'
+            '550e8400-e29b-41d4-a716-446655440000'
         )
         
         assert success is False
         assert data is None
         assert "not found or access denied" in error
     
+    @pytest.mark.skip(reason="workshop_id removed in T-1501-DB (workshops not used in MVP)")
     def test_get_part_detail_superuser_sees_all(self):
         """
         UNIT-04: Superuser (no workshop_id) can see all parts.
+        
+        OBSOLETE: Test validates workshop_id filtering removed in T-1501-DB.
         
         Given: User with no workshop_id (superuser)
         When: Request part from any workshop
@@ -130,9 +128,12 @@ class TestPartDetailService:
         assert data['workshop_id'] == 'workshop-xyz'
         assert error is None
     
+    @pytest.mark.skip(reason="workshop_id removed in T-1501-DB (workshops not used in MVP)")
     def test_get_part_detail_unassigned_part_accessible(self):
         """
         UNIT-05: Unassigned parts (workshop_id=NULL) accessible to all.
+        
+        OBSOLETE: Test validates workshop_id field removed in T-1501-DB.
         
         Given: Part with workshop_id = NULL (unassigned)
         When: Any user requests it
@@ -184,8 +185,6 @@ class TestPartDetailService:
             'created_at': '2026-02-15T10:30:00Z',
             'low_poly_url': 'https://cdn.cloudfront.net/low-poly/550e8400.glb',
             'bbox': {'min': [-2.5, 0, -2.5], 'max': [2.5, 5, 2.5]},
-            'workshop_id': 'workshop-123',
-            'workshops': {'name': 'Taller Granollers'},
             'validation_report': {
                 'is_valid': True,
                 'errors': [],
@@ -193,12 +192,11 @@ class TestPartDetailService:
             }
         }]
         
-        mock_client.from_.return_value.select.return_value.eq.return_value.or_.return_value.execute.return_value = mock_response
+        mock_client.from_.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
         
         service = PartDetailService(supabase_client=mock_client)
         success, data, error = service.get_part_detail(
-            '550e8400-e29b-41d4-a716-446655440000',
-            'workshop-123'
+            '550e8400-e29b-41d4-a716-446655440000'
         )
         
         assert success is True
@@ -219,8 +217,7 @@ class TestPartDetailService:
         
         service = PartDetailService(supabase_client=mock_client)
         success, data, error = service.get_part_detail(
-            '550e8400-e29b-41d4-a716-446655440000',
-            'workshop-123'
+            '550e8400-e29b-41d4-a716-446655440000'
         )
         
         assert success is False
@@ -245,17 +242,14 @@ class TestPartDetailService:
             'created_at': '2026-02-15T10:30:00Z',
             'low_poly_url': 'https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb',
             'bbox': {'min': [-2.5, 0, -2.5], 'max': [2.5, 5, 2.5]},
-            'workshop_id': 'workshop-123',
-            'workshops': {'name': 'Taller Granollers'},
             'validation_report': None
         }]
         
-        mock_client.from_.return_value.select.return_value.eq.return_value.or_.return_value.execute.return_value = mock_response
+        mock_client.from_.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
         
         service = PartDetailService(supabase_client=mock_client)
         success, data, error = service.get_part_detail(
-            '550e8400-e29b-41d4-a716-446655440000',
-            'workshop-123'
+            '550e8400-e29b-41d4-a716-446655440000'
         )
         
         assert success is True
@@ -281,8 +275,6 @@ class TestPartDetailService:
             'created_at': '2026-02-15T10:30:00Z',
             'low_poly_url': 'https://cdn.cloudfront.net/low-poly/550e8400.glb',
             'bbox': {'min': [-2.5, 0, -2.5], 'max': [2.5, 5, 2.5]},
-            'workshop_id': '123e4567-e89b-12d3-a456-426614174000',
-            'workshops': {'name': 'Taller Granollers'},
             'validation_report': {
                 'is_valid': True,
                 'errors': [],
@@ -292,12 +284,11 @@ class TestPartDetailService:
             }
         }]
         
-        mock_client.from_.return_value.select.return_value.eq.return_value.or_.return_value.execute.return_value = mock_response
+        mock_client.from_.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
         
         service = PartDetailService(supabase_client=mock_client)
         success, data, error = service.get_part_detail(
-            '550e8400-e29b-41d4-a716-446655440000',
-            '123e4567-e89b-12d3-a456-426614174000'
+            '550e8400-e29b-41d4-a716-446655440000'
         )
         
         assert success is True
@@ -306,9 +297,12 @@ class TestPartDetailService:
         assert response.iso_code == 'SF-C12-D-001'
         assert response.status == BlockStatus.VALIDATED
     
+    @pytest.mark.skip(reason="workshop_id removed in T-1501-DB (workshops not used in MVP)")
     def test_get_part_detail_rls_violation_same_as_not_found(self):
         """
         UNIT-10: RLS violation returns same error as not found (security).
+        
+        OBSOLETE: Test validates workshop RLS filtering removed in T-1501-DB.
         
         Given: User tries to access part from different workshop
         When: RLS filtering returns empty result
@@ -330,9 +324,12 @@ class TestPartDetailService:
         assert success is False
         assert "not found or access denied" in error
     
+    @pytest.mark.skip(reason="workshop_id removed in T-1501-DB (workshops not used in MVP)")
     def test_get_part_detail_null_workshop_name(self):
         """
         UNIT-11: Null workshop_name handled gracefully when workshop join returns null.
+        
+        OBSOLETE: Test validates workshop_name field removed in T-1501-DB.
         
         Given: Part with NULL workshop_id
         When: Call get_part_detail()
@@ -382,7 +379,7 @@ class TestPartDetailService:
         ]
         
         for bad_uuid in malformed_uuids:
-            success, data, error = service.get_part_detail(bad_uuid, 'workshop-123')
+            success, data, error = service.get_part_detail(bad_uuid)
             assert success is False, f"Should fail for {bad_uuid}"
             assert data is None
             assert "Invalid UUID format" in error

@@ -16,22 +16,19 @@ part_detail_service = PartDetailService()
 
 @router.get("/parts/{part_id}", response_model=PartDetailResponse)
 async def get_part_detail(
-    part_id: str,
-    x_workshop_id: Optional[str] = Header(None)
+    part_id: str
 ) -> PartDetailResponse:
     """
-    Fetch a single part by ID with RLS enforcement.
+    Fetch a single part by ID.
 
     Args:
         part_id: UUID of the part
-        x_workshop_id: User's workshop ID (from header). None for superuser.
 
     Returns:
         PartDetailResponse with part details
 
     Raises:
         HTTPException 400: Invalid UUID format
-        HTTPException 403: RLS violation (access denied)
         HTTPException 404: Part not found
         HTTPException 500: Database error
     """
@@ -46,8 +43,7 @@ async def get_part_detail(
 
     # Fetch part with RLS
     success, data, error = part_detail_service.get_part_detail(
-        part_id=part_id,
-        workshop_id=x_workshop_id
+        part_id=part_id
     )
 
     if not success:

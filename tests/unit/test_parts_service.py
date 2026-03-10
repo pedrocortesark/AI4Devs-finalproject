@@ -20,6 +20,7 @@ Author: AI Assistant (Prompt #039 - TDD-RED Phase)
 Date: 2026-02-19
 """
 
+import pytest
 from uuid import uuid4
 from unittest.mock import Mock, MagicMock
 
@@ -36,7 +37,7 @@ except ModuleNotFoundError:
 
 def test_list_parts_builds_correct_query_no_filters():
     """
-    GIVEN no filters provided (status=None, tipologia=None, workshop_id=None)
+    GIVEN no filters provided (status=None, tipologia=None)
     WHEN list_parts() is called
     THEN Supabase query filters only by is_archived=false
     AND returns all non-archived blocks
@@ -56,8 +57,7 @@ def test_list_parts_builds_correct_query_no_filters():
             "status": "validated",
             "tipologia": "capitel",
             "low_poly_url": "https://example.com/file.glb",
-            "bbox": {"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
-            "workshop_id": str(uuid4())
+            "bbox": {"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]}
         }
     ]
 
@@ -70,7 +70,7 @@ def test_list_parts_builds_correct_query_no_filters():
     service = PartsService(mock_supabase)
 
     # Act
-    result = service.list_parts(status=None, tipologia=None, workshop_id=None)
+    result = service.list_parts(status=None, tipologia=None)
 
     # Assert
     assert isinstance(result, PartsListResponse), "Should return PartsListResponse"
@@ -105,8 +105,7 @@ def test_list_parts_applies_status_filter():
             "status": "validated",
             "tipologia": "columna",
             "low_poly_url": None,
-            "bbox": None,
-            "workshop_id": None
+            "bbox": None
         }
     ]
 
@@ -120,7 +119,7 @@ def test_list_parts_applies_status_filter():
     service = PartsService(mock_supabase)
 
     # Act
-    result = service.list_parts(status="validated", tipologia=None, workshop_id=None)
+    result = service.list_parts(status="validated", tipologia=None)
 
     # Assert
     assert len(result.parts) == 1
@@ -148,8 +147,7 @@ def test_list_parts_applies_tipologia_filter():
             "status": "validated",
             "tipologia": "capitel",
             "low_poly_url": "https://example.com/file.glb",
-            "bbox": {"min": [-2.5, 0, -2.5], "max": [2.5, 5, 2.5]},
-            "workshop_id": None
+            "bbox": {"min": [-2.5, 0, -2.5], "max": [2.5, 5, 2.5]}
         }
     ]
 
@@ -159,7 +157,7 @@ def test_list_parts_applies_tipologia_filter():
     service = PartsService(mock_supabase)
 
     # Act
-    result = service.list_parts(status=None, tipologia="capitel", workshop_id=None)
+    result = service.list_parts(status=None, tipologia="capitel")
 
     # Assert
     assert len(result.parts) == 1
@@ -167,12 +165,15 @@ def test_list_parts_applies_tipologia_filter():
     assert result.filters_applied["tipologia"] == "capitel"
 
 
+@pytest.mark.skip(reason="workshop_id removed in T-1501-DB (workshops not used in MVP)")
 def test_list_parts_applies_all_three_filters():
     """
     GIVEN all 3 filters provided (status, tipologia, workshop_id)
     WHEN list_parts(status="validated", tipologia="columna", workshop_id=uuid) is called
     THEN Supabase query includes WHERE status='validated' AND tipologia='columna' AND workshop_id=uuid
     AND is_archived=false
+    
+    OBSOLETE: Test validates workshop_id filtering removed in T-1501-DB.
     """
     # Arrange
     mock_supabase = Mock()
@@ -223,7 +224,6 @@ def test_list_parts_transforms_db_rows_to_pydantic():
     mock_supabase = Mock()
 
     test_id = str(uuid4())
-    test_workshop_id = str(uuid4())
     test_bbox = {"min": [-1.5, -1.5, -1.5], "max": [1.5, 1.5, 1.5]}
 
     db_response = [
@@ -233,8 +233,7 @@ def test_list_parts_transforms_db_rows_to_pydantic():
             "status": "validated",
             "tipologia": "dovela",
             "low_poly_url": "https://example.com/low-poly.glb",
-            "bbox": test_bbox,
-            "workshop_id": test_workshop_id
+            "bbox": test_bbox
         }
     ]
 
@@ -259,7 +258,6 @@ def test_list_parts_transforms_db_rows_to_pydantic():
     assert part.bbox is not None
     assert part.bbox.min == test_bbox["min"]
     assert part.bbox.max == test_bbox["max"]
-    assert str(part.workshop_id) == test_workshop_id
 
 
 def test_list_parts_handles_null_low_poly_url():
@@ -278,8 +276,7 @@ def test_list_parts_handles_null_low_poly_url():
             "status": "uploaded",
             "tipologia": "clave",
             "low_poly_url": None,  # NULL in DB
-            "bbox": None,
-            "workshop_id": None
+            "bbox": None
         }
     ]
 
@@ -317,8 +314,7 @@ def test_list_parts_parses_bbox_from_jsonb():
             "status": "validated",
             "tipologia": "capitel",
             "low_poly_url": "https://example.com/file.glb",
-            "bbox": test_bbox_json,
-            "workshop_id": None
+            "bbox": test_bbox_json
         }
     ]
 
@@ -342,11 +338,14 @@ def test_list_parts_parses_bbox_from_jsonb():
 
 # ===== VALIDATION & ERROR HANDLING =====
 
+@pytest.mark.skip(reason="workshop_id removed in T-1501-DB (workshops not used in MVP)")
 def test_list_parts_validates_uuid_format():
     """
     GIVEN workshop_id parameter is an invalid UUID string
     WHEN list_parts(workshop_id="not-a-uuid") is called
     THEN query executes (validation happens at API layer, not service layer)
+
+    OBSOLETE: Test validates workshop_id parameter removed in T-1501-DB.
 
     NOTE: UUID validation is handled by the API endpoint (parts.py _validate_uuid_format helper),
     not by the service layer. This test verifies service accepts any string and passes it to DB.

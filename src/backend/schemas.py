@@ -253,7 +253,6 @@ class PartCanvasItem(BaseModel):
         tipologia: Part typology (capitel, columna, dovela, clave, imposta, etc.)
         low_poly_url: Storage URL to simplified GLB file (~1000 triangles, ~300-400KB with Draco)
         bbox: 3D bounding box for camera centering and spatial queries
-        workshop_id: Assigned workshop UUID (NULL if unassigned)
     """
     id: UUID = Field(..., description="Block UUID")
     iso_code: str = Field(..., description="Part identifier (e.g., SF-C12-D-001)")
@@ -261,7 +260,6 @@ class PartCanvasItem(BaseModel):
     tipologia: str = Field(..., description="Part typology")
     low_poly_url: Optional[str] = Field(None, description="GLB file URL for 3D rendering")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
-    workshop_id: Optional[UUID] = Field(None, description="Assigned workshop UUID")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -271,8 +269,7 @@ class PartCanvasItem(BaseModel):
         "status": "validated",
         "tipologia": "capitel",
         "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
-        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
+        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]}
         }
         }
     )
@@ -329,8 +326,6 @@ class PartDetailResponse(BaseModel):
         created_at: Row creation timestamp (ISO 8601 format)
         low_poly_url: Presigned CDN URL for GLB file (TTL 5min), None if not generated yet
         bbox: 3D bounding box for camera positioning
-        workshop_id: Assigned workshop UUID (NULL if unassigned)
-        workshop_name: Workshop human-readable name (NULL if unassigned)
         validation_report: Automatic validation results from The Librarian agent
         glb_size_bytes: File size of GLB in bytes (optional, from validation metadata)
         triangle_count: Number of triangles (optional, from validation metadata)
@@ -342,8 +337,6 @@ class PartDetailResponse(BaseModel):
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
     low_poly_url: Optional[str] = Field(None, description="Presigned CDN URL for GLB (TTL 5min)")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
-    workshop_id: Optional[UUID] = Field(None, description="Assigned workshop UUID")
-    workshop_name: Optional[str] = Field(None, description="Workshop human-readable name")
     validation_report: Optional[ValidationReport] = Field(None, description="Validation results from agent")
     glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
     triangle_count: Optional[int] = Field(None, description="Triangle count (for performance)")
@@ -358,8 +351,6 @@ class PartDetailResponse(BaseModel):
         "created_at": "2026-02-15T10:30:00Z",
         "low_poly_url": "https://d1234abcd.cloudfront.net/low-poly/550e8400.glb?X-Amz-Expires=300&...",
         "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-        "workshop_id": "123e4567-e89b-12d3-a456-426614174000",
-        "workshop_name": "Taller Granollers",
         "validation_report": {
         "is_valid": True,
         "errors": [],

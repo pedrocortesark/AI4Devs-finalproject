@@ -1,12 +1,10 @@
-"""
-Part Navigation API Router (T-1003-BACK)
+""" Part Navigation API Router (T-1003-BACK)
 
 Endpoint:
 - GET /api/parts/{id}/adjacent - Fetch prev/next part IDs for 3D viewer modal navigation
 
 Features:
-- Optional filters: workshop_id, status, tipologia
-- X-Workshop-Id header support for RLS enforcement
+- Optional filters: status, tipologia
 - Redis caching (300s TTL)
 - Returns 1-based pagination index (current_index, total_count)
 
@@ -33,7 +31,7 @@ router = APIRouter(
     summary="Get adjacent parts for navigation",
     description=(
         "Returns prev/next part IDs for 3D viewer modal navigation. "
-        "Applies optional filters (workshop_id, status, tipologia) and orders by created_at ASC. "
+        "Applies optional filters (status, tipologia) and orders by created_at ASC. "
         "Uses Redis caching with 300s TTL for performance."
     ),
     responses={
@@ -57,21 +55,15 @@ router = APIRouter(
 )
 async def get_adjacent_parts(
     id: str,
-    workshop_id: Optional[str] = Query(None, description="Filter by workshop UUID"),
     status: Optional[str] = Query(None, description="Filter by status (e.g., 'validated')"),
-    tipologia: Optional[str] = Query(None, description="Filter by tipologia (e.g., 'capitel')"),
-    x_workshop_id: Optional[str] = Header(None, alias="X-Workshop-Id", description="Workshop UUID from header (alternative to query param)")
+    tipologia: Optional[str] = Query(None, description="Filter by tipologia (e.g., 'capitel')")
 ):
     """
     Fetch prev/next part IDs for navigation in 3D viewer modal.
 
     Query Parameters:
-    - workshop_id (optional): Filter by workshop UUID
     - status (optional): Filter by status
     - tipologia (optional): Filter by tipologia
-
-    Headers:
-    - X-Workshop-Id (optional): Alternative way to pass workshop_id (query param takes precedence)
 
     Returns:
     - prev_id: UUID of previous part (null if first)
@@ -79,14 +71,10 @@ async def get_adjacent_parts(
     - current_index: 1-based position in filtered set
     - total_count: Total parts in filtered set
     """
-    # Priority: query param > header
-    effective_workshop_id = workshop_id or x_workshop_id
-
     # Initialize service and fetch adjacent parts
     service = NavigationService()
     success, data, error = service.get_adjacent_parts(
         part_id=id,
-        workshop_id=effective_workshop_id,
         status=status,
         tipologia=tipologia
     )

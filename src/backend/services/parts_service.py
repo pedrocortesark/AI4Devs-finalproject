@@ -106,18 +106,16 @@ class PartsService:
             status=row["status"],
             tipologia=row["tipologia"],
             low_poly_url=low_poly_url,  # CDN-transformed or original
-            bbox=bbox,
-            workshop_id=row.get("workshop_id")  # NULL-safe
+            bbox=bbox
         )
 
-    def _build_filters_applied(self, status: Optional[str], tipologia: Optional[str], workshop_id: Optional[str]) -> Dict[str, str]:
+    def _build_filters_applied(self, status: Optional[str], tipologia: Optional[str]) -> Dict[str, str]:
         """
         Build filters_applied dictionary from non-NULL filter parameters.
 
         Args:
             status: Status filter value
             tipologia: Tipologia filter value
-            workshop_id: Workshop ID filter value
 
         Returns:
             Dictionary with only non-NULL filters included
@@ -127,28 +125,24 @@ class PartsService:
             filters["status"] = status
         if tipologia is not None:
             filters["tipologia"] = tipologia
-        if workshop_id is not None:
-            filters["workshop_id"] = workshop_id
         return filters
 
     def list_parts(
         self,
         status: Optional[str] = None,
-        tipologia: Optional[str] = None,
-        workshop_id: Optional[str] = None
+        tipologia: Optional[str] = None
     ) -> PartsListResponse:
         """
         List all parts with optional filtering.
 
         Query optimization:
-        - Uses composite index idx_blocks_canvas_query (status, tipologia, workshop_id)
+        - Uses composite index idx_blocks_canvas_query (status, tipologia)
         - Always filters is_archived=false
         - Returns minimal fields for 3D rendering (no heavy blobs)
 
         Args:
             status: Filter by lifecycle status (validated, in_fabrication, etc.)
             tipologia: Filter by part type (capitel, columna, dovela, etc.)
-            workshop_id: Filter by assigned workshop UUID
 
         Returns:
             PartsListResponse with parts array, count, and filters_applied
@@ -169,9 +163,6 @@ class PartsService:
         if tipologia is not None:
             query = query.eq("tipologia", tipologia)
 
-        if workshop_id is not None:
-            query = query.eq("workshop_id", workshop_id)
-
         # Apply ordering (newest first)
         query = query.order(QUERY_FIELD_CREATED_AT, desc=QUERY_ORDER_DESC)
 
@@ -182,7 +173,7 @@ class PartsService:
         parts = [self._transform_row_to_part_item(row) for row in result.data]
 
         # Build filters_applied dict for transparency
-        filters_applied = self._build_filters_applied(status, tipologia, workshop_id)
+        filters_applied = self._build_filters_applied(status, tipologia)
 
         return PartsListResponse(
             parts=parts,

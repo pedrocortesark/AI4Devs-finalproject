@@ -62,14 +62,13 @@ class TestFetchOrderedIds:
         mock_client.table.return_value = mock_table
         mock_table.select.return_value = mock_select
         mock_select.eq.return_value = mock_eq  # is_archived filter
-        mock_eq.eq.return_value = mock_eq  # workshop_id filter (chainable)
         mock_eq.order.return_value = mock_order
         mock_order.execute.return_value = MagicMock(data=db_response)
         
         service = NavigationService(mock_client)
         
         # Execute
-        ids = service._fetch_ordered_ids(workshop_id="ws1", filters={})
+        ids = service._fetch_ordered_ids(filters={})
         
         # Assert
         assert len(ids) == 3
@@ -96,18 +95,16 @@ class TestFetchOrderedIds:
         mock_client.table.return_value = mock_table
         mock_table.select.return_value = mock_select
         mock_select.eq.return_value = mock_eq
-        mock_eq.eq.return_value = mock_eq  # Chainable for workshop_id
         mock_eq.order.return_value = mock_order
         mock_order.execute.return_value = MagicMock(data=db_response)
         
         service = NavigationService(mock_client)
-        ids = service._fetch_ordered_ids(workshop_id="ws1", filters={})
+        ids = service._fetch_ordered_ids(filters={})
         
         assert len(ids) == 2
         mock_table.select.assert_called_once_with("id")
-        # Verify is_archived filter applied first, then workshop_id
+        # Verify is_archived filter applied
         assert mock_select.eq.call_count == 1
-        assert mock_eq.eq.call_count == 1
     
     def test_nav_07_fetch_with_multiple_filters(self):
         """
@@ -127,20 +124,19 @@ class TestFetchOrderedIds:
         mock_client.table.return_value = mock_table
         mock_table.select.return_value = mock_select
         mock_select.eq.return_value = mock_eq  # is_archived filter
-        mock_eq.eq.return_value = mock_eq  # Chainable for workshop_id, status, material_type
+        mock_eq.eq.return_value = mock_eq  # Chainable for status, material_type
         mock_eq.order.return_value = mock_order
         mock_order.execute.return_value = MagicMock(data=db_response)
         
         service = NavigationService(mock_client)
         ids = service._fetch_ordered_ids(
-            workshop_id="ws1", 
             filters={"status": "validated", "material_type": "Montjuïc"}
         )
         
         assert len(ids) == 1
-        # Verify .eq() called for each filter: is_archived + workshop_id + status + material_type
+        # Verify .eq() called for each filter: is_archived + status + material_type
         assert mock_select.eq.call_count == 1  # First .eq() on select
-        assert mock_eq.eq.call_count == 3  # Three chained .eq() calls
+        assert mock_eq.eq.call_count == 2  # Two chained .eq() calls
 
 
 class TestFindAdjacentPositions:
@@ -238,18 +234,16 @@ class TestBuildCacheKey:
     def test_nav_08_cache_key_with_filters(self):
         """
         NAV-08: Cache key generation with status + material_type filters
-        Scenario: ws1 + status=validated + material_type=Montjuïc → unique key
+        Scenario: status=validated + material_type=Montjuïc → unique key
         """
         mock_client = Mock()
         service = NavigationService(mock_client)
         
         key = service._build_cache_key(
-            workshop_id="ws1",
             filters={"status": "validated", "material_type": "Montjuïc"}
         )
         
         # Key should include all filter values in deterministic order
-        assert "ws1" in key
         assert "validated" in key
         assert "Montjuïc" in key
         assert key.startswith("nav:")  # Namespace prefix
@@ -259,9 +253,8 @@ class TestBuildCacheKey:
         mock_client = Mock()
         service = NavigationService(mock_client)
         
-        key1 = service._build_cache_key(workshop_id="ws1", filters={})
+        key1 = service._build_cache_key(filters={})
         key2 = service._build_cache_key(
-            workshop_id="ws1", 
             filters={"status": "validated"}
         )
         
@@ -280,8 +273,7 @@ class TestGetAdjacentParts:
         service = NavigationService(mock_client)
         
         success, data, error = service.get_adjacent_parts(
-            part_id="not-a-uuid",
-            workshop_id="ws1"
+            part_id="not-a-uuid"
         )
         
         assert success is False
@@ -311,8 +303,7 @@ class TestGetAdjacentParts:
         
         service = NavigationService(mock_client)
         success, data, error = service.get_adjacent_parts(
-            part_id="00000000-0000-0000-0000-000000000999",
-            workshop_id="ws1"
+            part_id="00000000-0000-0000-0000-000000000999"
         )
         
         assert success is False
@@ -331,8 +322,7 @@ class TestGetAdjacentParts:
         mock_client.table().select().eq().order().execute.side_effect = Exception("DB connection lost")
         
         success, data, error = service.get_adjacent_parts(
-            part_id="00000000-0000-0000-0000-000000000001",
-            workshop_id="ws1"
+            part_id="00000000-0000-0000-0000-000000000001"
         )
         
         assert success is False
@@ -341,8 +331,8 @@ class TestGetAdjacentParts:
     
     def test_nav_12_rls_enforcement(self):
         """
-        NAV-12 SECURITY: RLS policy enforced via workshop_id filter
-        Scenario: workshop_id always passed to .eq() filter → only workshop parts returned
+        NAV-12 SECURITY: RLS enforced via is_archived filter
+        Scenario: Only non-archived parts returned
         """
         mock_client = Mock()
         mock_table = Mock()
@@ -360,18 +350,15 @@ class TestGetAdjacentParts:
         mock_client.table.return_value = mock_table
         mock_table.select.return_value = mock_select
         mock_select.eq.return_value = mock_eq
-        mock_eq.eq.return_value = mock_eq  # Chainable
         mock_eq.order.return_value = mock_order
         mock_order.execute.return_value = MagicMock(data=db_response)
         mock_redis.get.return_value = None  # Cache miss
         
         service = NavigationService(mock_client, redis_client=mock_redis)
         success, data, error = service.get_adjacent_parts(
-            part_id="00000000-0000-0000-0000-000000000001",
-            workshop_id="ws_protected"
+            part_id="00000000-0000-0000-0000-000000000001"
         )
         
-        # Verify workshop_id filter was applied
-        # is_archived filter in select.eq(), workshop_id in eq.eq()
-        assert mock_eq.eq.call_count >= 1
+        # Verify is_archived filter was applied
+        assert mock_select.eq.call_count >= 1
         assert success is True

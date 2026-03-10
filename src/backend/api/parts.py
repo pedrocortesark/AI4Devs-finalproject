@@ -34,34 +34,13 @@ def _validate_status_enum(status: Optional[str]) -> None:
             )
 
 
-def _validate_uuid_format(workshop_id: Optional[str]) -> None:
-    """
-    Validate workshop_id parameter as valid UUID.
-
-    Args:
-        workshop_id: UUID string to validate
-
-    Raises:
-        HTTPException: 400 if UUID format is invalid
-    """
-    if workshop_id is not None:
-        try:
-            UUID(workshop_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=ERROR_MSG_INVALID_UUID
-            )
-
-
 router = APIRouter()
 
 
 @router.get("", response_model=PartsListResponse)
 async def list_parts(
     status: Optional[str] = Query(None, description="Filter by lifecycle status (validated, in_fabrication, etc.)"),
-    tipologia: Optional[str] = Query(None, description="Filter by part type (capitel, columna, dovela, etc.)"),
-    workshop_id: Optional[str] = Query(None, description="Filter by assigned workshop UUID")
+    tipologia: Optional[str] = Query(None, description="Filter by part type (capitel, columna, dovela, etc.)")
 ) -> PartsListResponse:
     """
     List all non-archived parts with optional filtering.
@@ -69,11 +48,10 @@ async def list_parts(
     Query Parameters:
         - status: Filter by lifecycle status
         - tipologia: Filter by part typology
-        - workshop_id: Filter by assigned workshop UUID
 
     Returns:
         PartsListResponse with:
-        - parts: Array of PartCanvasItem (id, iso_code, status, tipologia, low_poly_url, bbox, workshop_id)
+        - parts: Array of PartCanvasItem (id, iso_code, status, tipologia, low_poly_url, bbox)
         - count: Total number of parts returned
         - filters_applied: Echo of applied filters for transparency
 
@@ -92,7 +70,6 @@ async def list_parts(
     try:
         # Validate input parameters
         _validate_status_enum(status)
-        _validate_uuid_format(workshop_id)
 
         # Get dependencies
         supabase = get_supabase_client()
@@ -101,8 +78,7 @@ async def list_parts(
         # Call service layer
         result = service.list_parts(
             status=status,
-            tipologia=tipologia,
-            workshop_id=workshop_id
+            tipologia=tipologia
         )
 
         return result

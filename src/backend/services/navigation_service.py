@@ -25,7 +25,7 @@ class NavigationService:
     """Service for fetching adjacent part IDs with caching and RLS enforcement.
 
     This service handles navigation between parts in the 3D viewer modal,
-    supporting optional filters (workshop_id, status, material_type) and
+    supporting optional filters (status, material_type) and
     ordered traversal by created_at timestamp.
     """
 
@@ -51,7 +51,6 @@ class NavigationService:
     def get_adjacent_parts(
         self,
         part_id: str,
-        workshop_id: Optional[str] = None,
         status: Optional[str] = None,
         material_type: Optional[str] = None
     ) -> Tuple[bool, Optional[PartNavigationResponse], Optional[str]]:
@@ -71,7 +70,6 @@ class NavigationService:
 
         Args:
             part_id: UUID of current part to find neighbors for.
-            workshop_id: Optional filter by workshop UUID (RLS enforcement).
             status: Optional filter by lifecycle status (e.g., "validated").
             material_type: Optional filter by material type (e.g., "Montjuïc").
 
@@ -107,7 +105,7 @@ class NavigationService:
             filters['material_type'] = material_type
 
         # 3. Try cache hit (if Redis available)
-        cache_key = self._build_cache_key(workshop_id, filters)
+        cache_key = self._build_cache_key(filters)
         ordered_ids = None
 
         if self.redis:
@@ -122,7 +120,7 @@ class NavigationService:
         # 4. Cache miss: Fetch ordered list of IDs from database
         if ordered_ids is None:
             try:
-                ordered_ids = self._fetch_ordered_ids(workshop_id, filters)
+                ordered_ids = self._fetch_ordered_ids(filters)
 
                 # Store in cache with 5min TTL (if Redis available)
                 if self.redis and ordered_ids:
@@ -162,29 +160,26 @@ class NavigationService:
 
         return True, response, None
 
-    def _build_cache_key(self, workshop_id: Optional[str], filters: Dict[str, Any]) -> str:
-        """Build deterministic cache key from workshop_id and filters.
+    def _build_cache_key(self, filters: Dict[str, Any]) -> str:
+        """Build deterministic cache key from filters.
 
         Args:
-            workshop_id: Workshop UUID (optional).
             filters: Dict with optional status, material_type keys.
 
         Returns:
-            str: Cache key in format "nav:{ws}:{status}:{material_type}".
+            str: Cache key in format "nav:{status}:{material_type}".
 
         Examples:
-            >>> service._build_cache_key("ws1", {"status": "validated"})
-            'nav:ws1:validated:null'
+            >>> service._build_cache_key({"status": "validated"})
+            'nav:validated:null'
         """
         # Build deterministic key from filters (sorted for consistency)
-        ws = workshop_id or 'null'
         status = filters.get('status', 'null')
         material_type = filters.get('material_type', 'null')
-        return f"nav:{ws}:{status}:{material_type}"
+        return f"nav:{status}:{material_type}"
 
     def _fetch_ordered_ids(
         self,
-        workshop_id: Optional[str],
         filters: Dict[str, Any]
     ) -> List[str]:
         """Fetch list of part IDs with filters applied, ordered by created_at ASC.
@@ -193,7 +188,6 @@ class NavigationService:
         Always filters out archived parts (is_archived=false).
 
         Args:
-            workshop_id: Optional filter by workshop UUID.
             filters: Dict with optional 'status' and 'material_type' keys.
 
         Returns:
@@ -206,8 +200,6 @@ class NavigationService:
         query = self.client.table("blocks").select("id").eq("is_archived", False)
 
         # Apply optional filters dynamically
-        if workshop_id is not None:
-            query = query.eq("workshop_id", workshop_id)
         if filters.get('status') is not None:
             query = query.eq("status", filters['status'])
         if filters.get('material_type') is not None:

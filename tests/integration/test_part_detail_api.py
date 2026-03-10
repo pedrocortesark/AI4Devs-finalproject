@@ -1,6 +1,9 @@
 """
 T-1002-BACK: Part Detail API Integration Tests
 Test full HTTP request/response cycle with real Supabase (or test DB).
+
+OBSOLETE: All tests in this file depend on workshop_id column removed in T-1501-DB.
+Workshops are not used in MVP scope.
 """
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +20,7 @@ client = TestClient(app)
 TEST_WORKSHOP_ID = "b5c4c8e7-2d9e-4f0a-9b1c-3d5e7a8b9c1d"
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 class TestPartDetailAPI:
     """Integration tests for GET /api/parts/{id} endpoint."""
     

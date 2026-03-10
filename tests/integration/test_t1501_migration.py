@@ -4,22 +4,28 @@ Integration tests for T-1501-DB: Element Model Database Migration.
 
 This test suite verifies:
 - Migration execution success (column added, data updated, constraints active)
-- Constraint enforcement (CHECK, NOT NULL)
-- Data integrity (6 blocks preserved with correct values)
+- Schema changes (material_type added with TEXT type, no restrictive CHECK constraint)
+- Data integrity (blocks preserved with correct values)
 - Rollback functionality (DOWN migration restores schema)
-- Baseline validation (108/108 backend tests remain passing)
+- Baseline validation (backend tests remain passing)
+
+**Model Evolution:**
+- OLD (T-0503): Stone/Ceramic enum with CHECK constraint
+- NEW (T-1501 + T-1504): 62 real Sagrada Família materials (Montjuïc, Ulldecona, Girona Granite, etc)
+- Agent extracts material from Rhino UserString key "Material"
+- No column-level DEFAULT (agent populates during processing)
 
 Prerequisites:
 - Supabase database connection (SUPABASE_DATABASE_URL environment variable)
-- 6 existing blocks with iso_code 'GLPER.B-PAE0720.0701' through '0706'
+- Corrective migration applied: 20260310000001_fix_element_model_complete.sql
 - Migrations folder: supabase/migrations/
 
 Test execution:
 pytest tests/integration/test_t1501_migration.py -v
 
 Expected results:
-- RED phase: 26 FAIL (migration not applied yet)
-- GREEN phase: 26 PASS (migration applied successfully)
+- RED phase: FAIL (migration not applied)
+- GREEN phase: 16/16 PASS (after corrective migration)
 """
 
 import os
@@ -49,16 +55,16 @@ def insert_test_block(cursor, iso_code: str, material_type: str,
     
     Args:
         cursor: Database cursor for executing INSERT
-        iso_code: Unique identifier for test block (e.g., 'TEST-STONE')
-        material_type: Material enum value ('Stone', 'Ceramic', or invalid for constraint tests)
+        iso_code: Unique identifier for test block (e.g., 'TEST-MONTJUIC')
+        material_type: Real Sagrada Família material (e.g., 'Montjuïc', 'Ulldecona', 'Girona Granite')
         low_poly_url: GLB file URL (default: valid example URL)
         bbox: Bounding box JSONB string (default: valid bbox)
         tipologia: Block typology (default: 'capitel')
         status: Block status (default: 'uploaded')
     
     Example:
-        insert_test_block(cursor, 'TEST-STONE', 'Stone')
-        insert_test_block(cursor, 'TEST-INVALID', 'Metal')  # Will raise IntegrityError
+        insert_test_block(cursor, 'TEST-MONTJUIC', 'Montjuïc')
+        insert_test_block(cursor, 'TEST-ULLDECONA', 'Ulldecona')
     """
     cursor.execute(f"""
         INSERT INTO blocks (iso_code, tipologia, material_type, low_poly_url, bbox, status)
@@ -133,7 +139,8 @@ def test_material_type_column_exists(db_cursor):
     assert result[0] == "material_type", f"Unexpected column name: {result[0]}"
     assert result[1] == "text", f"Unexpected data type: {result[1]} (expected text)"
     assert result[2] == "YES", f"material_type should be NULLABLE (async processing), got: {result[2]}"
-    assert result[3] == "'Stone'::text", f"material_type should have DEFAULT 'Stone', got: {result[3]}"
+    # New model: No DEFAULT constraint, values populated during migration or by agent
+    # Initial blocks get 'Montjuïc' (Barcelona sandstone), but no column-level DEFAULT
 
 
 def test_six_blocks_remain_in_database(db_cursor, requires_production_data):
@@ -143,14 +150,14 @@ def test_six_blocks_remain_in_database(db_cursor, requires_production_data):
     assert count == 6, f"Expected 6 blocks after migration, found {count}"
 
 
-def test_all_six_blocks_have_material_type_stone(db_cursor, requires_production_data):
-    """Verify UPDATE step populated material_type for existing blocks."""
+def test_all_six_blocks_have_material_type_montjuic(db_cursor, requires_production_data):
+    """Verify UPDATE step populated material_type for existing blocks with real Sagrada Família material."""
     db_cursor.execute("""
         SELECT COUNT(*) FROM blocks 
-        WHERE iso_code LIKE 'GLPER.B-PAE0720.07%' AND material_type = 'Stone'
+        WHERE iso_code LIKE 'GLPER.B-PAE0720.07%' AND material_type = 'Montjuïc'
     """)
     count = db_cursor.fetchone()[0]
-    assert count == 6, f"Expected 6 blocks with material_type='Stone', found {count}"
+    assert count == 6, f"Expected 6 blocks with material_type='Montjuïc' (Barcelona sandstone), found {count}"
 
 
 def test_workshop_id_column_dropped(db_cursor):
@@ -185,8 +192,10 @@ def test_bbox_structure_check_constraint_exists(db_cursor):
     
     assert result is not None, "blocks_bbox_structure_check constraint not found"
     assert "bbox IS NULL" in result[1], "Constraint should allow NULL"
-    assert "bbox = '{}'::jsonb" in result[1], "Constraint should allow empty JSONB"
-    assert "bbox ? 'min'" in result[1], "Constraint should validate min key when present"
+    # New constraint validates array structure: {min: [x,y,z], max: [x,y,z]}
+    assert "jsonb_typeof" in result[1], "Constraint should validate JSONB type"
+    assert "= 'array'" in result[1], "Constraint should validate min/max are arrays"
+    assert "jsonb_array_length" in result[1], "Constraint should validate array length = 3"
 
 
 def test_material_type_index_created(db_cursor):
@@ -203,44 +212,47 @@ def test_material_type_index_created(db_cursor):
 
 # ===== TEST SUITE 2: Constraint Enforcement =====
 
-def test_material_type_defaults_to_stone(db_cursor, clean_test_blocks):
-    """Verify material_type defaults to 'Stone' when not provided."""
-    # Insert block without specifying material_type (should use DEFAULT)
+def test_material_type_accepts_null_when_not_provided(db_cursor, clean_test_blocks):
+    """Verify material_type accepts NULL when not provided (no DEFAULT in new model)."""
+    # Insert block without specifying material_type (should be NULL, agent populates later)
     db_cursor.execute("""
         INSERT INTO blocks (iso_code, status, tipologia)
         VALUES ('TEST-DEFAULT-MAT', 'uploaded', 'imposta')
         RETURNING material_type
     """)
     result = db_cursor.fetchone()
-    assert result[0] == "Stone", f"Expected DEFAULT 'Stone', got: {result[0]}"
+    # New model: No DEFAULT, agent extracts from Rhino UserString "Material"
+    assert result[0] is None, f"Expected NULL (agent populates material), got: {result[0]}"
 
 
+@pytest.mark.skip(reason="CHECK constraint removed in T-1504-AGENT (62 real materials model)")
 def test_reject_spanish_piedra(db_cursor, clean_test_blocks):
-    """Verify CHECK constraint rejects Spanish 'Piedra'."""
-    with pytest.raises(IntegrityError, match="check constraint"):
-        insert_test_block(db_cursor, 'TEST-SPANISH', 'Piedra')
+    """OBSOLETE: Old model had Stone/Ceramic enum, new model accepts 62 Sagrada Família materials."""
+    # New model: No restrictive CHECK constraint, agent validates against 62-material catalog
+    pass
 
 
+@pytest.mark.skip(reason="CHECK constraint removed in T-1504-AGENT (62 real materials model)")
 def test_reject_invalid_metal(db_cursor, clean_test_blocks):
-    """Verify CHECK constraint rejects free strings like 'Metal' (not in enum)."""
-    with pytest.raises(IntegrityError, match="check constraint"):
-        insert_test_block(db_cursor, 'TEST-METAL', 'Metal')
+    """OBSOLETE: Old model had Stone/Ceramic enum, new model accepts 62 Sagrada Família materials."""
+    # New model: No restrictive CHECK constraint, agent validates against 62-material catalog
+    pass
 
 
-def test_accept_valid_stone(db_cursor, clean_test_blocks):
-    """Verify CHECK constraint accepts valid 'Stone' value."""
-    insert_test_block(db_cursor, 'TEST-STONE', 'Stone')
-    db_cursor.execute("SELECT material_type FROM blocks WHERE iso_code = 'TEST-STONE'")
+def test_accept_valid_montjuic(db_cursor, clean_test_blocks):
+    """Verify material_type accepts real Sagrada Família material 'Montjuïc' (Barcelona sandstone)."""
+    insert_test_block(db_cursor, 'TEST-MONTJUIC', 'Montjuïc')
+    db_cursor.execute("SELECT material_type FROM blocks WHERE iso_code = 'TEST-MONTJUIC'")
     result = db_cursor.fetchone()
-    assert result[0] == "Stone", f"Expected 'Stone', got: {result[0]}"
+    assert result[0] == "Montjuïc", f"Expected 'Montjuïc', got: {result[0]}"
 
 
-def test_accept_valid_ceramic(db_cursor, clean_test_blocks):
-    """Verify CHECK constraint accepts valid 'Ceramic' value."""
-    insert_test_block(db_cursor, 'TEST-CERAMIC', 'Ceramic')
-    db_cursor.execute("SELECT material_type FROM blocks WHERE iso_code = 'TEST-CERAMIC'")
+def test_accept_valid_ulldecona(db_cursor, clean_test_blocks):
+    """Verify material_type accepts real Sagrada Família material 'Ulldecona' (Tarragona limestone)."""
+    insert_test_block(db_cursor, 'TEST-ULLDECONA', 'Ulldecona')
+    db_cursor.execute("SELECT material_type FROM blocks WHERE iso_code = 'TEST-ULLDECONA'")
     result = db_cursor.fetchone()
-    assert result[0] == "Ceramic", f"Expected 'Ceramic', got: {result[0]}"
+    assert result[0] == "Ulldecona", f"Expected 'Ulldecona', got: {result[0]}"
 
 
 def test_accept_null_low_poly_url(db_cursor, clean_test_blocks):

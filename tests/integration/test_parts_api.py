@@ -179,9 +179,12 @@ def test_filter_by_tipologia_only(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_filter_by_workshop_id_only(supabase_client: Client):
     """
     T-0501-BACK (TDD-RED Test 4): Filter by workshop_id only.
+
+    OBSOLETE: workshop_id column removed in T-1501-DB migration.
 
     Given: Blocks with workshop_id = [workshop-A, workshop-B, NULL]
     When: GET /api/parts?workshop_id=<workshop-A-uuid>
@@ -225,9 +228,12 @@ def test_filter_by_workshop_id_only(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_multiple_filters_combined(supabase_client: Client):
     """
     T-0501-BACK (TDD-RED Test 5): Multiple filters combined.
+
+    OBSOLETE: workshop_id filter removed after T-1501-DB migration.
 
     Given: 10 blocks with varied combinations of status/tipologia/workshop_id
     When: GET /api/parts?status=validated&tipologia=columna&workshop_id=<uuid>
@@ -575,9 +581,12 @@ def test_invalid_status_enum_value(supabase_client: Client):
     assert "uploaded" in error_detail or "validated" in error_detail, "Error should list valid values"
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_invalid_uuid_format_for_workshop_id(supabase_client: Client):
     """
     T-0501-BACK (TDD-RED Test 14): Invalid UUID format for workshop_id.
+
+    OBSOLETE: workshop_id parameter removed from API after T-1501-DB migration.
 
     Given: Query param workshop_id = "not-a-valid-uuid"
     When: GET /api/parts?workshop_id=not-a-valid-uuid
@@ -678,9 +687,12 @@ def test_response_size_under_200kb_with_realistic_dataset(supabase_client: Clien
     # TODO: Add gzip size check in implementation
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_rls_applies_for_workshop_users(supabase_client: Client):
     """
     T-0501-BACK (TDD-RED Test 18): RLS applies for workshop users.
+
+    OBSOLETE: Test depends on workshop_id filtering removed in T-1501-DB migration.
 
     Given:
         - User: role=workshop, workshop_id=workshop-A
@@ -725,9 +737,12 @@ def test_rls_applies_for_workshop_users(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_bim_manager_sees_all_parts_no_rls_filter(supabase_client: Client):
     """
     T-0501-BACK (TDD-RED Test 19): BIM Manager sees ALL parts (no RLS filter).
+
+    OBSOLETE: Test depends on workshop_id filtering removed in T-1501-DB migration.
 
     Given:
         - User: role=bim_manager

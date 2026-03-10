@@ -52,6 +52,7 @@
 - **rhino3dm** 8.4.0 - Rhino .3dm file parsing and geometry validation (T-024/T-025/T-026/T-027)
 - **trimesh** 4.0.5 - Mesh decimation (`simplify_quadric_decimation`) for low-poly GLB generation (T-0502-AGENT)
 - **open3d** 0.18.0 - Backend engine for trimesh decimation algorithm (required dependency)
+- **scipy** >=1.11.0 - Scientific computing (required for normal vector validation and geometry operations)
 - **numpy** <2.0 - Pinned to 1.x for trimesh 4.0.5 compatibility (`ptp()` removed in numpy 2.0)
 - **rtree** 1.1.0 - Spatial index for trimesh (required dependency)
 
@@ -96,9 +97,10 @@
 ### Container Images
 - **Backend**: `python:3.11-slim` (multi-stage: base/dev/prod)
 - **Frontend**: `node:20-bookworm` (multi-stage: dev/build/prod-nginx)
-- **Database**: `postgres:15-alpine` (local development only)
-- **Agent Worker**: `python:3.11-slim` (multi-stage: base/dev/prod) - NEW (T-022-INFRA)
-- **Redis**: `redis:7-alpine` (message broker + result backend) - NEW (T-022-INFRA)
+- **Redis**: `redis:7-alpine` (message broker + result backend)
+- **Agent Worker**: `python:3.11-slim` (multi-stage: base/dev/prod)
+
+**Note:** This project uses **Supabase exclusively** for PostgreSQL (no local database container).
 
 ### Build Tools
 - **GNU Make** - Task automation (Makefile for common commands)
@@ -128,6 +130,13 @@
 ## Development Tools
 - **Standard shell commands** - bash/zsh for automation
 - **Environment management** - `.env` files with `.env.example` templates
+- **Database Migrations** - SQL files in `supabase/migrations/` (applied with `make migrate`)
+
+**Migration Strategy:**
+- All migrations stored in `supabase/migrations/*.sql` (chronologically ordered)
+- Rollback scripts stored in `supabase/rollbacks/` (never in migrations folder)
+- Apply to Supabase with `make migrate` (sources .env automatically)
+- Uses Docker postgres:15-alpine client (no local psql installation required)
 - **Dependency locking** - `requirements-lock.txt` for reproducible builds
 
 ## CI/CD Pipeline

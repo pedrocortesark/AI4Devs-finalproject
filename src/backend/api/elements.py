@@ -245,7 +245,6 @@ async def get_element_navigation(
     # Call navigation service with material_type filter
     success, data, error = service.get_adjacent_parts(
         part_id=element_id,
-        workshop_id=None,  # Not used in Element API
         status=status_filter,
         material_type=material_type
     )

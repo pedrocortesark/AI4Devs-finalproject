@@ -43,7 +43,7 @@ BLOCK_TIPOLOGIA_PENDING = "pending"
 BLOCK_ISO_CODE_PREFIX = "PENDING"
 
 # ===== Parts Listing Query Fields =====
-PARTS_LIST_SELECT_FIELDS = "id, iso_code, status, tipologia, low_poly_url, bbox, workshop_id"
+PARTS_LIST_SELECT_FIELDS = "id, iso_code, status, tipologia, low_poly_url, bbox"
 QUERY_FIELD_IS_ARCHIVED = "is_archived"
 QUERY_FIELD_CREATED_AT = "created_at"
 QUERY_ORDER_DESC = True
