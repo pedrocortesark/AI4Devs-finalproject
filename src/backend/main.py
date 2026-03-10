@@ -11,10 +11,6 @@ import os
 import redis
 
 from api.upload import router as upload_router
-from api.validation import router as validation_router
-from api.parts import router as parts_router
-from api.parts_detail import router as parts_detail_router
-from api.parts_navigation import router as parts_navigation_router
 from api.elements import router as elements_router
 
 app = FastAPI(
@@ -158,9 +154,5 @@ async def readiness_check():
         )
 
 app.include_router(upload_router, prefix="/api/upload", tags=["Upload"])
-app.include_router(validation_router)
-app.include_router(parts_router, prefix="/api/parts", tags=["Parts"])
-app.include_router(parts_detail_router)
-app.include_router(parts_navigation_router)
 app.include_router(elements_router, prefix="/api/elements", tags=["Elements"])
 
