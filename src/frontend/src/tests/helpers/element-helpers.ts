@@ -1,25 +1,38 @@
 /**
  * Test Helpers for T-1507-TEST Frontend Integration Tests
  * 
- * TDD Phase: RED
+ * TDD Phase: GREEN (updated to import from shared constants)
  * Purpose: Reusable utilities for Element + Canvas testing
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { MATERIAL_COLORS as SHARED_MATERIAL_COLORS } from '../../constants/materials';
+
+/**
+ * TypeScript Interfaces (match backend Pydantic schemas)
+ */
+export interface BoundingBox {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+export interface Element {
+  id: string;
+  iso_code: string;
+  status: string;
+  material_type: string;
+  low_poly_url: string | null;
+  bbox: BoundingBox | null;
+}
 
 /**
  * MATERIAL_COLORS Dictionary (63 materials from T-1504-AGENT)
  * 
+ * Re-exported from src/constants/materials.ts (synced with backend)
  * Must be IDENTICAL to src/agent/constants.py MATERIAL_COLORS
  * Format: { material_name: [R, G, B] }
  */
-export const MATERIAL_COLORS: Record<string, [number, number, number]> = {
-  'Montjuïc': [230, 180, 100],
-  'Ulldecona': [200, 160, 120],
-  'Floresta': [180, 140, 100],
-  // ... (remaining 60 materials - placeholder for RED phase)
-  // Full dictionary should be imported from shared constants in GREEN phase
-};
+export const MATERIAL_COLORS = SHARED_MATERIAL_COLORS;
 
 /**
  * Mock Element Factory
@@ -103,21 +116,4 @@ export function assertMaterialColor(
       );
     }
   }
-}
-
-/**
- * TypeScript Interfaces (match backend Pydantic schemas)
- */
-export interface Element {
-  id: string;
-  iso_code: string;
-  status: string;
-  material_type: string;
-  low_poly_url: string | null;
-  bbox: BoundingBox | null;
-}
-
-export interface BoundingBox {
-  min: [number, number, number];
-  max: [number, number, number];
 }

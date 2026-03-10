@@ -336,9 +336,9 @@ describe('ElementCanvas Integration - Infrastructure', () => {
      */
     expect(Object.keys(MATERIAL_COLORS).length).toBe(63);
 
-    // Verify key materials
+    // Verify key materials (values from backend src/agent/constants.py)
     expect(MATERIAL_COLORS['Montjuïc']).toEqual([230, 180, 100]);
-    expect(MATERIAL_COLORS['Ulldecona']).toEqual([200, 160, 120]);
-    expect(MATERIAL_COLORS['Floresta']).toEqual([180, 140, 100]);
+    expect(MATERIAL_COLORS['Ulldecona']).toEqual([240, 220, 180]);
+    expect(MATERIAL_COLORS['Floresta']).toEqual([225, 200, 130]);
   });
 });
