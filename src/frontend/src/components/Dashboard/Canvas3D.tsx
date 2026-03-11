@@ -95,16 +95,29 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         {/* Coordinate System Helper — Shows origin (0,0,0) with RGB axes */}
         <axesHelper args={[100]} /> {/* 100m axes for scale reference */}
 
-        {/* Ambient Light */}
-        <ambientLight intensity={LIGHTING_CONFIG.AMBIENT_INTENSITY} />
+        {/* Enhanced Lighting for Better Geometry Visualization */}
+        {/* Ambient Light - soft overall illumination */}
+        <ambientLight intensity={0.6} />
+        
+        {/* Hemisphere Light - simulates sky/ground ambient */}
+        <hemisphereLight 
+          args={['#ffffff', '#444444', 0.5]} 
+          position={[0, 100, 0]} 
+        />
 
-        {/* Directional Light with Shadows */}
+        {/* Main Directional Light (Key Light) with Shadows */}
         <directionalLight
-          position={LIGHTING_CONFIG.DIRECTIONAL_POSITION as [number, number, number]}
-          intensity={LIGHTING_CONFIG.DIRECTIONAL_INTENSITY}
+          position={[50, 100, 50]}
+          intensity={1.2}
           castShadow
-          shadow-mapSize-width={LIGHTING_CONFIG.SHADOW_MAP_SIZE}
-          shadow-mapSize-height={LIGHTING_CONFIG.SHADOW_MAP_SIZE}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+        />
+        
+        {/* Fill Light - softer light from opposite side */}
+        <directionalLight
+          position={[-50, 50, -50]}
+          intensity={0.4}
         />
 
         {/* Grid */}

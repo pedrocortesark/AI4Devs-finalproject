@@ -50,6 +50,11 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
   // Track if we've successfully fitted to prevent redundant animations
   const lastFittedCountRef = useRef(0);
 
+  // TEMPORARILY DISABLED: Fit All automatic animation
+  // Reason: Camera animation during GLB loading causes LOD calculation issues
+  // Camera now starts at optimal position [1, -43, 84] (~17m from elements)
+  // User can still manually trigger with 'F' key
+  /*
   // Fit All - runs when parts change (but not on every render)
   useEffect(() => {
     if (parts.length === 0 || !controls) {
@@ -130,6 +135,7 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
 
     lastFittedCountRef.current = parts.length;
   }, [parts, camera, controls, animateTo]);
+  */
 
   // Focus Selected - 'F' key handler
   useEffect(() => {
@@ -173,8 +179,14 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
       // Case 2: Focus on selected part
       console.log(`🎯 Focus key pressed: Focusing on part ${selectedId}`);
 
-      // Find selected part mesh in scene
-      const selectedMesh = scene.getObjectByProperty('userData', { partId: selectedId });
+      // Find selected part mesh in scene by traversing and checking userData.partId
+      let selectedMesh: THREE.Object3D | null = null;
+      scene.traverse((obj) => {
+        if (obj.userData?.partId === selectedId) {
+          selectedMesh = obj;
+        }
+      });
+
       if (!selectedMesh) {
         console.warn(`⚠️ Selected part mesh not found: ${selectedId}`);
         return;

@@ -16,10 +16,9 @@ import type { DockPosition } from './Dashboard3D.types';
  */
 export const CAMERA_CONFIG = {
   FOV: 55,
-  // Start at 8 m above, 12 m back — parts visible at first frame without
-  // relying on Bounds.fit() to fire before the first GLB loads.
-  // Bounds.fit() will still reposition once geometry is in the scene.
-  POSITION: [5, 8, 12] as [number, number, number],
+  // Elements centered at Three.js [-8.96, 74.07, 53.23] (from debug overlay)
+  // Camera at [-8.96, 76, 56] is ~3m from center for 30-60cm pieces
+  POSITION: [-8.96, 76, 56] as [number, number, number],
   NEAR: 0.001,    // 1 mm minimum render distance
   FAR: 10000,     // 10 km maximum render distance
 } as const;

@@ -33,8 +33,9 @@ const CONFIRM_UPLOAD_ENDPOINT = `${API_BASE}/api/upload/confirm`;
 
 /**
  * API endpoint for fetching part details
+ * US-015: Changed from /api/parts to /api/elements (aligns with backend cleanup)
  */
-const PART_DETAIL_ENDPOINT = `${API_BASE}/api/parts`;
+const PART_DETAIL_ENDPOINT = `${API_BASE}/api/elements`;
 
 /**
  * Content type for .3dm Rhino files

@@ -16,6 +16,8 @@ import { useMemo, useEffect } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { ElementMesh } from './ElementMesh';
 import { CameraController } from './CameraController';
+import { DebugOverlay } from './DebugOverlay';
+import { MeshDebugger } from './MeshDebugger';
 import { usePartsSpatialLayout } from '@/hooks/usePartsSpatialLayout';
 import type { PartsSceneProps } from './PartsScene.types';
 
@@ -62,6 +64,12 @@ export function PartsScene({ parts, selectedId = null }: PartsSceneProps) {
     <group name="parts-scene">
       {/* Professional CAD-style camera controls */}
       <CameraController parts={partsWithGeometry} selectedId={selectedId} />
+      
+      {/* Debug Overlay - Visual diagnostics */}
+      <DebugOverlay parts={parts} />
+      
+      {/* Mesh Debugger - DISABLED (was interfering with visualization) */}
+      {/* <MeshDebugger parts={partsWithGeometry} positions={positions} /> */}
       
       {/* Render individual element meshes with LOD */}
       {partsWithGeometry.map((part, index) => (

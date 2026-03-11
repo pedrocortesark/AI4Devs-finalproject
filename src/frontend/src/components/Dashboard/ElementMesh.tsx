@@ -8,7 +8,7 @@
  * 
  * Renders elements at their real building coordinates from Rhino (absolute positioning).
  * GLB geometry includes Z→Y rotation applied during backend export.
- * LOD system: Level 0 (mid-poly <20km) → Level 1 (low-poly 20-50km) → Level 2 (bbox >50km)
+ * LOD system: Level 0 (mid-poly <20m) → Level 1 (low-poly 20-50m) → Level 2 (bbox >50m)
  * 
  * @module ElementMesh
  */
@@ -20,6 +20,7 @@ import { FILTER_VISUAL_FEEDBACK } from '@/constants/parts.constants';
 import { LOD_DISTANCES } from '@/constants/lod.constants';
 import { usePartsStore } from '@/stores/parts.store';
 import { BBoxProxy } from './BBoxProxy';
+import { WireframeHelper } from './WireframeHelper';
 import type { ElementMeshProps } from './PartsScene.types';
 
 /**
@@ -98,6 +99,10 @@ function calculatePartOpacity(
  */
 export function ElementMesh({ part, position, enableLod = true }: ElementMeshProps) {
   const [hovered, setHovered] = useState(false);
+  
+  // Debug logging
+  console.log(`🎨 ElementMesh: Rendering ${part.iso_code} at [${position.join(', ')}], LOD: ${enableLod}`);
+  
   const store = usePartsStore();
   const { selectPart, selectedId } = store;
   const getFilteredParts = store.getFilteredParts || (() => [part]); // Default: no filtering
@@ -132,6 +137,8 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   // IMPORTANT: These hooks always return valid scenes or suspend - no need for null checks
   const { scene: lowPolyScene } = useGLTF(lowPolyUrl);
   const { scene: midPolyScene } = useGLTF(midPolyUrl);
+  
+  console.log(`✅ ElementMesh: ${part.iso_code} - GLB loaded (low: ${lowPolyScene.children.length} children, mid: ${midPolyScene.children.length} children)`);
 
   // Clone scenes so each LOD level owns its own Three.js Object3D.
   // useGLTF returns the same cached object for the same URL; a Three.js
@@ -146,6 +153,9 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   const lowPolyClone = useMemo(() => lowPolyScene.clone(true), [lowPolyScene]);
   const midPolyClone = useMemo(() => midPolyScene.clone(true), [midPolyScene]);
   const lod2Clone    = useMemo(() => lowPolyScene.clone(true), [lowPolyScene]);
+  
+  // Triangle counts logged on initial load (disabled for production)
+  // useEffect(() => { ... }, [lowPolyClone, midPolyClone, part.iso_code]);
 
   // Preload LOD assets on mount for smoother transitions
   useEffect(() => {
@@ -184,15 +194,32 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   // Apply material properties to cloned objects
   // Traverse clones and update existing materials (GLTF objects already have materials)
   useEffect(() => {
-    [lowPolyClone, midPolyClone, lod2Clone].forEach(clone => {
+    [lowPolyClone, midPolyClone, lod2Clone].forEach((clone) => {
       clone.traverse((child: any) => {
         if (child.isMesh && child.material) {
+          // Apply status color with proper PBR properties
           child.material.color.set(color);
           child.material.emissive.set(emissive);
           child.material.emissiveIntensity = emissiveIntensity;
           child.material.opacity = opacity;
-          child.material.transparent = true;
+          child.material.transparent = opacity < 1.0;
+          
+          // Material properties for better visualization
+          child.material.flatShading = false;
+          child.material.side = 2; // DoubleSide
+          child.material.metalness = 0.3;
+          child.material.roughness = 0.6;
+          child.material.wireframe = false;
+          
+          child.castShadow = true;
+          child.receiveShadow = true;
+          
           child.material.needsUpdate = true;
+          
+          // Ensure geometry has normals
+          if (child.geometry && !child.geometry.attributes.normal) {
+            child.geometry.computeVertexNormals();
+          }
         }
       });
     });
@@ -231,8 +258,42 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   }
 
   // LOD System: 3-level distance-based rendering
-  // Level 0 (<20 km): mid_poly → Level 1 (20–50 km): low_poly → Level 2 (>50 km): BBoxProxy
-  return (
+  // Level 0 (<20 km): mid_poly → Level 1 (20–50 km): low_poly → Level 2 (>50 km): BBoxProxy  
+  // Temporarily DISABLE LOD for better debugging (re-enable after verification)
+  const FORCE_DISABLE_LOD = true;
+  
+  if (FORCE_DISABLE_LOD) {
+    return (
+      <group 
+        name={`part-${part.iso_code}`} 
+        position={position}
+        userData={{ partId: part.id }}
+      >
+        {/* Tooltip on hover or selection */}
+        {(hovered || isSelected) && (
+          <Html>
+            <div style={TOOLTIP_STYLES}>
+              <div>{part.iso_code}</div>
+              <div>{part.tipologia}</div>
+              {part.workshop_name && <div>{part.workshop_name}</div>}
+            </div>
+          </Html>
+        )}
+        
+        {/* Always show mid-poly geometry (LOD disabled) */}
+        <primitive
+          name={`part-${part.iso_code}`}
+          object={midPolyClone}
+          onClick={handleClick}
+          onPointerOver={() => setHovered(true)}
+          onPointerOut={() => setHovered(false)}
+          castShadow
+          receiveShadow
+        />
+      </group>
+    );
+  }
+    return (
     // GLB is positioned at element's real building coordinates (from bbox center).
     // Z→Y rotation already applied during backend GLB export.
     // userData stores partId for camera focus functionality ('F' key)
@@ -253,29 +314,7 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
       )}
 
       <Detailed distances={[...LOD_DISTANCES]}>
-        {/* Level 0: Mid-poly geometry (0-20 km) */}
-        <group name="lod-0">
-          <primitive
-            name={`part-${part.iso_code}`}
-            object={midPolyClone}
-            onClick={handleClick}
-            onPointerOver={() => setHovered(true)}
-            onPointerOut={() => setHovered(false)}
-          />
-        </group>
-
-        {/* Level 1: Low-poly geometry (20-50 km) */}
-        <group name="lod-1">
-          <primitive
-            name={`part-${part.iso_code}`}
-            object={lowPolyClone}
-            onClick={handleClick}
-            onPointerOver={() => setHovered(true)}
-            onPointerOut={() => setHovered(false)}
-          />
-        </group>
-
-        {/* Level 2: BBox proxy (>50 km) or low-poly fallback */}
+        {/* Level 2: BBox proxy (>50 m) - FURTHEST (shown when far away) */}
         <group
           name="lod-2"
           onClick={handleClick}
@@ -296,6 +335,32 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
               object={lod2Clone}
             />
           )}
+        </group>
+
+        {/* Level 1: Low-poly geometry (20-50 m) - MIDDLE */}
+        <group name="lod-1">
+          <primitive
+            name={`part-${part.iso_code}`}
+            object={lowPolyClone}
+            onClick={handleClick}
+            onPointerOver={() => setHovered(true)}
+            onPointerOut={() => setHovered(false)}
+          />
+        </group>
+
+        {/* Level 0: Mid-poly geometry (0-20 m) - CLOSEST (highest detail) */}
+        <group name="lod-0">
+          <primitive
+            name={`part-${part.iso_code}`}
+            object={midPolyClone}
+            onClick={handleClick}
+            onPointerOver={() => setHovered(true)}
+            onPointerOut={() => setHovered(false)}
+            castShadow
+            receiveShadow
+          />
+          {/* Wireframe overlay for better geometry visibility */}
+          <WireframeHelper mesh={midPolyClone} color="#ff0000" />
         </group>
       </Detailed>
     </group>

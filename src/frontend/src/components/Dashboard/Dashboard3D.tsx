@@ -11,7 +11,7 @@
  * - LoadingOverlay during data fetch
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Dashboard3DProps, DockPosition } from './Dashboard3D.types';
 import { CAMERA_CONFIG, STORAGE_KEYS, MESSAGES } from './Dashboard3D.constants';
 import Canvas3D from './Canvas3D';
@@ -35,6 +35,31 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
     initialSidebarDock
   );
   const [floatingPosition, setFloatingPosition] = useState({ x: 100, y: 100 });
+  
+  // CAD-style modal control: separate from selection state
+  // Click on part → selects visually, Press 'D' → opens details modal
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  // Open details modal with 'D' key (CAD-style)
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'd' || event.key === 'D') {
+        if (selectedId) {
+          setShowDetailsModal(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [selectedId]);
+  
+  // Close modal when selection cleared
+  useEffect(() => {
+    if (!selectedId) {
+      setShowDetailsModal(false);
+    }
+  }, [selectedId]);
 
   const handleDockChange = (newDock: DockPosition) => {
     setSidebarDock(newDock);
@@ -125,15 +150,73 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
 
         {/* Loading Overlay */}
         {isLoading && <LoadingOverlay message={MESSAGES.LOADING} />}
+        
+        {/* CAD-style Selection Hint (when part selected but modal not open) */}
+        {selectedId && !showDetailsModal && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '30px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              padding: '12px 20px',
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              border: '1px solid rgba(59, 130, 246, 0.5)',
+              borderRadius: '8px',
+              color: 'white',
+              fontSize: '14px',
+              zIndex: 100,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              display: 'flex',
+              gap: '16px',
+              alignItems: 'center',
+            }}
+          >
+            <span>Pieza seleccionada</span>
+            <span style={{ opacity: 0.6 }}>|</span>
+            <span><kbd style={{ 
+              padding: '2px 6px', 
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: '4px',
+              fontWeight: 'bold'
+            }}>F</kbd> Zoom</span>
+            <span style={{ opacity: 0.6 }}>|</span>
+            <button
+              onClick={() => setShowDetailsModal(true)}
+              style={{
+                padding: '4px 12px',
+                backgroundColor: '#3B82F6',
+                border: 'none',
+                borderRadius: '4px',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+              }}
+            >
+              Ver Detalles (D)
+            </button>
+            <span style={{ opacity: 0.6 }}>|</span>
+            <span><kbd style={{ 
+              padding: '2px 6px', 
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: '4px',
+              fontWeight: 'bold'
+            }}>ESC</kbd> Deseleccionar</span>
+          </div>
+        )}
       </div>
 
-      {/* Part Detail Modal (T-1007-FRONT) */}
-      {selectedId && (
+      {/* Part Detail Modal - Only opens with 'D' key or button (CAD-style) */}
+      {selectedId && showDetailsModal && (
         <PartDetailModal
-          isOpen={!!selectedId}
+          isOpen={showDetailsModal}
           partId={selectedId}
-          onClose={clearSelection}
-          enableNavigation={true}
+          onClose={() => {
+            setShowDetailsModal(false);
+            clearSelection();
+          }}
+          enableNavigation={false}
           filters={null}
         />
       )}
