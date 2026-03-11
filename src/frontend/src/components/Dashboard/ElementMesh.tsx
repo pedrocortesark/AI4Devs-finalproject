@@ -193,19 +193,20 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
 
   // Apply material properties to cloned objects
   // Traverse clones and update existing materials (GLTF objects already have materials)
+  // PRESERVE Rhino materials: only modify emissive/opacity, NOT base color
   useEffect(() => {
     [lowPolyClone, midPolyClone, lod2Clone].forEach((clone) => {
       clone.traverse((child: any) => {
         if (child.isMesh && child.material) {
-          // Apply status color with proper PBR properties
-          child.material.color.set(color);
+          // PRESERVE original Rhino materials - only modify feedback properties
+          // child.material.color.set(color); // REMOVED: destroys Rhino per-face materials
           child.material.emissive.set(emissive);
           child.material.emissiveIntensity = emissiveIntensity;
           child.material.opacity = opacity;
           child.material.transparent = opacity < 1.0;
           
           // Material properties for better visualization
-          child.material.flatShading = false;
+          child.material.flatShading = false; // Smooth shading
           child.material.side = 2; // DoubleSide
           child.material.metalness = 0.3;
           child.material.roughness = 0.6;
@@ -216,24 +217,24 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
           
           child.material.needsUpdate = true;
           
-          // Ensure geometry has normals
+          // Ensure geometry has smooth normals
           if (child.geometry && !child.geometry.attributes.normal) {
             child.geometry.computeVertexNormals();
           }
         }
       });
     });
-  }, [color, emissive, emissiveIntensity, opacity, lowPolyClone, midPolyClone, lod2Clone]);
+  }, [emissive, emissiveIntensity, opacity, lowPolyClone, midPolyClone, lod2Clone]);
 
   // Backward compatibility: Single-level rendering when enableLod=false
   if (!enableLod) {
     return (
-      // GLB is positioned at element's real building coordinates (from bbox center).
-      // Z→Y rotation already applied during backend GLB export.
+      // GLB geometry contains absolute Rhino coordinates (not centered).
+      // Backend exports meshes in world-space (see geometry_processing.py:537-540).
+      // Therefore, NO position offset needed - geometry is already positioned.
       // userData stores partId for camera focus functionality ('F' key)
       <group 
-        name={`part-${part.iso_code}`} 
-        position={position}
+        name={`part-${part.iso_code}`}
         userData={{ partId: part.id }}
       >
         <primitive
@@ -265,8 +266,7 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   if (FORCE_DISABLE_LOD) {
     return (
       <group 
-        name={`part-${part.iso_code}`} 
-        position={position}
+        name={`part-${part.iso_code}`}
         userData={{ partId: part.id }}
       >
         {/* Tooltip on hover or selection */}
@@ -294,12 +294,12 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
     );
   }
     return (
-    // GLB is positioned at element's real building coordinates (from bbox center).
-    // Z→Y rotation already applied during backend GLB export.
+    // GLB geometry contains absolute Rhino coordinates (not centered).
+    // Backend exports meshes in world-space (see geometry_processing.py:537-540).
+    // Therefore, NO position offset needed - geometry is already positioned.
     // userData stores partId for camera focus functionality ('F' key)
     <group 
-      name={`part-${part.iso_code}`} 
-      position={position}
+      name={`part-${part.iso_code}`}
       userData={{ partId: part.id }}
     >
       {/* Tooltip on hover or selection (shared across all LOD levels) */}

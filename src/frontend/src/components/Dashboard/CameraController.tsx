@@ -192,6 +192,17 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
         return;
       }
 
+      // Force matrix update before bounding box calculation
+      selectedMesh.updateMatrixWorld(true);
+
+      const meshPos = selectedMesh.position;
+      const worldPos = selectedMesh.getWorldPosition(new THREE.Vector3());
+      console.log('🎯 Selected mesh found:');
+      console.log(`   name: ${selectedMesh.name}`);
+      console.log(`   position: [${meshPos.x.toFixed(2)}, ${meshPos.y.toFixed(2)}, ${meshPos.z.toFixed(2)}]`);
+      console.log(`   worldPosition: [${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}]`);
+      console.log(`   children: ${selectedMesh.children.length}, type: ${selectedMesh.type}`);
+
       // Calculate fit for selected object
       const result = calculateCameraFit(
         camera as THREE.PerspectiveCamera,
@@ -199,6 +210,11 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
         CAMERA_FIT_CONFIG.FIT_OFFSET,
         controls
       );
+
+      console.log('🎯 Camera fit calculated:');
+      console.log(`   target: [${result.target.x.toFixed(2)}, ${result.target.y.toFixed(2)}, ${result.target.z.toFixed(2)}]`);
+      console.log(`   position: [${result.position.x.toFixed(2)}, ${result.position.y.toFixed(2)}, ${result.position.z.toFixed(2)}]`);
+      console.log(`   distance: ${result.distance.toFixed(2)}, radius: ${result.radius.toFixed(3)}`);
 
       animateTo(result.position, result.target, {
         duration: CAMERA_FIT_CONFIG.ANIMATION_DURATION,
