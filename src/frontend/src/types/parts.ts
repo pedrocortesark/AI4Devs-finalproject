@@ -35,9 +35,10 @@ export interface PartCanvasItem {
   iso_code: string;                // e.g., "SF-C12-D-001"
   status: BlockStatus;             // Enum value
   tipologia: string;               // "capitel" | "columna" | "dovela" | etc.
-  low_poly_url: string | null;     // Supabase Storage URL to GLB, or null if not processed
-  mid_poly_url?: string | null;    // T-0507: Mid-poly URL (1000 tris) for LOD Level 0 - graceful fallback to low_poly_url
-  bbox: BoundingBox | null;        // 3D bounding box, or null if not extracted yet
+  high_poly_url?: string | null;   // US-015: High-poly URL (~7k tris) for LOD Level 0 (0-5m)
+  mid_poly_url?: string | null;    // US-015: Mid-poly URL (~2k tris) for LOD Level 1 (5-20m)
+  low_poly_url: string | null;     // US-015: Low-poly URL (~500 tris) for LOD Level 2 (20-50m), required fallback
+  bbox: BoundingBox | null;        // 3D bounding box, or null if not extracted yet (used for LOD Level 3 >50m)
   workshop_id: string | null;      // UUID string or null if unassigned
   workshop_name?: string | null;   // Workshop display name (joined from workshops table) or null if unassigned
 }

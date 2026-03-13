@@ -35,7 +35,8 @@ import { Position3D } from '@/components/Dashboard/PartsScene.types';
  */
 export function usePartsSpatialLayout(parts: PartCanvasItem[]): Position3D[] {
   return useMemo(() => {
-    console.log('🎯 usePartsSpatialLayout: Calculating positions for', parts.length, 'parts');
+    // DEBUG: Disabled to reduce console noise during React StrictMode
+    // console.log('🎯 usePartsSpatialLayout: Calculating positions for', parts.length, 'parts');
     
     const positions = parts.map((part, index) => {
       if (!part.bbox) {
@@ -55,19 +56,21 @@ export function usePartsSpatialLayout(parts: PartCanvasItem[]): Position3D[] {
       const threejsY = rhinoZ;  // Rhino Z becomes Three.js Y
       const threejsZ = -rhinoY; // Rhino Y becomes Three.js -Z
       
-      if (index === 0) {
-        console.log(`🎯 Part 0 (${part.iso_code}):`, {
-          rhinoCoords: `[${rhinoX.toFixed(2)}, ${rhinoY.toFixed(2)}, ${rhinoZ.toFixed(2)}]`,
-          threejsCoords: `[${threejsX.toFixed(2)}, ${threejsY.toFixed(2)}, ${threejsZ.toFixed(2)}]`,
-          hasGLB: !!part.low_poly_url,
-          glbUrl: part.low_poly_url?.substring(0, 60) + '...',
-        });
-      }
+      // DEBUG: Disabled to reduce console noise
+      // if (index === 0) {
+      //   console.log(`🎯 Part 0 (${part.iso_code}):`, {
+      //     rhinoCoords: `[${rhinoX.toFixed(2)}, ${rhinoY.toFixed(2)}, ${rhinoZ.toFixed(2)}]`,
+      //     threejsCoords: `[${threejsX.toFixed(2)}, ${threejsY.toFixed(2)}, ${threejsZ.toFixed(2)}]`,
+      //     hasGLB: !!part.low_poly_url,
+      //     glbUrl: part.low_poly_url?.substring(0, 60) + '...',
+      //   });
+      // }
       
       return [threejsX, threejsY, threejsZ] as Position3D;
     });
     
-    console.log('🎯 All positions calculated:', positions.length, 'positions');
+    // DEBUG: Disabled to reduce console noise
+    // console.log('🎯 All positions calculated:', positions.length, 'positions');
     return positions;
   }, [parts]);
 }

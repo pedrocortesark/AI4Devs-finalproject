@@ -48,12 +48,15 @@ export async function listParts(
   const elementsResponse = response.data;
   
   // Map Element → PartCanvasItem (add missing fields with defaults)
+  // US-015: Include all 3 LOD URLs (high_poly, mid_poly, low_poly)
   const parts: PartCanvasItem[] = elementsResponse.elements.map((element: any) => ({
     id: element.id,
     iso_code: element.iso_code,
     status: element.status,
     tipologia: element.material_type, // Map material_type → tipologia for backward compat
-    low_poly_url: element.low_poly_url,
+    high_poly_url: element.high_poly_url || null,  // US-015: High-detail LOD (~7k tris)
+    mid_poly_url: element.mid_poly_url || null,    // US-015: Mid-detail LOD (~2k tris)
+    low_poly_url: element.low_poly_url,             // US-015: Low-detail LOD (~500 tris)
     bbox: element.bbox,
     workshop_id: null, // Elements don't have workshop_id
     workshop_name: null, // Elements don't have workshop_name

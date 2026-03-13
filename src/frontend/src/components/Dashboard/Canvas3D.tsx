@@ -19,7 +19,7 @@ import {
 import { usePartsStore } from '@/stores/parts.store';
 import { DESELECTION_KEYS } from '@/constants/selection.constants';
 import { PartsScene } from './PartsScene';
-import { DebugHelpers } from './DebugHelpers';
+import { DebugHelpers } from './DebugHelpers'; // RE-ENABLED for diagnosis
 
 const Canvas3D: React.FC<Canvas3DProps> = ({ 
   showStats = false, 
@@ -135,6 +135,7 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         {/* Orbit Controls — makeDefault registers controls in R3F context so <Bounds> can find them */}
         <OrbitControls
           makeDefault
+          target={CAMERA_CONFIG.TARGET}
           enableDamping={CONTROLS_CONFIG.ENABLE_DAMPING}
           dampingFactor={CONTROLS_CONFIG.DAMPING_FACTOR}
           minDistance={CONTROLS_CONFIG.MIN_DISTANCE}
@@ -152,7 +153,7 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           <PartsScene parts={filteredParts} selectedId={selectedId} />
         </Suspense>
 
-        {/* Debug Helpers — TEMPORARILY ENABLED for diagnosis */}
+        {/* Debug Helpers — TEMPORARILY RE-ENABLED for camera diagnosis */}
         <DebugHelpers parts={filteredParts} enabled={true} />
 
         {/* Stats Panel (dev only) */}

@@ -251,14 +251,20 @@ class PartCanvasItem(BaseModel):
         iso_code: Part identifier (ISO-19650 format, e.g., SF-C12-D-001)
         status: Lifecycle state (reuses existing BlockStatus enum)
         tipologia: Part typology (capitel, columna, dovela, clave, imposta, etc.)
-        low_poly_url: Storage URL to simplified GLB file (~1000 triangles, ~300-400KB with Draco)
-        bbox: 3D bounding box for camera centering and spatial queries
+        material_type: Material type (US-015: for LOD system)
+        high_poly_url: Storage URL to high-detail GLB (~7k tris, ~600-800KB, LOD Level 0: 0-5m)
+        mid_poly_url: Storage URL to mid-detail GLB (~2k tris, ~300-400KB, LOD Level 1: 5-20m)
+        low_poly_url: Storage URL to low-detail GLB (~500 tris, ~150-200KB, LOD Level 2: 20-50m)
+        bbox: 3D bounding box for camera centering, spatial queries, and LOD Level 3 (>50m proxy)
     """
     id: UUID = Field(..., description="Block UUID")
     iso_code: str = Field(..., description="Part identifier (e.g., SF-C12-D-001)")
     status: BlockStatus = Field(..., description="Lifecycle state")
     tipologia: str = Field(..., description="Part typology")
-    low_poly_url: Optional[str] = Field(None, description="GLB file URL for 3D rendering")
+    material_type: Optional[str] = Field(None, description="Material type (Montjuïc, Gaudí, Synthetic)")
+    high_poly_url: Optional[str] = Field(None, description="High-detail GLB URL (~7k tris, LOD 0-5m)")
+    mid_poly_url: Optional[str] = Field(None, description="Mid-detail GLB URL (~2k tris, LOD 5-20m)")
+    low_poly_url: Optional[str] = Field(None, description="Low-detail GLB URL (~500 tris, LOD 20-50m)")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
 
     model_config = ConfigDict(
@@ -268,6 +274,9 @@ class PartCanvasItem(BaseModel):
         "iso_code": "SF-C12-D-001",
         "status": "validated",
         "tipologia": "capitel",
+        "material_type": "Montjuïc",
+        "high_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/high-poly/550e8400.glb",
+        "mid_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/mid-poly/550e8400.glb",
         "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
         "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]}
         }
@@ -420,7 +429,7 @@ class ElementStatus(str, Enum):
 
 class Element(BaseModel):
     """
-    Element schema optimized for 3D canvas rendering (US-005).
+    Element schema optimized for 3D canvas rendering (US-005 + US-015 LOD).
 
     Contract: Must match TypeScript interface Element exactly (T-1505-FRONT).
 
@@ -429,13 +438,19 @@ class Element(BaseModel):
     - Renamed: tipologia → material_type (internationalization)
     - Changed: material_type from enum to str (validated against 62 real materials)
 
+    LOD System (US-015):
+    - 4-level LOD: high_poly (0-5m), mid_poly (5-20m), low_poly (20-50m), bbox (>50m)
+    - URLs are CDN-transformed presigned URLs to GLB files
+
     Attributes:
         id: Element UUID
         iso_code: ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)
         status: Lifecycle state (ElementStatus enum)
         material_type: Stone material type (validated against 62 MATERIAL_COLORS)
-        low_poly_url: Presigned CDN URL to GLB file (~1000 triangles)
-        bbox: 3D bounding box for camera centering
+        high_poly_url: CDN URL to high-detail GLB (~7k tris, Level 0: 0-5m viewing)
+        mid_poly_url: CDN URL to mid-detail GLB (~2k tris, Level 1: 5-20m viewing)
+        low_poly_url: CDN URL to low-detail GLB (~500 tris, Level 2: 20-50m viewing)
+        bbox: 3D bounding box for camera centering and LOD Level 3 (>50m wireframe proxy)
     """
     id: UUID = Field(..., description="Element UUID")
     iso_code: str = Field(..., description="ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)")
@@ -444,13 +459,21 @@ class Element(BaseModel):
         ...,
         description="Stone material type (one of 62 real materials: Montjuïc, Ulldecona, etc.)"
     )
+    high_poly_url: Optional[str] = Field(
+        None,
+        description="CDN URL to high-detail GLB (~7k tris, LOD Level 0: 0-5m viewing distance)"
+    )
+    mid_poly_url: Optional[str] = Field(
+        None,
+        description="CDN URL to mid-detail GLB (~2k tris, LOD Level 1: 5-20m viewing distance)"
+    )
     low_poly_url: Optional[str] = Field(
         None,
-        description="Presigned CDN URL for GLB file (NULL if async processing incomplete)"
+        description="CDN URL to low-detail GLB (~500 tris, LOD Level 2: 20-50m viewing distance)"
     )
     bbox: Optional[BoundingBox] = Field(
         None,
-        description="3D bounding box (NULL if async processing incomplete)"
+        description="3D bounding box (used for camera centering and LOD Level 3: >50m wireframe proxy)"
     )
 
     @field_validator('material_type')
@@ -485,6 +508,8 @@ class Element(BaseModel):
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
         "material_type": "Montjuïc",
+        "high_poly_url": "https://d1234abcd.cloudfront.net/models/high-poly/550e8400_20260307T120000Z.glb",
+        "mid_poly_url": "https://d1234abcd.cloudfront.net/models/mid-poly/550e8400_20260307T120000Z.glb",
         "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400_20260307T120000Z.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
         }

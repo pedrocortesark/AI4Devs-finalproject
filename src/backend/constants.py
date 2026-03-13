@@ -48,10 +48,10 @@ QUERY_FIELD_IS_ARCHIVED = "is_archived"
 QUERY_FIELD_CREATED_AT = "created_at"
 QUERY_ORDER_DESC = True
 
-# ===== Element API Query Fields (T-1504-BACK) =====
-ELEMENTS_LIST_SELECT_FIELDS = "id, iso_code, status, material_type, low_poly_url, bbox"
+# ===== Element API Query Fields (T-1504-BACK + US-015 LOD) =====
+ELEMENTS_LIST_SELECT_FIELDS = "id, iso_code, status, material_type, high_poly_url, mid_poly_url, low_poly_url, bbox"
 ELEMENT_DETAIL_SELECT_FIELDS = ("id, iso_code, status, material_type, created_at, updated_at, "
-                                 "low_poly_url, bbox, validation_report, rhino_metadata")
+                                 "high_poly_url, mid_poly_url, low_poly_url, bbox, validation_report, rhino_metadata")
 
 # ===== Validation Error Messages =====
 ERROR_MSG_INVALID_STATUS = "Invalid status value. Must be one of: {valid_values}"

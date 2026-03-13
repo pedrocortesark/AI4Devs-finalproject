@@ -2,6 +2,7 @@
  * LOD (Level of Detail) System Configuration
  *
  * T-0507-FRONT: 3-level LOD system for performance optimization
+ * US-015: Real LOD System with high/mid/low-poly GLBs (March 2026)
  *
  * Based on POC validation (docs/US-005/PERFORMANCE-ANALYSIS-3D-FORMATS.md):
  * - 60 FPS achieved with 1197 meshes (39,360 triangles)
@@ -15,16 +16,19 @@
 
 /**
  * LOD level distances in metres (scene units).
+ * 
+ * US-015: Updated to 4 levels (high/mid/low + bbox) based on architectural CAD best practices
  *
  * Arrays are passed to drei <Detailed distances={LOD_DISTANCES}>:
- * - Index 0 (Level 0): 0 to LOD_DISTANCES[1] m  → mid-poly  (<20 m)
- * - Index 1 (Level 1): LOD_DISTANCES[1] to LOD_DISTANCES[2] m → low-poly (20–50 m)
- * - Index 2 (Level 2): LOD_DISTANCES[2]+ m → BBox proxy (>50 m)
+ * - Level 0: 0 to 5m     → high-poly (5000-8000 tris, detailed inspection)
+ * - Level 1: 5 to 20m    → mid-poly (1500-2000 tris, normal working distance)
+ * - Level 2: 20 to 50m   → low-poly (400-600 tris, overview)
+ * - Level 3: 50m+        → BBox proxy (12 tris, distant view)
  *
  * @constant
  * @readonly
  */
-export const LOD_DISTANCES = [0, 20, 50] as const;
+export const LOD_DISTANCES = [0, 5, 20, 50] as const;
 
 /**
  * LOD level identifiers
@@ -34,14 +38,17 @@ export const LOD_DISTANCES = [0, 20, 50] as const;
  * @readonly
  */
 export const LOD_LEVELS = {
-  /** Level 0: Mid-poly geometry (<20 m) - 1000 triangles */
-  MID_POLY: 0,
+  /** Level 0: High-poly geometry (<5 m) - 5000-8000 triangles */
+  HIGH_POLY: 0,
 
-  /** Level 1: Low-poly geometry (20–50 m) - 500 triangles */
-  LOW_POLY: 1,
+  /** Level 1: Mid-poly geometry (5-20 m) - 1500-2000 triangles */
+  MID_POLY: 1,
 
-  /** Level 2: BBox wireframe proxy (>50 m) - 12 triangles */
-  BBOX_PROXY: 2,
+  /** Level 2: Low-poly geometry (20-50 m) - 400-600 triangles */
+  LOW_POLY: 2,
+
+  /** Level 3: BBox wireframe proxy (>50 m) - 12 triangles */
+  BBOX_PROXY: 3,
 } as const;
 
 /**

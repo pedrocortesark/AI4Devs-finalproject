@@ -20,6 +20,8 @@ try:
     from ..constants import (
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
+        LOD_DECIMATION_TARGETS,
+        LOD_PREFIXES,
         PROCESSED_GEOMETRY_BUCKET,
         RAW_UPLOADS_BUCKET,
         LOW_POLY_PREFIX,
@@ -44,6 +46,8 @@ except ImportError:
     from src.agent.constants import (
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
+        LOD_DECIMATION_TARGETS,
+        LOD_PREFIXES,
         PROCESSED_GEOMETRY_BUCKET,
         RAW_UPLOADS_BUCKET,
         LOW_POLY_PREFIX,
@@ -672,26 +676,28 @@ def _apply_draco_compression(input_path: str, output_path: str) -> bool:
 
 def _export_and_upload_glb(
     mesh: trimesh.Trimesh,
-    block_id: str
+    block_id: str,
+    lod_level: str = 'low'
 ) -> tuple[str, int]:
     """Export mesh to GLB format, apply Draco compression, and upload to S3.
 
     Pipeline:
     1. Apply Z-up → Y-up rotation (Rhino → Three.js coordinate system)
-    2. Export uncompressed GLB to /tmp/{block_id}_raw.glb
-    3. Apply Draco compression → /tmp/{block_id}.glb (falls back if unavailable)
+    2. Export uncompressed GLB to /tmp/{block_id}_{lod_level}_raw.glb
+    3. Apply Draco compression → /tmp/{block_id}_{lod_level}.glb (falls back if unavailable)
     4. Upload compressed GLB to Supabase Storage
     5. Clean up both temp files
 
     Args:
         mesh: Trimesh mesh to export (in Rhino Z-up coordinates)
         block_id: UUID of the block (used in S3 key)
+        lod_level: LOD level ('high', 'mid', or 'low') for storage path/naming
 
     Returns:
         Tuple of (public_url, file_size_kb)
 
     Example:
-        url, size = _export_and_upload_glb(mesh, "123e4567-e89b-12d3-a456-426614174000")
+        url, size = _export_and_upload_glb(mesh, "123e4567-e89b-12d3-a456-426614174000", "high")
     """
     # Step 1: Apply Z-up → Y-up rotation for Three.js compatibility
     # Rhino: Z-up (architectural standard)
@@ -708,13 +714,14 @@ def _export_and_upload_glb(
                 message="Applied Z-up → Y-up rotation for Three.js")
 
     # Step 2: Export raw (uncompressed) GLB
-    raw_glb_path = os.path.join(TEMP_DIR, f"{block_id}_raw.glb")
-    temp_glb_path = os.path.join(TEMP_DIR, f"{block_id}.glb")
+    raw_glb_path = os.path.join(TEMP_DIR, f"{block_id}_{lod_level}_raw.glb")
+    temp_glb_path = os.path.join(TEMP_DIR, f"{block_id}_{lod_level}.glb")
     mesh.export(raw_glb_path, file_type='glb')
 
     raw_size_kb = os.path.getsize(raw_glb_path) // 1024
     logger.info("export_glb.raw",
                block_id=block_id,
+               lod_level=lod_level,
                file_size_kb=raw_size_kb,
                path=raw_glb_path)
 
@@ -725,7 +732,7 @@ def _export_and_upload_glb(
     try:
         os.remove(raw_glb_path)
     except Exception as e:
-        logger.warning("cleanup.raw_glb_failed", block_id=block_id, error=str(e))
+        logger.warning("cleanup.raw_glb_failed", block_id=block_id, lod_level=lod_level, error=str(e))
 
     # Get final compressed file size
     file_size_bytes = os.path.getsize(temp_glb_path)
@@ -733,12 +740,13 @@ def _export_and_upload_glb(
 
     logger.info("export_glb.success",
                block_id=block_id,
+               lod_level=lod_level,
                file_size_kb=file_size_kb,
                path=temp_glb_path)
 
-    # Step 3: Upload to Supabase Storage
+    # Step 3: Upload to Supabase Storage with LOD-specific path
     supabase = get_supabase_client()
-    glb_key = f"{LOW_POLY_PREFIX}{block_id}.glb"
+    glb_key = f"{LOD_PREFIXES[lod_level]}{block_id}.glb"
 
     with open(temp_glb_path, 'rb') as f:
         glb_data = f.read()
@@ -750,24 +758,161 @@ def _export_and_upload_glb(
     )
 
     # Get public URL
-    low_poly_url = supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).get_public_url(glb_key)
+    public_url = supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).get_public_url(glb_key)
 
     logger.info("upload_glb.success",
                block_id=block_id,
-               url=low_poly_url,
+               lod_level=lod_level,
+               url=public_url,
                key=glb_key)
 
     # Step 4: Cleanup compressed temp file
     try:
         os.remove(temp_glb_path)
     except Exception as e:
-        logger.warning("cleanup.temp_glb_failed", block_id=block_id, error=str(e))
+        logger.warning("cleanup.temp_glb_failed", block_id=block_id, lod_level=lod_level, error=str(e))
 
-    return low_poly_url, file_size_kb
+    return public_url, file_size_kb
 
 
+def _generate_lod_glbs(
+    merged_mesh: trimesh.Trimesh,
+    block_id: str
+) -> dict:
+    """Generate 3-level LOD GLB files (high/mid/low) from merged mesh.
+
+    US-015: Real LOD System Implementation
+    
+    Pipeline for each LOD level:
+    1. High-poly: No decimation (original quality, ~5000-8000 faces)
+    2. Mid-poly: Moderate decimation to ~2000 faces (~70-80% reduction)
+    3. Low-poly: Aggressive decimation to ~500 faces (~90-95% reduction)
+    
+    Each mesh is:
+    - Exported to GLB with Z-up → Y-up rotation
+    - Draco compressed (~level 7)
+    - Uploaded to Supabase Storage (separate folders: high-poly/, mid-poly/, low-poly/)
+    
+    Args:
+        merged_mesh: Original merged mesh from Rhino .3dm (in world coordinates)
+        block_id: UUID of the block
+        
+    Returns:
+        Dictionary with LOD URLs and metadata:
+        {
+            'high_poly_url': str,
+            'mid_poly_url': str,
+            'low_poly_url': str,
+            'file_sizes_kb': {'high': int, 'mid': int, 'low': int},
+            'face_counts': {'original': int, 'high': int, 'mid': int, 'low': int}
+        }
+        
+    Example:
+        lod_data = _generate_lod_glbs(mesh, "123e4567-e89b-12d3-a456-426614174000")
+        # Returns URLs for all 3 LOD levels + metadata
+    """
+    original_faces = len(merged_mesh.faces)
+    logger.info("lod_generation.start",
+                block_id=block_id,
+                original_faces=original_faces)
+    
+    results = {
+        'file_sizes_kb': {},
+        'face_counts': {'original': original_faces}
+    }
+    
+    # Level 1: High-Poly (no decimation)
+    logger.info("lod_generation.high_poly",
+                block_id=block_id,
+                target_faces="no decimation (original)")
+    
+    high_poly_mesh = merged_mesh.copy()  # Work with copy to preserve original
+    high_url, high_size = _export_and_upload_glb(high_poly_mesh, block_id, 'high')
+    results['high_poly_url'] = high_url
+    results['file_sizes_kb']['high'] = high_size
+    results['face_counts']['high'] = len(high_poly_mesh.faces)
+    
+    # Level 2: Mid-Poly (moderate decimation)
+    target_mid = LOD_DECIMATION_TARGETS['mid']
+    logger.info("lod_generation.mid_poly",
+                block_id=block_id,
+                target_faces=target_mid)
+    
+    mid_poly_mesh, mid_faces = _apply_decimation(merged_mesh.copy(), target_mid, block_id)
+    mid_url, mid_size = _export_and_upload_glb(mid_poly_mesh, block_id, 'mid')
+    results['mid_poly_url'] = mid_url
+    results['file_sizes_kb']['mid'] = mid_size
+    results['face_counts']['mid'] = mid_faces
+    
+    # Level 3: Low-Poly (aggressive decimation)
+    target_low = LOD_DECIMATION_TARGETS['low']
+    logger.info("lod_generation.low_poly",
+                block_id=block_id,
+                target_faces=target_low)
+    
+    low_poly_mesh, low_faces = _apply_decimation(merged_mesh.copy(), target_low, block_id)
+    low_url, low_size = _export_and_upload_glb(low_poly_mesh, block_id, 'low')
+    results['low_poly_url'] = low_url
+    results['file_sizes_kb']['low'] = low_size
+    results['face_counts']['low'] = low_faces
+    
+    logger.info("lod_generation.complete",
+                block_id=block_id,
+                face_counts=results['face_counts'],
+                total_size_kb=sum(results['file_sizes_kb'].values()),
+                reduction_pct=round((1 - low_faces / max(original_faces, 1)) * 100, 1))
+    
+    return results
+
+
+def _update_block_lod_urls(
+    block_id: str,
+    high_poly_url: str,
+    mid_poly_url: str,
+    low_poly_url: str,
+    bbox: dict,
+    material_type: str
+) -> None:
+    """Update database with all LOD URLs, bbox, and material_type for processed block.
+    
+    US-015: Real LOD System Implementation
+
+    Args:
+        block_id: UUID of the block to update
+        high_poly_url: Public URL of high-poly GLB (~5000-8000 faces)
+        mid_poly_url: Public URL of mid-poly GLB (~1500-2000 faces)
+        low_poly_url: Public URL of low-poly GLB (~400-600 faces)
+        bbox: Bounding box in absolute Rhino coordinates: {"min": [x,y,z], "max": [x,y,z]}
+        material_type: Validated material type (e.g., "Montjuïc", "Ceramic")
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE blocks 
+            SET high_poly_url = %s,
+                mid_poly_url = %s,
+                low_poly_url = %s,
+                bbox = %s,
+                material_type = %s
+            WHERE id = %s
+            """,
+            (high_poly_url, mid_poly_url, low_poly_url, json.dumps(bbox), material_type, block_id)
+        )
+        conn.commit()
+        logger.info("database.lod_urls_updated",
+                    block_id=block_id,
+                    high_poly_url=high_poly_url,
+                    mid_poly_url=mid_poly_url,
+                    low_poly_url=low_poly_url)
+
+
+# Legacy function for backward compatibility (deprecated)
 def _update_block_low_poly_url(block_id: str, url: str, bbox: dict, material_type: str) -> None:
-    """Update database with low_poly_url, bbox, and material_type for processed block.
+    """[DEPRECATED] Use _update_block_lod_urls instead.
+    
+    Update database with low_poly_url, bbox, and material_type for processed block.
+    Maintained for backward compatibility with existing scripts.
 
     Args:
         block_id: UUID of the block to update
@@ -862,23 +1007,26 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 3b: Extract material type from UserStrings (T-1503-AGENT)
         material_type = _extract_material_type(rhino_file, block_id, iso_code)
 
-        # Step 4-5: Extract and merge meshes (returns bbox in centred coords)
+        # Step 4-5: Extract and merge meshes (returns bbox in absolute Rhino coords)
         merged_mesh, original_faces_count, bbox = _extract_and_merge_meshes(
             rhino_file, block_id, iso_code
         )
 
-        # Step 6: Apply decimation
-        decimated_mesh, decimated_faces_count = _apply_decimation(
-            merged_mesh, DECIMATION_TARGET_FACES, block_id
+        # Step 6: Generate 3-level LOD GLBs (US-015: Real LOD System)
+        # Creates high-poly (~5000-8000 faces), mid-poly (~2000 faces), low-poly (~500 faces)
+        lod_data = _generate_lod_glbs(merged_mesh, block_id)
+
+        # Step 7: Update database with all LOD URLs + bbox + material_type
+        _update_block_lod_urls(
+            block_id,
+            lod_data['high_poly_url'],
+            lod_data['mid_poly_url'],
+            lod_data['low_poly_url'],
+            bbox,
+            material_type
         )
 
-        # Step 7-8: Export and upload GLB
-        low_poly_url, file_size_kb = _export_and_upload_glb(decimated_mesh, block_id)
-
-        # Step 9: Update database (low_poly_url + bbox + material_type)
-        _update_block_low_poly_url(block_id, low_poly_url, bbox, material_type)
-
-        # Step 10: Cleanup temp .3dm file
+        # Step 8: Cleanup temp .3dm file
         if temp_3dm_path and os.path.exists(temp_3dm_path):
             try:
                 os.remove(temp_3dm_path)
@@ -888,17 +1036,21 @@ def generate_low_poly_glb(self, block_id: str):
 
         logger.info("generate_low_poly_glb.completed",
                    block_id=block_id,
-                   low_poly_url=low_poly_url,
+                   high_poly_url=lod_data['high_poly_url'],
+                   mid_poly_url=lod_data['mid_poly_url'],
+                   low_poly_url=lod_data['low_poly_url'],
                    original_faces=original_faces_count,
-                   decimated_faces=decimated_faces_count,
-                   file_size_kb=file_size_kb)
+                   face_counts=lod_data['face_counts'],
+                   total_size_kb=sum(lod_data['file_sizes_kb'].values()))
 
         return {
             'status': 'success',
-            'low_poly_url': low_poly_url,
+            'high_poly_url': lod_data['high_poly_url'],
+            'mid_poly_url': lod_data['mid_poly_url'],
+            'low_poly_url': lod_data['low_poly_url'],
             'original_faces': original_faces_count,
-            'decimated_faces': decimated_faces_count,
-            'file_size_kb': file_size_kb,
+            'face_counts': lod_data['face_counts'],
+            'file_sizes_kb': lod_data['file_sizes_kb'],
             'error_message': None
         }
 

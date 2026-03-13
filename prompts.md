@@ -10198,6 +10198,38 @@ Ready for REFACTOR phase.
 
 ---
 
+## [136-US-015-LOD] - Frontend ElementMesh 4-Level LOD Update
+**Fecha:** 2026-03-11 18:00
+
+**Prompt Original:**
+> [Session Continuation - US-015 LOD Implementation]
+> Continue after conversation summary with completion of frontend ElementMesh.tsx updates for 4-level LOD system.
+> Backend pipeline already complete (generates high/mid/low GLBs), frontend constants updated (LOD_DISTANCES=[0,5,20,50]).
+> Need to implement frontend component to load 3 GLB files and render with 4-level <Detailed> distances.
+
+**Resumen de la Respuesta/Acción:**
+Completed frontend ElementMesh.tsx 4-level LOD implementation (US-015):
+- Updated TypeScript types: Added high_poly_url to PartCanvasItem interface
+- GLB loading: Load 3 GLBs (high/mid/low) with fallback chain (high→mid→low)
+- Cloning: Created 3 clones (highPolyClone, midPolyClone, lowPolyClone) for LOD levels
+- Material system: Applied to all 3 clones (preserves Rhino materials, modifies emissive/opacity)
+- Preload: Added high_poly_url preloading for smooth transitions
+- <Detailed> component: 4 levels with distances [0,5,20,50]
+  * Level 0 (0-5m): highPolyClone (~7k tris, max detail)
+  * Level 1 (5-20m): midPolyClone (~2k tris, working distance)
+  * Level 2 (20-50m): lowPolyClone (~500 tris, overview)
+  * Level 3 (>50m): BBox proxy (12 tris, wireframe)
+- Removed FORCE_DISABLE_LOD flag (LOD now active)
+- Fixed TypeScript errors (bbox null check, removed unused LOD_DISTANCES import)
+
+Files modified:
+- src/frontend/src/types/parts.ts (added high_poly_url field)
+- src/frontend/src/components/Dashboard/ElementMesh.tsx (complete LOD refactor)
+
+Next steps: Apply DB migration → Create reprocesamiento script → Test LOD switching → Performance validation
+
+---
+
 ## [137] - AUDITORÍA FINAL - Ticket T-0507-FRONT
 **Fecha:** 2026-02-22 17:30
 

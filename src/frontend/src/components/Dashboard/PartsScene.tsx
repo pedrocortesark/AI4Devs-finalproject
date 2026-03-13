@@ -18,7 +18,6 @@ import { ElementMesh } from './ElementMesh';
 import { CameraController } from './CameraController';
 import { DebugOverlay } from './DebugOverlay';
 import { MeshDebugger } from './MeshDebugger';
-import { usePartsSpatialLayout } from '@/hooks/usePartsSpatialLayout';
 import type { PartsSceneProps } from './PartsScene.types';
 
 /**
@@ -39,9 +38,6 @@ export function PartsScene({ parts, selectedId = null }: PartsSceneProps) {
   const partsWithGeometry = useMemo(() => {
     return parts.filter((part) => part.low_poly_url !== null);
   }, [parts]);
-
-  // Calculate positions for all parts with geometry
-  const positions = usePartsSpatialLayout(partsWithGeometry);
 
   // Preload all geometry URLs to prevent pop-in during LOD transitions (T-0507)
   useEffect(() => {
@@ -72,11 +68,11 @@ export function PartsScene({ parts, selectedId = null }: PartsSceneProps) {
       {/* <MeshDebugger parts={partsWithGeometry} positions={positions} /> */}
       
       {/* Render individual element meshes with LOD */}
-      {partsWithGeometry.map((part, index) => (
+      {/* Note: GLB geometry contains absolute world coordinates, no position offset needed */}
+      {partsWithGeometry.map((part) => (
         <ElementMesh
           key={part.id}
           part={part}
-          position={positions[index]}
           enableLod={true}
         />
       ))}

@@ -102,7 +102,9 @@ class ElementsService:
                 max=bbox_data["max"]
             )
 
-        # T-1001-INFRA: Apply CDN transformation if enabled (extracted method)
+        # T-1001-INFRA + US-015: Apply CDN transformation to all LOD URLs
+        high_poly_url = self._apply_cdn_transformation(row.get("high_poly_url"))
+        mid_poly_url = self._apply_cdn_transformation(row.get("mid_poly_url"))
         low_poly_url = self._apply_cdn_transformation(row.get("low_poly_url"))
 
         return Element(
@@ -110,7 +112,9 @@ class ElementsService:
             iso_code=row["iso_code"],
             status=ElementStatus(row["status"]),
             material_type=row["material_type"],
-            low_poly_url=low_poly_url,  # CDN-transformed or original
+            high_poly_url=high_poly_url,  # CDN-transformed or None
+            mid_poly_url=mid_poly_url,    # CDN-transformed or None
+            low_poly_url=low_poly_url,    # CDN-transformed or None
             bbox=bbox
         )
 

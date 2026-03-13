@@ -50,13 +50,18 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
   // Track if we've successfully fitted to prevent redundant animations
   const lastFittedCountRef = useRef(0);
 
-  // TEMPORARILY DISABLED: Fit All automatic animation
-  // Reason: Camera animation during GLB loading causes LOD calculation issues
-  // Camera now starts at optimal position [1, -43, 84] (~17m from elements)
-  // User can still manually trigger with 'F' key
-  /*
+  // US-015: Fit All automatic animation - RE-ENABLED
+  // Fits camera to all parts on initial load with smooth animation
+  // User can also manually trigger with 'F' key
+  
   // Fit All - runs when parts change (but not on every render)
   useEffect(() => {
+    console.log('🎥 CameraController: useEffect triggered', { 
+      partsCount: parts.length,
+      hasControls: !!controls,
+      lastFittedCount: lastFittedCountRef.current
+    });
+
     if (parts.length === 0 || !controls) {
       console.log('🎥 CameraController: Waiting for parts/controls...', { 
         partsCount: parts.length, 
@@ -67,10 +72,11 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
 
     // Skip if we already fitted to the same number of parts (avoid redundant fits)
     if (parts.length === lastFittedCountRef.current) {
+      console.log('🎥 CameraController: Already fitted to this count, skipping');
       return;
     }
 
-    console.log(`🎥 CameraController: Fitting camera to ${parts.length} parts`);
+    console.log(`🎥 CameraController: ✅ Fitting camera to ${parts.length} parts`);
 
     // Filter parts with bbox data
     const partsWithBbox = parts.filter((p) => p.bbox);
@@ -79,30 +85,42 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
       return;
     }
 
+    console.log(`🎥 CameraController: Found ${partsWithBbox.length} parts with bbox data`);
+
     // Calculate camera position using bbox data (not mesh geometry)
-    const globalMin = new THREE.Vector3(Infinity, Infinity, Infinity);
-    const globalMax = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+    // CRITICAL: Must apply Z-up → Y-up rotation to match GLB positioning
+    const rhinoMin = new THREE.Vector3(Infinity, Infinity, Infinity);
+    const rhinoMax = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
 
     partsWithBbox.forEach((part) => {
       if (!part.bbox) return;
-      globalMin.x = Math.min(globalMin.x, part.bbox.min[0]);
-      globalMin.y = Math.min(globalMin.y, part.bbox.min[1]);
-      globalMin.z = Math.min(globalMin.z, part.bbox.min[2]);
-      globalMax.x = Math.max(globalMax.x, part.bbox.max[0]);
-      globalMax.y = Math.max(globalMax.y, part.bbox.max[1]);
-      globalMax.z = Math.max(globalMax.z, part.bbox.max[2]);
+      rhinoMin.x = Math.min(rhinoMin.x, part.bbox.min[0]);
+      rhinoMin.y = Math.min(rhinoMin.y, part.bbox.min[1]);
+      rhinoMin.z = Math.min(rhinoMin.z, part.bbox.min[2]);
+      rhinoMax.x = Math.max(rhinoMax.x, part.bbox.max[0]);
+      rhinoMax.y = Math.max(rhinoMax.y, part.bbox.max[1]);
+      rhinoMax.z = Math.max(rhinoMax.z, part.bbox.max[2]);
     });
 
+    // Calculate center in Rhino coordinates
+    const rhinoCenter = new THREE.Vector3(
+      (rhinoMin.x + rhinoMax.x) / 2,
+      (rhinoMin.y + rhinoMax.y) / 2,
+      (rhinoMin.z + rhinoMax.z) / 2
+    );
+
+    // Apply Z-up → Y-up rotation (matches usePartsSpatialLayout)
+    // Rhino (X, Y, Z) → Three.js (X, Z, -Y)
     const center = new THREE.Vector3(
-      (globalMin.x + globalMax.x) / 2,
-      (globalMin.y + globalMax.y) / 2,
-      (globalMin.z + globalMax.z) / 2
+      rhinoCenter.x,   // X stays same
+      rhinoCenter.z,   // Rhino Z becomes Three.js Y
+      -rhinoCenter.y   // Rhino Y becomes Three.js -Z
     );
 
     const bboxSize = new THREE.Vector3(
-      globalMax.x - globalMin.x,
-      globalMax.y - globalMin.y,
-      globalMax.z - globalMin.z
+      rhinoMax.x - rhinoMin.x,
+      rhinoMax.z - rhinoMin.z,  // Height in Three.js is Rhino Z range
+      rhinoMax.y - rhinoMin.y   // Depth in Three.js is Rhino Y range
     );
     const radius = bboxSize.length() / 2;
 
@@ -114,9 +132,11 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
     const fovRadians = (effectiveFOV * Math.PI) / 180;
     const distance = (radius * CAMERA_FIT_CONFIG.FIT_OFFSET) / Math.sin(fovRadians / 2);
 
-    // Calculate new camera position (maintain current direction)
-    const direction = camera.position.clone().sub(controls.target).normalize();
-    const newPosition = center.clone().add(direction.multiplyScalar(distance));
+    // US-015 Fix: Use sensible viewing angle for small objects
+    // Instead of maintaining current direction, use diagonal offset [0, 2, 3] 
+    // for comfortable viewing from slightly above and in front
+    const viewingDirection = new THREE.Vector3(0, 2, 3).normalize();
+    const newPosition = center.clone().add(viewingDirection.multiplyScalar(distance));
 
     console.log('🎥 Fit All calculated', {
       partsCount: partsWithBbox.length,
@@ -135,7 +155,6 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
 
     lastFittedCountRef.current = parts.length;
   }, [parts, camera, controls, animateTo]);
-  */
 
   // Focus Selected - 'F' key handler
   useEffect(() => {

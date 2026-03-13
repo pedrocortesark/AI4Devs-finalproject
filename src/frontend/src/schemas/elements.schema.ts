@@ -48,14 +48,16 @@ export const BoundingBoxSchema = z.object({
 // ===== Element (Canvas Item) =====
 
 /**
- * Element schema: Minimal info optimized for 3D canvas rendering
+ * Element schema: Minimal info optimized for 3D canvas rendering + LOD system (US-015)
  */
 export const ElementSchema = z.object({
   id: z.string().uuid(),
   iso_code: z.string(),
   status: ElementStatusSchema,
   material_type: MaterialTypeSchema,
-  low_poly_url: z.string().url().nullable(),
+  high_poly_url: z.string().url().nullable().optional(),  // US-015: High-detail GLB (~7k tris, 0-5m)
+  mid_poly_url: z.string().url().nullable().optional(),   // US-015: Mid-detail GLB (~2k tris, 5-20m)
+  low_poly_url: z.string().url().nullable(),              // US-015: Low-detail GLB (~500 tris, 20-50m)
   bbox: BoundingBoxSchema.nullable(),
 });
 
@@ -95,7 +97,9 @@ export const ElementDetailSchema = z.object({
   status: ElementStatusSchema,
   material_type: MaterialTypeSchema,
   created_at: z.string().datetime(),
-  low_poly_url: z.string().url().nullable(),
+  high_poly_url: z.string().url().nullable().optional(),  // US-015: High-detail GLB
+  mid_poly_url: z.string().url().nullable().optional(),   // US-015: Mid-detail GLB
+  low_poly_url: z.string().url().nullable(),              // US-015: Low-detail GLB
   bbox: BoundingBoxSchema.nullable(),
   validation_report: ValidationReportSchema.nullable(),
   glb_size_bytes: z.number().int().nonnegative().nullable().optional(),

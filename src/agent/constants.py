@@ -56,17 +56,37 @@ GEOMETRY_ERROR_ZERO_VOLUME = "Solid geometry has zero or near-zero volume (< {mi
 # Task Names
 TASK_GENERATE_LOW_POLY_GLB = "agent.generate_low_poly_glb"
 
-# Decimation Targets
-DECIMATION_TARGET_FACES = 1000  # ~1000 triangles for Low-Poly (POC validated 60 FPS with 1197 meshes = 39,360 tris)
+# LOD System - Multi-Level Decimation Targets (US-015)
+# 3-level LOD + BBox proxy for optimal performance/quality balance
+LOD_DECIMATION_TARGETS = {
+    'high': None,    # High-poly: no decimation (~5000-8000 faces, <5m viewing distance)
+    'mid': 2000,     # Mid-poly: moderate decimation (~1500-2000 faces, 5-20m viewing distance)
+    'low': 500,      # Low-poly: aggressive decimation (~400-600 faces, 20-50m viewing distance)
+}
+
+# Legacy constant (deprecated - use LOD_DECIMATION_TARGETS['low'])
+DECIMATION_TARGET_FACES = LOD_DECIMATION_TARGETS['low']  # Backward compatibility
+
 MAX_ORIGINAL_FACES_WARNING = 100_000  # Log warning if geometry exceeds 100K faces (timeout risk)
 
-# File Size Limits
-MAX_GLB_SIZE_KB = 500  # Target: <500KB with Draco compression (POC: 778KB uncompressed → 300-400KB expected)
+# File Size Limits (updated for LOD system)
+MAX_GLB_SIZE_KB = {
+    'high': 800,   # High-poly target: ~600-800KB with Draco
+    'mid': 400,    # Mid-poly target: ~300-400KB with Draco
+    'low': 200,    # Low-poly target: ~150-200KB with Draco
+}
 MAX_3DM_DOWNLOAD_SIZE_MB = 500  # Reject .3dm files >500MB (timeout risk)
 
 # S3/Storage Configuration
 PROCESSED_GEOMETRY_BUCKET = "processed-geometry"
-LOW_POLY_PREFIX = "low-poly/"
+LOD_PREFIXES = {
+    'high': 'high-poly/',
+    'mid': 'mid-poly/',
+    'low': 'low-poly/',
+}
+# Legacy (deprecated - use LOD_PREFIXES['low'])
+LOW_POLY_PREFIX = LOD_PREFIXES['low']
+
 RAW_UPLOADS_BUCKET = "raw-uploads"
 
 # Temp File Paths
