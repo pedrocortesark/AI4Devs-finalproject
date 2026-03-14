@@ -80,6 +80,66 @@ except ModuleNotFoundError:
 logger = structlog.get_logger()
 
 
+def _is_transient_error(exc: Exception) -> bool:
+    """Determine if error is transient (should retry) or permanent.
+    
+    Transient errors include:
+    - Network timeouts and connection issues
+    - Supabase/S3 rate limiting (503, 502, 504)
+    - Temporary service unavailability
+    - Redis connection issues
+    
+    Permanent errors include:
+    - File not found (404)
+    - Invalid geometry (ValueError)
+    - Malformed .3dm files
+    - Missing InstanceDefinitions
+    
+    Args:
+        exc: Exception to classify
+        
+    Returns:
+        bool: True if error is transient (should retry), False if permanent
+    """
+    transient_patterns = [
+        "timeout", "timed out", "connection", "network",
+        "rate limit", "503", "502", "504", "temporary",
+        "unavailable", "redis", "could not connect"
+    ]
+    error_msg = str(exc).lower()
+    return any(pattern in error_msg for pattern in transient_patterns)
+
+
+def _update_block_status_error(block_id: str, error_message: str) -> None:
+    """Update block status to error_processing (only for permanent errors).
+    
+    This function should only be called after all retries are exhausted
+    or when a permanent error is detected.
+    
+    Args:
+        block_id: UUID of the block
+        error_message: Error description to log
+    """
+    try:
+        supabase = get_supabase_client()
+        supabase.table('blocks').update({
+            'status': 'error_processing'
+        }).eq('id', block_id).execute()
+        
+        logger.error(
+            "block_status_updated_to_error",
+            block_id=block_id,
+            error_message=error_message
+        )
+    except Exception as db_error:
+        logger.exception(
+            "failed_to_update_block_status",
+            block_id=block_id,
+            original_error=error_message,
+            db_error=str(db_error)
+        )
+
+
 @contextmanager
 def get_db_connection():
     """Get a PostgreSQL database connection using psycopg2.
@@ -371,6 +431,106 @@ def _extract_material_type(rhino_file: rhino3dm.File3dm, block_id: str, iso_code
                source="default",
                reason="No Material UserString found in objects")
     return DEFAULT_MATERIAL
+
+
+def _extract_all_user_strings(rhino_file: rhino3dm.File3dm, block_id: str, iso_code: str) -> dict:
+    """Extract ALL UserStrings from Rhino file for metadata storage.
+    
+    Extracts complete metadata from InstanceReference-level UserStrings including:
+    - GrauEstructural (structural grade)
+    - Codi (part code)
+    - Material (stone type)
+    - Tipologia (typology)
+    - Zona (zone)
+    - FechaFabricacion (fabrication date)
+    - Any other custom UserStrings
+    
+    UserStrings are stored in the InstanceReference.Attributes (the block instance
+    in the scene), NOT in the objects inside the InstanceDefinition.
+    
+    Args:
+        rhino_file: Parsed rhino3dm.File3dm object
+        block_id: UUID of the block (for logging)
+        iso_code: ISO code of the block (for logging)
+    
+    Returns:
+        Dictionary with all UserStrings found (empty dict if none found)
+    
+    Examples:
+        >>> rhino_file = rhino3dm.File3dm.Read("GLPER.B-PAE0720.0701.3dm")
+        >>> metadata = _extract_all_user_strings(rhino_file, "uuid-123", "GLPER.B-PAE0720.0701")
+        >>> print(metadata)
+        {
+            "Codi": "GLPER.B-PAE0720.0701",
+            "Material": "Montjuïc",
+            "GrauEstructural": "E2",
+            "Tipologia": "Capitel",
+            "Zona": "Façana Nord"
+        }
+    """
+    all_user_strings = {}
+    
+    # Find the InstanceDefinition matching this ISO code
+    matched_idef = None
+    if hasattr(rhino_file, 'InstanceDefinitions') and rhino_file.InstanceDefinitions is not None:
+        for idef in rhino_file.InstanceDefinitions:
+            if idef.Name == iso_code:
+                matched_idef = idef
+                break
+    
+    # Extract UserStrings from InstanceReferences that point to this InstanceDefinition
+    instance_refs_checked = 0
+    if hasattr(rhino_file, 'Objects') and rhino_file.Objects is not None:
+        for obj in rhino_file.Objects:
+            try:
+                # Check if this is an InstanceReference
+                obj_type = getattr(obj.Geometry, 'ObjectType', None)
+                if obj_type != rhino3dm.ObjectType.InstanceReference:
+                    continue
+                
+                instance_refs_checked += 1
+                
+                # Check if this InstanceReference points to our InstanceDefinition
+                if matched_idef is not None:
+                    iref_geom = obj.Geometry
+                    # ParentIdefId is the UUID of the InstanceDefinition this instance references
+                    if hasattr(iref_geom, 'ParentIdefId'):
+                        if str(iref_geom.ParentIdefId).lower() != str(matched_idef.Id).lower():
+                            continue  # This instance belongs to a different block
+                
+                # Extract UserStrings from the InstanceReference's Attributes
+                if hasattr(obj, 'Attributes') and hasattr(obj.Attributes, 'GetUserStrings'):
+                    obj_strings = obj.Attributes.GetUserStrings()
+                    
+                    # rhino3dm.GetUserStrings() returns a tuple of (key, value) pairs
+                    if obj_strings is not None and isinstance(obj_strings, (tuple, list)):
+                        for key, value in obj_strings:
+                            # Store first occurrence of each key (skip duplicates)
+                            if key not in all_user_strings:
+                                all_user_strings[key] = value
+                                
+            except Exception as e:
+                logger.warning("extract_all_user_strings.instance_error",
+                             block_id=block_id,
+                             error=str(e))
+                continue
+    
+    # Log results
+    if all_user_strings:
+        logger.info("extract_all_user_strings.success",
+                   block_id=block_id,
+                   iso_code=iso_code,
+                   keys_found=list(all_user_strings.keys()),
+                   total_keys=len(all_user_strings),
+                   instance_refs_checked=instance_refs_checked)
+    else:
+        logger.warning("extract_all_user_strings.empty",
+                      block_id=block_id,
+                      iso_code=iso_code,
+                      instance_refs_checked=instance_refs_checked,
+                      reason="No UserStrings found in InstanceReference.Attributes")
+    
+    return all_user_strings
 
 
 def _extract_and_merge_meshes(
@@ -865,11 +1025,15 @@ def _update_block_lod_urls(
     mid_poly_url: str,
     low_poly_url: str,
     bbox: dict,
-    material_type: str
+    material_type: str,
+    rhino_metadata: dict | None = None
 ) -> None:
-    """Update database with all LOD URLs, bbox, and material_type for processed block.
+    """Update database with all LOD URLs, bbox, material_type, and rhino_metadata.
     
     US-015: Real LOD System Implementation
+    
+    Updated to include rhino_metadata (complete UserStrings extraction) for storing
+    all metadata fields like GrauEstructural, Tipologia, Zona, etc.
 
     Args:
         block_id: UUID of the block to update
@@ -878,6 +1042,7 @@ def _update_block_lod_urls(
         low_poly_url: Public URL of low-poly GLB (~400-600 faces)
         bbox: Bounding box in absolute Rhino coordinates: {"min": [x,y,z], "max": [x,y,z]}
         material_type: Validated material type (e.g., "Montjuïc", "Ceramic")
+        rhino_metadata: Complete UserStrings dictionary (all metadata from 3DM file)
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -888,17 +1053,20 @@ def _update_block_lod_urls(
                 mid_poly_url = %s,
                 low_poly_url = %s,
                 bbox = %s,
-                material_type = %s
+                material_type = %s,
+                rhino_metadata = %s
             WHERE id = %s
             """,
-            (high_poly_url, mid_poly_url, low_poly_url, json.dumps(bbox), material_type, block_id)
+            (high_poly_url, mid_poly_url, low_poly_url, json.dumps(bbox), material_type, 
+             json.dumps(rhino_metadata or {}), block_id)
         )
         conn.commit()
         logger.info("database.lod_urls_updated",
                     block_id=block_id,
                     high_poly_url=high_poly_url,
                     mid_poly_url=mid_poly_url,
-                    low_poly_url=low_poly_url)
+                    low_poly_url=low_poly_url,
+                    metadata_keys=list(rhino_metadata.keys()) if rhino_metadata else [])
 
 
 # Legacy function for backward compatibility (deprecated)
@@ -1001,6 +1169,9 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 3b: Extract material type from UserStrings (T-1503-AGENT)
         material_type = _extract_material_type(rhino_file, block_id, iso_code)
 
+        # Step 3c: Extract ALL UserStrings for metadata storage (includes GrauEstructural, etc.)
+        rhino_metadata = _extract_all_user_strings(rhino_file, block_id, iso_code)
+
         # Step 4-5: Extract and merge meshes (returns bbox in absolute Rhino coords)
         merged_mesh, original_faces_count, bbox = _extract_and_merge_meshes(
             rhino_file, block_id, iso_code
@@ -1010,14 +1181,15 @@ def generate_low_poly_glb(self, block_id: str):
         # Creates high-poly (~5000-8000 faces), mid-poly (~2000 faces), low-poly (~500 faces)
         lod_data = _generate_lod_objs(merged_mesh, block_id)
 
-        # Step 7: Update database with all LOD URLs + bbox + material_type
+        # Step 7: Update database with all LOD URLs + bbox + material_type + rhino_metadata
         _update_block_lod_urls(
             block_id,
             lod_data['high_poly_url'],
             lod_data['mid_poly_url'],
             lod_data['low_poly_url'],
             bbox,
-            material_type
+            material_type,
+            rhino_metadata
         )
 
         # Step 8: Cleanup temp .3dm file
@@ -1049,5 +1221,41 @@ def generate_low_poly_glb(self, block_id: str):
         }
 
     except Exception as e:
-        logger.exception("generate_low_poly_glb.error", block_id=block_id, error=str(e))
-        raise
+        # Log error with retry context
+        logger.exception(
+            "generate_low_poly_glb.error",
+            block_id=block_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            retry_count=self.request.retries,
+            max_retries=TASK_MAX_RETRIES
+        )
+        
+        # Classify error: transient (retry) or permanent (fail immediately)
+        if _is_transient_error(e):
+            # Exponential backoff: 30s → 60s → 120s → 240s → 480s
+            countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+            
+            logger.warning(
+                "generate_low_poly_glb.retry_scheduled",
+                block_id=block_id,
+                retry_count=self.request.retries + 1,
+                max_retries=TASK_MAX_RETRIES,
+                countdown_seconds=countdown,
+                error_type=type(e).__name__
+            )
+            
+            # Raise retry exception (Celery will automatically retry)
+            raise self.retry(exc=e, countdown=countdown, max_retries=TASK_MAX_RETRIES)
+        else:
+            # Permanent error: update status to error_processing and fail
+            logger.error(
+                "generate_low_poly_glb.permanent_error",
+                block_id=block_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                message="Permanent error detected, no retry will be attempted"
+            )
+            
+            _update_block_status_error(block_id, str(e))
+            raise  # Propagate exception without retry

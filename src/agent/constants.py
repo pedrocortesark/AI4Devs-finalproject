@@ -19,9 +19,9 @@ WORKER_PREFETCH_MULTIPLIER = 1  # One task at a time (isolate large file process
 # Result Storage
 RESULT_EXPIRES_SECONDS = 3600  # 1 hour (results cleaned up automatically)
 
-# Task Retry Policy
-TASK_MAX_RETRIES = 3
-TASK_RETRY_DELAY_SECONDS = 60  # 1 minute between retries
+# Task Retry Policy (with exponential backoff: 30s → 60s → 120s → 240s → 480s)
+TASK_MAX_RETRIES = 5
+TASK_RETRY_DELAY_SECONDS = 30  # Base delay (exponential backoff applied in task)
 
 # Task Names (for type safety and refactoring)
 TASK_HEALTH_CHECK = "agent.tasks.health_check"

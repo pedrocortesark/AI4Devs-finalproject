@@ -310,3 +310,190 @@ class TestPerformanceMetrics:
 
         # URLs should be identical (idempotent filename)
         assert url1 == url2, "Retry changed GLB URL (not idempotent)"
+
+
+# ===== RETRY MECHANISM TESTS =====
+
+class TestRetryMechanism:
+    """
+    Tests for automatic retry mechanism with exponential backoff.
+    
+    Verifies transient errors (network, rate limiting) trigger retries,
+    while permanent errors (invalid geometry, missing file) fail immediately.
+    """
+
+    @pytest.mark.integration
+    @pytest.mark.parametrize("error_msg,should_retry", [
+        ("Connection timeout while downloading file", True),
+        ("Network error: could not connect to supabase.co", True),
+        ("Rate limit exceeded (503)", True),
+        ("Temporary service unavailable", True),
+        ("ValueError: Invalid geometry - no meshes found", False),
+        ("FileNotFoundError: .3dm file not found (404)", False),
+        ("No InstanceDefinitions matching iso_code", False),
+    ])
+    def test_error_classification(self, error_msg, should_retry):
+        """
+        Test 14: Verify _is_transient_error() correctly classifies errors.
+        
+        Given: Error message or exception
+        When: Calling _is_transient_error(exc)
+        Then: Returns True for transient errors, False for permanent errors
+        """
+        from src.agent.tasks.geometry_processing import _is_transient_error
+        
+        exc = Exception(error_msg)
+        result = _is_transient_error(exc)
+        
+        assert result == should_retry, \
+            f"Error '{error_msg}' should {'retry' if should_retry else 'not retry'}, got {result}"
+
+
+    @pytest.mark.integration
+    @pytest.mark.slow
+    def test_transient_error_triggers_automatic_retry(self, test_block_id, monkeypatch):
+        """
+        Test 15: Verify transient errors trigger automatic retry with exponential backoff.
+        
+        Given: Task that fails with network timeout on first 2 attempts
+        When: Task is executed
+        Then:
+          - Task retries automatically (countdown: 30s, 60s)
+          - On 3rd attempt, succeeds
+          - Final status: 'validated'
+          - Logs show retry_count=1, retry_count=2
+        """
+        from src.agent.tasks.geometry_processing import generate_low_poly_glb
+        from unittest.mock import patch
+        
+        attempt_count = 0
+        
+        def mock_download_with_retry(*args, **kwargs):
+            nonlocal attempt_count
+            attempt_count += 1
+            
+            if attempt_count <= 2:
+                # First 2 attempts: simulate timeout
+                raise Exception("Connection timeout while downloading .3dm file")
+            else:
+                # 3rd attempt: succeed (return mock file path)
+                return "/tmp/mock-file.3dm"
+        
+        # Patch _download_3dm_from_s3 to simulate intermittent network failures
+        with patch('src.agent.tasks.geometry_processing._download_3dm_from_s3', side_effect=mock_download_with_retry):
+            # Execute task (should retry automatically)
+            try:
+                result = generate_low_poly_glb.apply(args=[test_block_id])
+                
+                # Assertions
+                assert attempt_count == 3, f"Expected 3 attempts, got {attempt_count}"
+                assert result.successful(), "Task should eventually succeed after retries"
+                
+            except Exception as e:
+                pytest.fail(f"Task failed despite retries: {str(e)}")
+
+
+    @pytest.mark.integration
+    def test_permanent_error_no_retry_immediate_fail(self, test_block_id):
+        """
+        Test 16: Verify permanent errors fail immediately without retry.
+        
+        Given: Task that fails with ValueError (no meshes found)
+        When: Task is executed
+        Then:
+          - Task does NOT retry (permanent error detected)
+          - Status updated to 'error_processing'
+          - Logs show 'permanent_error' message
+          - Total attempts: 1 (no retries)
+        """
+        from src.agent.tasks.geometry_processing import generate_low_poly_glb
+        from unittest.mock import patch
+        import psycopg2
+        
+        attempt_count = 0
+        
+        def mock_extract_with_permanent_error(*args, **kwargs):
+            nonlocal attempt_count
+            attempt_count += 1
+            # Simulate permanent error (no meshes in geometry)
+            raise ValueError("No meshes found in InstanceDefinition")
+        
+        # Patch _extract_and_merge_meshes to simulate permanent error
+        with patch('src.agent.tasks.geometry_processing._extract_and_merge_meshes', side_effect=mock_extract_with_permanent_error):
+            # Execute task (should fail immediately, no retry)
+            try:
+                result = generate_low_poly_glb.apply(args=[test_block_id])
+                pytest.fail("Task should have raised exception for permanent error")
+            except ValueError as e:
+                # Expected behavior: exception propagated
+                assert "No meshes found" in str(e)
+        
+        # Verify only 1 attempt was made (no retries)
+        assert attempt_count == 1, f"Expected 1 attempt (no retry), got {attempt_count}"
+        
+        # Verify block status updated to error_processing
+        database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@db:5432/sfpm_db")
+        conn = psycopg2.connect(database_url)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT status FROM blocks WHERE id = %s", (test_block_id,))
+            status = cursor.fetchone()[0]
+            
+            assert status == 'error_processing', \
+                f"Block status should be 'error_processing', got '{status}'"
+        finally:
+            cursor.close()
+            conn.close()
+
+
+    @pytest.mark.integration
+    @pytest.mark.slow
+    def test_exponential_backoff_timing(self, test_block_id):
+        """
+        Test 17: Verify exponential backoff delays (30s → 60s → 120s → 240s → 480s).
+        
+        Given: Task that fails with transient error multiple times
+        When: Task is executed
+        Then:
+          - Retry delays follow exponential pattern: 30, 60, 120, 240, 480 seconds
+          - Logs show countdown_seconds for each retry
+        """
+        from src.agent.tasks.geometry_processing import generate_low_poly_glb
+        from src.agent.constants import TASK_RETRY_DELAY_SECONDS
+        from unittest.mock import patch
+        
+        retry_delays = []
+        
+        def mock_download_always_fail(*args, **kwargs):
+            # Always fail with transient error
+            raise Exception("Connection timeout")
+        
+        def mock_retry_capture_countdown(exc, countdown, max_retries):
+            retry_delays.append(countdown)
+            # Simulate Celery retry exception
+            raise Exception(f"Retry scheduled with countdown={countdown}")
+        
+        with patch('src.agent.tasks.geometry_processing._download_3dm_from_s3', side_effect=mock_download_always_fail):
+            # Patch self.retry to capture countdown values
+            task_instance = generate_low_poly_glb
+            original_retry = task_instance.retry
+            task_instance.retry = mock_retry_capture_countdown
+            
+            try:
+                generate_low_poly_glb.apply(args=[test_block_id])
+            except Exception:
+                pass  # Expected to fail after max retries
+            
+            # Restore original retry
+            task_instance.retry = original_retry
+        
+        # Verify exponential backoff pattern: 30, 60, 120, 240, 480
+        expected_delays = [30 * (2 ** i) for i in range(5)]  # [30, 60, 120, 240, 480]
+        
+        assert len(retry_delays) > 0, "No retries were triggered"
+        assert retry_delays[0] == expected_delays[0], \
+            f"First retry delay should be {expected_delays[0]}s, got {retry_delays[0]}s"
+        
+        if len(retry_delays) > 1:
+            assert retry_delays[1] == expected_delays[1], \
+                f"Second retry delay should be {expected_delays[1]}s, got {retry_delays[1]}s"

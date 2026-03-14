@@ -35,6 +35,27 @@ from datetime import datetime
 logger = structlog.get_logger()
 
 
+def _is_transient_error(exc: Exception, error_msg: str = None) -> bool:
+    """Determine if error is transient (should retry) or permanent.
+    
+    Checks both exception type and error message for transient patterns.
+    
+    Args:
+        exc: Exception to classify
+        error_msg: Optional explicit error message (overrides exc message)
+        
+    Returns:
+        bool: True if error is transient (should retry), False if permanent
+    """
+    transient_patterns = [
+        "timeout", "timed out", "connection", "network",
+        "rate limit", "503", "502", "504", "temporary",
+        "unavailable", "redis", "could not connect"
+    ]
+    check_msg = error_msg if error_msg else str(exc)
+    return any(pattern in check_msg.lower() for pattern in transient_patterns)
+
+
 @celery_app.task(
     name=TASK_HEALTH_CHECK,
     bind=True,
@@ -114,7 +135,22 @@ def validate_file(self, part_id: str, s3_key: str):
         if not success:
             logger.error("validate_file.download_failed", part_id=part_id, error=download_error)
 
-            # Save error to validation report
+            # Check if error is transient (network/S3 issue) or permanent (not found)
+            if _is_transient_error(Exception(download_error), download_error):
+                # Exponential backoff: 30s → 60s → 120s → 240s → 480s
+                countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+                
+                logger.warning(
+                    "validate_file.download_retry_scheduled",
+                    part_id=part_id,
+                    retry_count=self.request.retries + 1,
+                    countdown_seconds=countdown
+                )
+                
+                # Raise retry exception (Celery will automatically retry)
+                raise self.retry(exc=Exception(download_error), countdown=countdown, max_retries=TASK_MAX_RETRIES)
+            
+            # Permanent error: save report and update status
             db_service.save_validation_report(
                 part_id=part_id,
                 is_valid=False,
@@ -127,13 +163,9 @@ def validate_file(self, part_id: str, s3_key: str):
                 validated_by=worker_id
             )
 
-            # Update status to error
             db_service.update_block_status(part_id, "error_processing")
 
-            return {
-                "success": False,
-                "error": download_error
-            }
+            raise Exception(download_error)  # Propagate as exception
 
         # Step 3: Parse .3dm file
         parse_result = rhino_parser.parse_file(local_path)
@@ -145,7 +177,21 @@ def validate_file(self, part_id: str, s3_key: str):
         if not parse_result.success:
             logger.error("validate_file.parse_failed", part_id=part_id, error=parse_result.error_message)
 
-            # Save error to validation report
+            # Parse errors are typically permanent (corrupted file, invalid format)
+            # But check for transient patterns just in case (memory issues, etc.)
+            if _is_transient_error(Exception(parse_result.error_message), parse_result.error_message):
+                countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+                
+                logger.warning(
+                    "validate_file.parse_retry_scheduled",
+                    part_id=part_id,
+                    retry_count=self.request.retries + 1,
+                    countdown_seconds=countdown
+                )
+                
+                raise self.retry(exc=Exception(parse_result.error_message), countdown=countdown, max_retries=TASK_MAX_RETRIES)
+            
+            # Permanent parse error: save report and update status
             db_service.save_validation_report(
                 part_id=part_id,
                 is_valid=False,
@@ -158,13 +204,9 @@ def validate_file(self, part_id: str, s3_key: str):
                 validated_by=worker_id
             )
 
-            # Update status to error
             db_service.update_block_status(part_id, "error_processing")
 
-            return {
-                "success": False,
-                "error": parse_result.error_message
-            }
+            raise Exception(parse_result.error_message)  # Propagate as exception
 
         # Step 6: Build metadata from parsed layers
         layers_metadata = [
@@ -213,9 +255,23 @@ def validate_file(self, part_id: str, s3_key: str):
         }
 
     except Exception as e:
-        logger.exception("validate_file.unexpected_error", part_id=part_id, error=str(e))
+        logger.exception("validate_file.unexpected_error", part_id=part_id, error=str(e), retry_count=self.request.retries)
 
-        # Save error to validation report
+        # Check if error is transient
+        if _is_transient_error(e):
+            countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+            
+            logger.warning(
+                "validate_file.retry_scheduled",
+                part_id=part_id,
+                retry_count=self.request.retries + 1,
+                countdown_seconds=countdown,
+                error_type=type(e).__name__
+            )
+            
+            raise self.retry(exc=e, countdown=countdown, max_retries=TASK_MAX_RETRIES)
+        
+        # Permanent error: save report and update status
         try:
             db_service.save_validation_report(
                 part_id=part_id,
@@ -233,10 +289,7 @@ def validate_file(self, part_id: str, s3_key: str):
         except Exception as db_error:
             logger.exception("validate_file.db_error_during_error_handling", error=str(db_error))
 
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        raise  # Propagate exception
 
 
 @celery_app.task(

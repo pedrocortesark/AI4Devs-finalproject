@@ -1071,6 +1071,282 @@ export function RequireAuth({ children, allowedRoles, fallback }: RequireAuthPro
 
 ---
 
+## Epic-2: UI/UX Standardization & Advanced Filtering System **[PLANNED]** 📋
+
+**Epic Context:** El sistema ha evolucionado de PoC a producto en fase MVP, acumulando deuda de UX: componentes con estilos inline inconsistentes, sin sistema de diseño unificado, y un sistema de filtros básico que no explota los metadatos disponibles (62 materiales, bbox espacial, estados complejos). Este Epic establece las bases visuales y funcionales para escalar la UI hacia un producto profesional estilo CAD.
+
+**Objetivos Estratégicos:**
+1. **Coherencia Visual:** Definir Design System base (colores, tipografía, espaciados, sombras) inspirado en Mac OS Dark Mode + Speckle + Rhino
+2. **Componentización:** Crear librería interna de componentes base (Button, Input, Select, Card, Badge) sin dependencias externas
+3. **UX CAD Profesional:** Sidebar draggable/dockable (estilo Rhino) con filtros avanzados multi-select, búsqueda full-text, filtros espaciales
+4. **Accesibilidad:** Garantizar WCAG 2.1 AA mínimo en componentes críticos (teclado, ARIA, contraste)
+
+**Alcance:**
+- ✅ **IN SCOPE:** Tema base + 5 componentes core + sidebar draggable + refactorización filtros Dashboard + estados vacíos/loaders
+- ❌ **OUT OF SCOPE:** Dark mode toggle (futuro), animaciones complejas (futuro), internacionalización (futuro)
+
+**Impacto Estimado:**
+- **Reducción deuda técnica:** -30% líneas duplicadas (estilos inline → constants extraction)
+- **Mejora UX:** +60% usabilidad filtros (multi-select + persistencia URL + sidebar draggable)
+- **TTM nuevas features:** -40% tiempo desarrollo UI (componentes reutilizables)
+
+---
+
+### 📐 Design System Specification (Reference for All Tickets)
+
+**Visual Identity:**
+- **Inspiración:** Mac OS Dark Mode (base) + Speckle (modernidad BIM) + Rhino (controles CAD precisos)
+- **Personalidad:** Profesional, técnico, confiable, espacioso, elegante sin ser pretencioso
+
+**Color Palette:**
+```typescript
+colors: {
+  primary: '#007AFF',        // Mac system blue
+  neutral: {
+    0: '#000000',            // Canvas 3D background (pure black)
+    50: '#141416',           // Darkest surface
+    100: '#1C1C1E',          // App background (Mac sidebar)
+    200: '#2C2C2E',          // Card/panel surfaces
+    300: '#3A3A3C',          // Borders, dividers
+    600: '#8E8E93',          // Secondary text
+    900: '#FFFFFF',          // Primary text
+  },
+  success: '#34C759',        // Mac green
+  warning: '#FF9F0A',        // Mac orange
+  error: '#FF3B30',          // Mac red
+}
+```
+
+**Typography:**
+```typescript
+fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+fontSize: { xs: 12px, sm: 13px, base: 14px, lg: 17px, xl: 20px, 2xl: 28px },
+fontWeight: { regular: 400, medium: 500, semibold: 600 },
+```
+
+**Spacing (4px baseline grid):**
+```typescript
+spacing: { 1: 4px, 2: 8px, 3: 12px, 4: 16px, 6: 24px, 8: 32px, 12: 48px }
+```
+
+**Border Radius & Shadows:**
+```typescript
+borderRadius: { sm: 6px, md: 8px, lg: 12px },
+boxShadow: {
+  sm: '0 1px 3px 0 rgba(0,0,0,0.3)',   // Buttons hover
+  lg: '0 10px 15px -3px rgba(0,0,0,0.4)', // Modals, floating sidebar
+  glow: { primary: '0 0 0 3px rgba(0,122,255,0.3)' }, // Focus ring
+}
+```
+
+**Layout Architecture (NO Header/Footer Global):**
+```
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│          3D Canvas (100% viewport)                 │
+│          Background: #000000                       │
+│                                                     │
+│   ┌─────────────────┐                              │
+│   │ Sidebar (280px) │  ← Draggable/Dockable:      │
+│   │ ┌─────────────┐ │     - Docked left           │
+│   │ │   Header    │ │     - Docked right          │
+│   │ └─────────────┘ │     - Floating (anywhere)   │
+│   │   Scrollable   │                               │
+│   │   Content      │  Drag handle: 6-dot :: icon  │
+│   │   (Filtros)    │  Snap zones: <50px del borde │
+│   │ ┌─────────────┐ │                              │
+│   │ │   Footer    │ │                              │
+│   │ └─────────────┘ │                              │
+│   └─────────────────┘                              │
+└─────────────────────────────────────────────────────┘
+```
+
+**Sidebar Behavior Specification:**
+- **3 Estados:** `docked-left`, `docked-right`, `floating`
+- **Transiciones:** Drag handle dispara movimiento, snap automático cuando <50px del borde
+- **Visual Feedback:** Border glow azul (#007AFF) al acercarse a snap zone, opacity 0.95 + scale 1.02 mientras arrastra
+- **Persistencia:** localStorage guarda posición (`sidebarState: {state, x?, y?}`)
+
+---
+
+### A. Technical Chores (Trabajo Fundacional)
+
+**Objetivo:** Establecer infraestructura visual reutilizable sin funcionalidad de negocio directa.
+
+| ID Ticket | Título | Story Points | Tech Spec | DoD |
+|-----------|--------|--------------|-----------|-----|
+| `T-1601-FRONT` | **Design System Definition (Theme Foundation)** | 3 | Archivo `src/design-system/theme.ts` con constantes TypeScript: colors (primary/neutral/semantic con escala completa), typography (fontFamily/sizes/weights), spacing (baseline 4px: 1-20), shadows (sm/md/lg + glow variants), borderRadius (sm/md/lg/full). JSDoc completo con ejemplos de uso. Exportar como `export const theme = { colors, typography, spacing, ... }`. No lógica, solo constantes. **Referencia visual:** Mac OS Big Sur dark mode palette exacta. | **DONE cuando:** theme.ts existe con 5 categorías completas (100+ valores), TypeScript compila sin errors, JSDoc con 10+ ejemplos, usado en 1 componente como PoC (Button), documentación README.md en `/design-system/` explicando uso. |
+| `T-1602-FRONT` | **Base Components Library (5 Core Components)** | 5 | Componentes en `src/components/ui/`: <br>**1. Button:** variants (primary/secondary/ghost), sizes (sm/md/lg), estados (hover/active/disabled/loading), ripple effect opcional. Props: `onClick`, `disabled`, `loading`, `icon`, `fullWidth`. <br>**2. Input:** types (text/number/email), estados (default/focus/error/disabled), label flotante, helper text, prefix/suffix icons. Props: `value`, `onChange`, `error`, `label`, `placeholder`. <br>**3. Select:** single/multi-select, búsqueda integrada (fuzzy matching), keyboard navigation (↑↓ Enter Esc), virtual scrolling (>100 options). Props: `options`, `value`, `onChange`, `multi`, `searchable`. <br>**4. Card:** variants (flat/elevated), padding presets (compact/default/spacious), optional header/footer slots. Props: `variant`, `padding`, `onClick`. <br>**5. Badge:** colors (status/material), sizes (sm/md), closable variant. Props: `text`, `color`, `size`, `onClose`. Todos con aria-\* completo (role, label, describedby). Tests Vitest: 8+ tests por componente (render, props, interaction, keyboard, a11y contrast, edge cases). **Storybook opcional** (nice-to-have). | **DONE cuando:** 5 componentes en `src/components/ui/`, cada uno con 8+ tests PASS (total 40+ tests), Storybook stories creadas (opcional), usado en 2+ componentes existentes como migración PoC, JSDoc completo, exports en `ui/index.ts`, README.md con ejemplos de uso. |
+| `T-1603-FRONT` | **Draggable Sidebar Component (CAD-style)** | 5 | **Hook:** `useDraggable(ref, options)` retorna `{ isDragging, position: {x,y}, state: SidebarState, startDrag, stopDrag }`. Lógica: detecta mousedown/touchstart en drag handle, calcula offset, actualiza posición en mousemove/touchmove, snap automático si distancia a borde <50px (threshold configurable). <br>**Componente:** `<DraggableSidebar>` con 3 estados internos (`docked-left` / `docked-right` / `floating`). Props: `defaultState`, `defaultPosition`, `onStateChange`, `snapThreshold`, `children`. Slots: `header` (área draggable), `content` (scrollable), `footer` (sticky). <br>**Visual Feedback:** Border glow azul al acercarse a snap zone (`boxShadow: glow.primary`), opacity 0.95 mientras arrastra, scale 1.02 transform, cursor `grab`/`grabbing`. <br>**Persistencia:** Hook `useLocalStorage('sidebarPosition')` guarda estado automáticamente. <br>**Animación:** Snap transition 150ms ease-out. <br>**Mobile:** Touch events support, tap-to-toggle dock. <br>**Tests:** 12+ tests (drag gestures con mouse/touch, snap behavior a 3 bordes, persistencia localStorage, edge cases fuera viewport, keyboard accessibility ESC para cancelar drag). **Referencia:** Rhino Properties Panel, Adobe After Effects floating panels. | **DONE cuando:** Hook useDraggable creado (150 lines), DraggableSidebar component (300 lines), 12+ tests PASS, integrado en Dashboard3D (reemplaza FiltersSidebar fijo), visual feedback completo (glow azul), persistencia funcional (recargar mantiene posición), documentación JSDoc completa, demostración video/GIF en PR. |
+| `T-1604-FRONT` | **EmptyState & LoadingSpinner Unification** | 2 | Refactorizar componentes existentes `EmptyState.tsx` (Dashboard) y `LoadingOverlay.tsx` (ModelLoader) para usar Design System. <br>**EmptyState:** Props: `icon` (ReactNode), `title` (string), `description` (string), `actionButton` (opcional: {label, onClick}), `variant` (info/warning/error). Estilos: background `neutral[200]`, border `neutral[300]`, borderRadius `lg`, padding `spacing[12]`, text centered, icon size 64px con color `neutral[600]`. <br>**LoadingOverlay:** Props: `message` (string), `progress` (0-100 opcional), `variant` (spinner/skeleton). Estilos: backdrop `rgba(0,0,0,0.6)`, spinner color `primary[500]`, size 48px, animation 1s linear infinite. <br>**Migración:** Actualizar 3 usos existentes (Dashboard empty state, ModelLoader processing, ValidationModal loading). Mantener tests existentes 100% PASS (24 tests: EmptyState 10/10, LoadingOverlay 9/9, regressions 5/5). | **DONE cuando:** EmptyState y LoadingOverlay usan `theme.ts` constants (0 hardcoded colors/sizes), 3 migraciones completas sin romper funcionalidad (tests 24/24 PASS), JSDoc actualizado, screenshots antes/después idénticas (visual regression 0), código reducido 15%+ (menos duplicación inline styles). |
+| `T-1611-FRONT` | **Sidebar Collapse/Minimize Toggle** | 2 | Feature: Sidebar colapsable a "mini mode" (64px width, solo íconos). <br>**Button:** IconButton en SidebarHeader (`<ChevronLeft>` / `<ChevronRight>` según estado). <br>**Animation:** Width transition 200ms ease. <br>**Mini Mode Visual:** Íconos centrados verticalmente (spacing[2] entre ellos), tooltips on hover (posición lateral según dock side), sin labels. <br>**Expand Trigger:** Click en cualquier parte del mini sidebar OR hover >500ms (configurable). <br>**Persistencia:** localStorage `sidebarCollapsed: boolean`. <br>**Props:** `<DraggableSidebar collapsible={true} defaultCollapsed={false}>`. <br>**Tests:** 6+ tests (toggle button interaction, width animation, tooltip visibility, expand on hover, persistencia, keyboard shortcut Cmd+B opcional). <br>**A11y:** aria-expanded, aria-label "Expand/Collapse sidebar", focus handling. | **DONE cuando:** Toggle button funcional, animación suave (no janky), mini mode rendering correcto (íconos visibles), 6/6 tests PASS, integrado en DraggableSidebar (T-1603), documentación JSDoc completa. |
+
+---
+
+### B. User Stories (Funcionalidad de Negocio)
+
+#### US-016: Advanced Filtering & Search for Element Dashboard **[PLANNED]** 🎯
+
+**User Story:** Como **BIM Manager**, quiero filtrar elementos por múltiples criterios simultáneos (material, estado, rango espacial, búsqueda texto libre) y que esos filtros persistan en la URL, para poder compartir vistas específicas del dashboard con mi equipo sin perder contexto.
+
+**Visión Técnica:** Refactorizar el sistema de filtros actual (T-0506-FRONT en US-005) dentro del DraggableSidebar para soportar:
+1. **Multi-select avanzado:** Seleccionar 3+ materiales simultáneamente (ej: "Montjuïc + Ulldecona + Floresta")
+2. **Búsqueda full-text:** Input que busca en `iso_code` (ej: "SF-C12-D-001") con debounce 300ms
+3. **Filtros espaciales:** Slider para bbox size (ej: "piezas entre 0.5m y 2m")
+4. **Persistencia URL:** Query params actualizados en tiempo real (`/dashboard?materials=Montjuïc,Ulldecona&status=validated&search=C12`)
+
+**Criterios de Aceptación:**
+*   **Scenario 1 (Happy Path - Multi-Filter Combination):**
+    *   Given estoy en el Dashboard con 150 elementos cargados.
+    *   When selecciono filtros en sidebar flotante: Materials = ["Montjuïc", "Ulldecona"], Status = ["validated", "in_fabrication"], búsqueda = "C12".
+    *   Then el canvas muestra solo elementos que cumplen **TODOS** los criterios (AND logic).
+    *   And el contador en sidebar footer muestra "Mostrando 8 de 150 elementos".
+    *   And la URL actualiza a `/dashboard?materials=Montjuïc,Ulldecona&status=validated,in_fabrication&search=C12`.
+    *   When comparto la URL con un compañero, al abrir mantiene los filtros aplicados y sidebar en misma posición (localStorage).
+
+*   **Scenario 2 (Edge Case - No Results):**
+    *   Given aplico filtros: Material = ["Material_Inexistente"], Status = ["completed"].
+    *   When el canvas procesa los filtros.
+    *   Then el canvas muestra EmptyState (T-1604) con mensaje: "No se encontraron elementos con estos filtros. Intenta ampliar los criterios."
+    *   And aparece botón "Limpiar Filtros" en sidebar footer que resetea a estado inicial (URL a `/dashboard` sin params).
+
+*   **Scenario 3 (Performance - Real-Time Filtering):**
+    *   Given el canvas tiene 150 elementos renderizados con LOD system activo.
+    *   When cambio un filtro (toggle checkbox material "Floresta").
+    *   Then el canvas actualiza en <200ms (sin recargar toda la página).
+    *   And las piezas no coincidentes hacen fade-out suave (opacity 1.0 → 0.2 en 150ms).
+    *   And el framerate se mantiene >30 FPS durante la transición (verificar con Stats.js).
+
+*   **Scenario 4 (Accessibility - Keyboard Navigation):**
+    *   Given el sidebar está visible (docked o floating).
+    *   When presiono Tab repetidamente desde cualquier parte de la app.
+    *   Then el foco visual (outline `boxShadow.glow.primary`) recorre todos los controles de filtros en orden lógico (Materials → Status → Search → BBox → Clear button).
+    *   When presiono Enter en un checkbox de material, se marca/desmarca.
+    *   When escribo en el input de búsqueda y presiono Escape, se limpia el texto.
+    *   When presiono Escape con foco en sidebar, cierra el sidebar (si floating) o colapsa (si docked).
+
+*   **Scenario 5 (Deep Linking - URL as Single Source of Truth):**
+    *   Given recibo una URL compartida: `/dashboard?materials=Montjuïc&status=validated&sidebarState=docked-right`.
+    *   When cargo la página por primera vez.
+    *   Then los filtros en el sidebar se inicializan desde la URL (checkbox "Montjuïc" marcado, "validated" seleccionado).
+    *   And el sidebar aparece docked a la derecha (no posición default left).
+    *   And el canvas renderiza solo los 23 elementos que cumplen estos criterios (sin mostrar primero todos y luego filtrar - filtrado server-side inicial).
+
+*   **Scenario 6 (Sidebar Draggable Context):**
+    *   Given el sidebar está floating en posición centro-derecha.
+    *   When aplico filtros y los resultados cambian.
+    *   Then el sidebar permanece en su posición flotante (no salta a docked).
+    *   And el contador de resultados en footer actualiza en tiempo real.
+    *   When arrastro el sidebar mientras filtros están activos, los filtros NO se resetean.
+
+**Desglose de Tickets Técnicos:**
+
+| ID Ticket | Título | Story Points | Tech Spec | DoD |
+|-----------|--------|--------------|-----------|-----|
+| `T-1605-FRONT` | **Multi-Select Filter Component** | 3 | Componente `<MultiSelectFilter options={materials} selected={[]} onChange={} label={}>` reutilizable. Usa `<CheckboxGroup>` de T-1602. Features: "Select All" button (selecciona todos visible options), "Clear All" button (deselecciona todos), counter badge `(3/62)`, collapsible groups (ej: agrupar materiales por tipo). Visual: Checkbox list scrollable (max-height 300px), search dentro del multi-select (filter options), selected items con Badge closable. Integración: Hook `useElementsStore()` (Zustand) con selector `setMaterialFilters(materials)`. Tests: 10+ (selección múltiple, toggle all/clear, search filtering, badge close, keyboard nav ↑↓ Space, edge cases: 0 selected, all selected, duplicates handling). WCAG 2.1 AA: role="group", aria-labelledby, contrast ratio >4.5:1. | **DONE cuando:** Component creado (200 lines), 10+ tests PASS, usado en FiltersSidebar para Materials + Status (2 instancias), migración backward compatible (no rompe T-0506 existente), JSDoc completo, Storybook story (opcional), performance validated (<100ms render con 100+ options). |
+| `T-1606-FRONT` | **Full-Text Search Input (Debounced)** | 2 | Componente `<SearchInput placeholder="Buscar por código ISO..." value={} onChange={} debounce={300}>` con magnifying glass icon (left), clear button (right, visible cuando `value.length > 0`). Hook: `useDebounce(value, delay)` retorna debounced value. Lógica filtrado: `element.iso_code.toLowerCase().includes(query.toLowerCase())` (case-insensitive). Visual: Input height 40px, borderRadius `md`, background `neutral[200]`, focus ring `glow.primary`. Loading indicator: Spinner pequeño (16px) mientras debounce activo. Integración: ElementsStore añadir `searchQuery: string`, action `setSearchQuery(query)`, selector `getFilteredElements` incluye lógica search. Tests: 8+ (render, debounce timing 300ms±50ms, clear button, icon visibility, keyboard shortcuts Cmd+F focus, edge cases: empty string, special chars `/\`, very long query >100 chars). A11y: aria-label "Search elements by ISO code", role="searchbox". | **DONE cuando:** SearchInput component (120 lines), useDebounce hook (30 lines), 8+ tests PASS, ElementsStore.searchQuery implementado, búsqueda funcional en Dashboard (integración visual con FiltersSidebar header), performance <200ms response time (incluso con 150 elements), clear UX sin confusión, JSDoc completo. |
+| `T-1607-FRONT` | **Spatial Filter (BBox Size Range)** | 3 | Componente `<RangeSlider min={0} max={5} step={0.1} value={[min,max]} onChange={} label="Tamaño (metros)" unit="m">` con dual handles (thumb left/right). Cálculo bbox size: `Math.max(bbox.max[0]-bbox.min[0], bbox.max[1]-bbox.min[1], bbox.max[2]-bbox.min[2])` (dimensión más grande). Visual: Track height 4px `neutral[400]`, filled track `primary[500]`, thumbs circular 20px diameter `neutral[900]` border `primary[500]` 2px, labels dinámicos (show value on hover/drag). Integración: ElementsStore añadir `bboxSizeRange: [number, number]`, filtrado en `getFilteredElements`. Tests: 10+ (render, dual handle interaction, drag gestures, keyboard arrows ↑↓ ←→, snap to step, edge cases: min=max, out of bounds, invalid ranges min>max, null bbox handling). A11y: role="slider", aria-valuemin/max/now, aria-label for each thumb. Library: Implementar custom (no externa) O usar headless library (ej: Radix UI Slider si permite). | **DONE cuando:** RangeSlider component creado (250 lines custom OR 80 lines con Radix), 10+ tests PASS, ElementsStore.bboxSizeRange implementado, filtrado espacial funcional (canvas actualiza correctamente), documentación visual con diagrama BBox (docs/US-016/bbox-filter-explanation.png), performance sin lag en drag continuo, JSDoc completo. |
+| `T-1608-FRONT` | **URL State Sync (Deep Linking)** | 2 | Hook `useURLFiltersSync()` sincroniza ElementsStore ↔ URL query params bidireccional. Formato: `?materials=Montjuïc,Ulldecona&status=validated,in_fabrication&search=C12&bboxMin=0.5&bboxMax=2.5&sidebarState=docked-right&sidebarCollapsed=false`. Usa `window.history.pushState()` (no reload page) + `popstate` listener for back/forward buttons. Parsers: `parseURLToFilters(): FiltersState` (handles malformed params, defaults to empty), `buildFiltersToURL(state): string` (encodes special chars). Integración: useEffect en Dashboard3D, sync on mount + reactive (watch store changes). Edge cases: URL params override localStorage (URL = source of truth), invalid params ignored with console.warn, missing params use defaults. Tests: 8+ (serialización, deserialización, special chars `&%=` encoding, malformed URL recovery, browser back/forward buttons, simultaneous changes store+URL, localStorage vs URL priority). | **DONE cuando:** useURLFiltersSync hook creado (180 lines), 8+ tests PASS, URL actualiza en <50ms al cambiar filtros (no perceptible lag), recargar página mantiene filtros exactos, backward/forward browser buttons funcionan correctamente, parsers robust (no crashes con URLs maliciosas), JSDoc completo, documentation example URLs in README. |
+| `T-1609-FRONT` | **Filters Sidebar Refactor (Integration)** | 3 | Refactorizar `FiltersSidebar.tsx` (existente T-0506) para integrar dentro de `<DraggableSidebar>` (T-1603) con nuevo layout: <br>**SidebarHeader (draggable area):** Drag handle :: icon, título "Filtros de Elementos", collapse button, close button (X). <br>**SidebarContent (scrollable):** 4 secciones colapsables (Collapsible accordion): (1) **Materiales** - MultiSelectFilter (T-1605) con 62 options MATERIAL_COLORS, (2) **Estado** - MultiSelectFilter con 8 BlockStatus enums, (3) **Búsqueda** - SearchInput (T-1606) full-width, (4) **Tamaño** - RangeSlider (T-1607) con histogram preview opcional (show distribution). <br>**SidebarFooter:** Counter dinámico `"Mostrando X de Y elementos"`, Button "Limpiar Filtros" (variant ghost, icon TrashIcon), Button "Aplicar" opcional (si queremos apply mode vs real-time). <br>Layout: Padding `spacing[4]`, sections separated by Divider (1px `neutral[300]`), collapsible sections con ChevronDown icon rotation animation. Accesibilidad: Focus trap cuando sidebar floating (Escape closes), ARIA labels completos, keyboard navigation Tab order lógico. Tests: 15+ integration tests (4 sections render, collapsible expand/collapse, multi-filter interaction, search + material filter combined, clear button resets all, counter updates real-time, keyboard nav complete flow, edge cases: all collapsed, no results state, performance con 150 elements). | **DONE cuando:** FiltersSidebar refactorizado (400 lines), integrado en DraggableSidebar (T-1603) reemplazando componente antiguo, 15+ integration tests PASS, 4 secciones functional y collapsibles, accesibilidad WCAG 2.1 AA verificada (Axe DevTools 0 violations), performance <200ms filter apply (measured con React DevTools Profiler), zero regression en T-0506 tests existentes (backward compat), visual polish completo (spacing consistent, transitions smooth), JSDoc completo. |
+| `T-1610-TEST-FRONT` | **Advanced Filtering Integration Tests** | 2 | Vitest: 3 test suites en `tests/integration/dashboard-filters/`. <br>**Suite 1 - Multi-Filter Logic (8 tests):** AND logic (Material + Status combination), OR within same filter type (Material A OR B), empty results handling, filter priority (search overrides others), filters + LOD system interaction (canvas performance), extreme case: all filters max (62 materials + 8 statuses + search + bbox). <br>**Suite 2 - Performance (4 tests):** Real-time update <200ms (mock 150 elements), filter apply no memory leak (repeat 100x), canvas FPS >30 during filter change (integration con Stats.js), debounce effectiveness (search doesn't trigger on every keystroke). <br>**Suite 3 - Accessibility (5 tests):** Keyboard navigation complete flow (Tab through all filters + apply), screen reader announcements (aria-live regions for result count), focus management (filter change doesn't lose focus), Escape key behavior (close sidebar/clear search), color contrast validation (all text >4.5:1 ratio). <br>MSW mocks: `/api/elements` con dataset 150 elements fixture. Fixtures: `mockElements150.json` con variedad materials (20 types), statuses (all 8), bbox ranges (0.3m - 4.5m). | **DONE cuando:** 17/17 tests PASS (8 multi-filter + 4 performance + 5 a11y), coverage >85% FiltersSidebar + >90% ElementsStore selectors, no regressions en baseline (368 frontend tests maintained), integration con T-0509 validada (Dashboard integration tests updated), performance benchmarks documented (docs/US-016/performance-report.md), CI pipeline executes in <5min, JSDoc examples reference these tests. |
+
+**Valoración US-016:** 15 Story Points (T-1605: 3 + T-1606: 2 + T-1607: 3 + T-1608: 2 + T-1609: 3 + T-1610: 2)
+
+**Dependencias:**
+- **Técnicas:** US-005 (Dashboard 3D canvas), US-015 (Element model con material_type), T-1603 (DraggableSidebar)
+- **Infraestructura:** ElementsStore (T-1505-FRONT) implementado
+
+---
+
+#### US-017: Component Migration & Visual Consistency **[PLANNED]** 🎨
+
+**User Story:** Como **Desarrollador Frontend**, quiero que todos los componentes existentes usen el Design System definido (theme.ts) y los componentes base (Button, Input, etc.), para reducir deuda técnica y garantizar coherencia visual en futuras features.
+
+**Visión Técnica:** Migración sistemática de componentes legacy (estilos inline hardcoded) a Design System. No añade funcionalidad nueva, solo refactoriza código existente siguiendo Mac OS design language.
+
+**Criterios de Aceptación:**
+*   **Scenario 1 (Visual Regression Zero):**
+    *   Given migro 5 componentes core (FileUploader, PartDetailModal, ValidationReportModal, EmptyState, LoadingOverlay).
+    *   When ejecuto visual regression tests (Playwright screenshot comparison).
+    *   Then las capturas antes/después son **idénticas pixel-perfect** (diferencia <2% de píxeles, tolerancia para anti-aliasing).
+    *   And todos los tests funcionales (368 baseline frontend) pasan sin modificaciones (zero code changes needed en tests).
+
+*   **Scenario 2 (Code Quality Improvement):**
+    *   Given el código antes de migración tiene estilos inline duplicados (ej: `style={{ padding: '16px', borderRadius: '8px', background: '#2C2C2E' }}` repetido en 15 lugares).
+    *   When aplico Design System (`theme.spacing[4]`, `theme.borderRadius.md`, `theme.colors.neutral[200]`).
+    *   Then las líneas de código de estilos se reducen en 30%+ (medido con `cloc` before/after).
+    *   And ESLint no reporta warnings de "magic numbers" en estilos (rule `no-magic-numbers` con config para styles).
+    *   And todos los valores están centralizados en `theme.ts` (grep no encuentra hardcoded `#` colors ni `px` sizes fuera de theme).
+
+*   **Scenario 3 (Developer Experience):**
+    *   Given un nuevo desarrollador une al equipo sin conocimiento previo del proyecto.
+    *   When necesita crear un botón nuevo en feature X.
+    *   Then importa `<Button>` de `@/components/ui`, lee JSDoc inline, implementa en <5 minutos.
+    *   And NO necesita buscar estilos inline en otros archivos (Design System como single source of truth).
+    *   And el botón se ve exactamente igual a otros botones de la app (consistency automática).
+
+*   **Scenario 4 (Performance Maintained):**
+    *   Given migración completa de 5 componentes.
+    *   When ejecuto Lighthouse audit en `/dashboard` y `/upload`.
+    *   Then Performance score se mantiene >90 (no degradación por refactor).
+    *   And bundle size JavaScript NO aumenta más de 5KB (theme.ts es tree-shakeable).
+    *   And Time to Interactive (TTI) <3s en 3G throttled (same as baseline).
+
+**Desglose de Tickets Técnicos:**
+
+| ID Ticket | Título | Story Points | Tech Spec | DoD |
+|-----------|--------|--------------|-----------|-----|
+| `T-1701-FRONT` | **FileUploader Component Migration** | 2 | Refactorizar `FileUploader.tsx`: Reemplazar todos los estilos inline con `theme` constants. Usar `<Button variant="primary">` y `<Card variant="elevated">` de ui/. Mantener props API exacta (no breaking changes). Estructura: UploadZone usa `Card`, progress bar usa `theme.colors.primary[500]`, error states usan `theme.colors.error`. Tests: Mantener 4/4 tests pasando sin modificaciones (imports y mocks iguales). Documentar cambios en commit message detallado (before/after screenshots). Code review checklist: (1) 0 hardcoded colors, (2) 0 hardcoded sizes, (3) spacing usa theme.spacing, (4) hover states usan theme utilities. | **DONE cuando:** FileUploader.tsx refactorizado (150 lines → 120 lines, -20%), usa theme.ts 100% (verified con grep), tests 4/4 PASS, Playwright screenshots before/after pixel-diff <2%, PR approved by 2 reviewers, no console warnings en dev mode, bundle size analysis shows 0 increase. |
+| `T-1702-FRONT` | **Modal Components Migration (2 modals)** | 3 | Migrar `PartDetailModal.tsx` (227 lines) y `ValidationReportModal.tsx` (402 lines) al Design System. Unificar estilos de: backdrop (`rgba(0,0,0,0.6)` → `theme.overlays.modal`), header (height 64px, padding `spacing[4]`, border-bottom `neutral[300]`), footer (height 72px, padding `spacing[4]`, border-top `neutral[300]`), close button (usar `<IconButton>`). Usar `<Card variant="elevated">` para contenedor principal. Tabs navigation: active tab usa `borderBottom: 3px solid primary[500]`. Tests: Mantener 31 + 14 = 45 tests sin cambios. Refactor opportunity: Crear `<ModalLayout>` wrapper component reutilizable (header/content/footer slots) para DRY. | **DONE cuando:** 2 modals migrados (629 lines → 500 lines, -20%), ModalLayout component creado (100 lines reutilizable), 45/45 tests PASS, theme constants 100%, código duplicado eliminado (header/footer styles centralizados), visual regression 0 (<2% diff), JSDoc actualizado, bundle analysis OK. |
+| `T-1703-FRONT` | **Dashboard Components Migration** | 3 | Migrar `Dashboard3D.tsx` (120 lines), `Canvas3D.tsx` (201 lines). FiltersSidebar ya migrado en T-1609 (skip). Estilos: Layout grid usa `theme.layout` constants, spacing entre elementos usa `theme.spacing`, background colors usan `theme.colors.neutral` scale. Canvas3D: No cambiar lógica Three.js (only UI wrapper styles). Dashboard3D: DraggableSidebar integration ya usa theme (minor adjustments). Stats panel: Background `neutral[200]` semi-transparent. Tests: Mantener 64 + 18 = 82 tests (FiltersSidebar 7 tests moved to T-1609). Performance critical: 3D canvas framerate NO afectado (verify con Stats.js >30 FPS maintained), layout responsivo intacto (test en 3 breakpoints: 375px, 768px, 1920px). | **DONE cuando:** Dashboard components migrados (321 lines → 290 lines, -10%), tests 82/82 PASS, 3D performance maintained (30 FPS baseline preserved, measured con React DevTools Profiler), layout responsive verified (manual test 3 viewports + Playwright screenshots), theme.ts constants 100%, zero hardcoded styles, JSDoc complete. |
+| `T-1704-TEST-FRONT` | **Visual Regression Test Suite (Playwright)** | 2 | Playwright: Capturar screenshots de 8 componentes clave en modo isolated (Storybook stories OR dedicated test pages): (1) FileUploader (empty state), (2) FileUploader (uploading 50%), (3) PartDetailModal (3D tab open), (4) ValidationReportModal (errors visible), (5) Dashboard3D (150 elements rendered), (6) Canvas3D (empty), (7) EmptyState (3 variants), (8) LoadingOverlay (spinner). Baseline images guardadas en `tests/visual-regression/baselines/` (1920x1080 viewport). Script CI: `npm run test:visual` ejecuta Playwright, compara con `toMatchSnapshot()`, threshold <2% pixel diff, genera report HTML con side-by-side comparison. Approval process: Manual review required si diff >2%, update baseline con `npm run test:visual:update`. Playwright config: headless Chrome + Firefox (cross-browser), retry 2x on failure (flaky test mitigation). | **DONE cuando:** 8 baseline screenshots creados (PNG format, ~500KB total), Playwright tests configured (playwright.config.ts), CI pipeline integrado (GitHub Actions OR local script), test execution <3min, 8/8 snapshots PASS on fresh run, documentation en README.md con approval workflow, example failed test output screenshot (shows diff highlighting). |
+
+**Valoración US-017:** 10 Story Points (T-1701: 2 + T-1702: 3 + T-1703: 3 + T-1704: 2)
+
+**Dependencias:**
+- **Técnicas:** T-1601 (theme.ts), T-1602 (base components), US-005 (Dashboard components existentes)
+
+---
+
+### Epic-2 Summary
+
+**Total Story Points:** 33 SP
+- **Technical Chores (A):** 17 SP (T-1601: 3 + T-1602: 5 + T-1603: 5 + T-1604: 2 + T-1611: 2)
+- **US-016 (Advanced Filtering):** 15 SP (T-1605 a T-1610)
+- **US-017 (Component Migration):** 10 SP (T-1701 a T-1704)
+- **Total Real:** 17 + 15 + 10 = **42 SP** (chores NO overlap con US, son prerequisitos)
+
+**CORRECTED: Epic-2 Total = 42 Story Points**
+
+**Dependencias Críticas:**
+- **Técnicas:** US-005 (Dashboard 3D), US-015 (Element model con material_type + ElementsStore)
+- **Infraestructura:** ElementsStore (T-1505-FRONT) debe estar implementado, MATERIAL_COLORS dictionary (62 materials)
+- **Secuencia:** T-1601 → T-1602 → T-1603 → T-1604/T-1611 (parallel) → T-1605/T-1606/T-1607/T-1608 (parallel) → T-1609 → T-1610 → T-1701/T-1702/T-1703 (parallel) → T-1704
+
+**Riesgos & Mitigaciones:**
+1. **Regresiones Visuales:** Mitigación → T-1704 visual regression tests obligatorios, baseline screenshots pre-merge, peer review con screenshots in PR.
+2. **Over-engineering Design System:** Mitigación → Límite de 5 componentes base en T-1602 (no framework completo tipo Material-UI), iteración futura según necesidad real.
+3. **Complejidad Drag & Drop (T-1603):** Mitigación → PoC spike de 2 horas antes de estimar, evaluar usar library (react-dnd) vs custom implementation, fallback plan: sidebar fixed si drag falla QA.
+4. **Performance 3D Canvas:** Mitigación → Tests de performance obligatorios post-migración (FPS >30, memory <100MB), rollback plan si degrada >10%, profiling con React DevTools.
+5. **Tiempo Migración Subestimado (US-017):** Mitigación → Priorizar 3 componentes críticos (FileUploader, Modals, Dashboard), resto opcional post-MVP, timeboxing 2 días por componente.
+
+**Secuencia de Ejecución Recomendada (4 Waves):**
+1. **Wave 1 - Foundation (10 days, 17 SP):** T-1601 → T-1602 → T-1603 → T-1604 + T-1611 (parallel)
+2. **Wave 2 - Filtering Features (8 days, 10 SP):** T-1605 + T-1606 + T-1607 + T-1608 (parallel batch)
+3. **Wave 3 - Integration (5 days, 5 SP):** T-1609 → T-1610
+4. **Wave 4 - Migration (7 days, 10 SP):** T-1701 + T-1702 + T-1703 (parallel) → T-1704
+
+**Total Duration:** 30 days (6 weeks) con 1 developer full-time OR 15 days con 2 developers paired.
+
+**Success Metrics:**
+- ✅ **Deuda técnica:** Reducción 30% líneas duplicadas (measured con SonarQube)
+- ✅ **UX Score:** System Usability Scale (SUS) >80 (post-Epic user testing)
+- ✅ **Performance:** Lighthouse score >90 maintained, FPS >30 canvas
+- ✅ **A11y:** Axe DevTools 0 critical violations, WCAG 2.1 AA compliance
+- ✅ **Tests:** 100% baseline maintained (368 tests PASS), +70 new tests (total 438)
+
+---
+
 ## 3. Icebox (Fuera de Alcance MVP)
 Las siguientes historias quedan pospuestas para futuras iteraciones:
 * **US-003, US-004:** Casos de borde de upload.
