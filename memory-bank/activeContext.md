@@ -4,11 +4,31 @@
 Sprint 7 — US-015 Element Model Refactoring (2026-03-09 STARTED)
 
 ## Active Ticket
-NONE — US-015 Element Model Refactoring Epic COMPLETE (2026-02-09 17:05)
+NONE — Visual Testing Complete / Preparing US-016
 
 ---
 
 ## Recently Completed
+
+- **FIX CRÍTICO: Sistema LOD + Migración Formato OBJ** —  ✅ RESOLVED (2026-03-13 15:30) | **Custom useLOD Hook Replacing drei's Detailed** | Formato OBJ con coordenadas absolutas
+  - **Context:** Durante pruebas visuales de US-015, geometrías aparecían en origen [0,0,0] en lugar de coordenadas reales `[-9.4, -52.9, 73.9]`. Root cause: (1) trimesh GLB export bug (v4.0.5, v4.11.3) colapsaba geometría al exportar, (2) drei's `<Detailed>` incompatible con OBJLoader (diseñado para useGLTF/GLTF format).
+  - **Solución Implementada:**
+    - **Backend:** Cambio export GLB → OBJ en `geometry_processing.py`. OBJ preserva coordenadas absolutas Rhino Z-up. Añadido cleanup de URLs: `public_url.rstrip('?')` (bug Supabase `get_public_url()`).
+    - **Frontend:** Reemplazado `<Detailed>` con hook personalizado `useLOD`. Hook calcula distancia camera-elemento con `useFrame`, retorna nivel LOD (0-3). ElementMesh renderiza geometry condicional. Removido `useGLTF.preload()` de PartsScene (incompatible con OBJ).
+    - **LOD System:** 4 niveles — Level 0 (0-5m): high-poly, Level 1 (5-20m): mid-poly, Level 2 (20-50m): low-poly, Level 3 (>50m): bbox wireframe.
+  - **Validación:**
+    - ✅ 18 archivos OBJ (6 GLPER × 3 LODs) verificados con coordenadas absolutas válidas
+    - ✅ Test aislamiento: HTML standalone + React `OBJTestComponent` confirmaron OBJLoader funcional
+    - ✅ Geometría renderizada correctamente alineada con bbox cyan
+    - ✅ LOD transitions suaves (acercar/alejar cámara)
+  - **Files Modified:**
+    - `src/agent/tasks/geometry_processing.py` — `_export_and_upload_obj()` renamed from GLB, URL cleanup
+    - `src/frontend/src/hooks/useLOD.ts` — NEW (custom LOD hook) 
+    - `src/frontend/src/components/Dashboard/ElementMesh.tsx` — conditional rendering por LOD level, removed Detailed
+    - `src/frontend/src/components/Dashboard/PartsScene.tsx` — removed useGLTF.preload()
+  - **Architectural Decision:** documented in `memory-bank/decisions.md` (2026-03-13). drei's `<Detailed>` incompatible con loaders custom. OBJ format chosen over GLB for trimesh stability. Coordinates: absolute Rhino Z-up (backend) + Z→Y rotation (frontend group prop).
+  - **Trade-offs:** OBJ no soporta animations (irrelevant para piezas estáticas), files texto plano (más grandes que binario) pero mejor debugging.
+  - **Documentation:** `prompts.md` #228, `memory-bank/decisions.md` actualizado, clean code en ElementMesh (comentarios obsoletos GLB removed).
 
 - **T-1507-TEST: E2E Integration Test** — ✅ TDD-GREEN COMPLETE (2026-02-09 17:05) | **Backend 11/14 (79%), Frontend 4/14 (RED phase), Total 459 tests passing** | Multi-Layer Integration + MSW Fix
   - **Context:** Final ticket in US-015 Element Model Refactoring Epic. Verifies full pipeline: Upload .3dm → Agent Processing → Element API → Canvas Render.

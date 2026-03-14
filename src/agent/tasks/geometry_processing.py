@@ -541,7 +541,7 @@ def _extract_and_merge_meshes(
     # Keep geometry in Rhino world-space coordinates (absolute building position).
     # This creates a true digital twin where parts maintain their real spatial relationships.
     # The frontend will render them at their actual building positions.
-    # Z-up → Y-up rotation is applied during GLB export (see _export_and_upload_glb).
+    # Z-up → Y-up rotation is applied on frontend during OBJ rendering (see _export_and_upload_obj).
     centroid = merged_mesh.centroid.copy()
     logger.info("extract_meshes.absolute_coords",
                 block_id=block_id, iso_code=iso_code,
@@ -674,112 +674,106 @@ def _apply_draco_compression(input_path: str, output_path: str) -> bool:
         return False
 
 
-def _export_and_upload_glb(
+def _export_and_upload_obj(
     mesh: trimesh.Trimesh,
     block_id: str,
     lod_level: str = 'low'
 ) -> tuple[str, int]:
-    """Export mesh to GLB format, apply Draco compression, and upload to S3.
+    """Export mesh to OBJ format and upload to Supabase storage.
+
+    OBJ format chosen because trimesh GLB export has persistent bugs (collapses geometry).
+    Tested versions: 4.0.5, 4.11.3 - both fail to export valid GLBs.
 
     Pipeline:
-    1. Apply Z-up → Y-up rotation (Rhino → Three.js coordinate system)
-    2. Export uncompressed GLB to /tmp/{block_id}_{lod_level}_raw.glb
-    3. Apply Draco compression → /tmp/{block_id}_{lod_level}.glb (falls back if unavailable)
-    4. Upload compressed GLB to Supabase Storage
-    5. Clean up both temp files
+    1. Export to OBJ format (preserves Rhino Z-up absolute coordinates)
+    2. Upload to Supabase Storage (high-poly/, mid-poly/, or low-poly/ prefix)
+    3. Return public URL and file size
 
     Args:
-        mesh: Trimesh mesh to export (in Rhino Z-up coordinates)
-        block_id: UUID of the block (used in S3 key)
+        mesh: Trimesh mesh to export (in Rhino Z-up coordinates with absolute position)
+        block_id: UUID of the block (used in storage key)
         lod_level: LOD level ('high', 'mid', or 'low') for storage path/naming
 
     Returns:
         Tuple of (public_url, file_size_kb)
 
     Example:
-        url, size = _export_and_upload_glb(mesh, "123e4567-e89b-12d3-a456-426614174000", "high")
+        url, size = _export_and_upload_obj(mesh, "123e4567-e89b-12d3-a456-426614174000", "high")
     """
-    # Step 1: Apply Z-up → Y-up rotation for Three.js compatibility
-    # Rhino: Z-up (architectural standard)
-    # Three.js: Y-up (WebGL standard)
-    # Rotation: -90° around X-axis converts Z-up to Y-up
-    rotation_matrix = trimesh.transformations.rotation_matrix(
-        -np.pi / 2,  # -90 degrees
-        [1, 0, 0],   # Around X-axis
-        [0, 0, 0]    # At origin
+    # Export OBJ with ABSOLUTE RHINO COORDINATES in Z-up coordinate system
+    # OBJ format chosen because trimesh GLB export has persistent bugs (collapses geometry)
+    # Tested: trimesh 4.0.5, 4.11.3 - both fail to export valid GLBs
+    # Frontend applies Z→Y rotation via Three.js
+    
+    centroid = mesh.centroid.copy()
+    bounds = {"min": mesh.bounds[0].tolist(), "max": mesh.bounds[1].tolist()}
+    logger.info(
+        "export_obj.rhino_zup_absolute",
+        block_id=block_id,
+        lod_level=lod_level,
+        centroid_mm=centroid.tolist(),
+        bounds=bounds,
+        vertices=len(mesh.vertices),
+        message="Exporting OBJ in Rhino Z-up with absolute coordinates (no backend transforms)",
     )
-    mesh.apply_transform(rotation_matrix)
-    logger.info("export_glb.rotation_applied",
-                block_id=block_id,
-                message="Applied Z-up → Y-up rotation for Three.js")
+    logger.info(
+        "export_obj.frontend_rotation_required",
+        block_id=block_id,
+        message="Frontend must apply Z→Y rotation via Three.js rotation prop",
+    )
 
-    # Step 2: Export raw (uncompressed) GLB
-    raw_glb_path = os.path.join(TEMP_DIR, f"{block_id}_{lod_level}_raw.glb")
-    temp_glb_path = os.path.join(TEMP_DIR, f"{block_id}_{lod_level}.glb")
-    mesh.export(raw_glb_path, file_type='glb')
+    # Export OBJ (simpler format than GLB, more robust with trimesh)
+    temp_obj_path = os.path.join(TEMP_DIR, f"{block_id}_{lod_level}.obj")
+    mesh.export(temp_obj_path, file_type='obj')
 
-    raw_size_kb = os.path.getsize(raw_glb_path) // 1024
-    logger.info("export_glb.raw",
-               block_id=block_id,
-               lod_level=lod_level,
-               file_size_kb=raw_size_kb,
-               path=raw_glb_path)
-
-    # Step 2: Apply Draco compression (mirrors POC export_gltf_draco.py:166-207)
-    _apply_draco_compression(raw_glb_path, temp_glb_path)
-
-    # Clean up raw file immediately after compression
-    try:
-        os.remove(raw_glb_path)
-    except Exception as e:
-        logger.warning("cleanup.raw_glb_failed", block_id=block_id, lod_level=lod_level, error=str(e))
-
-    # Get final compressed file size
-    file_size_bytes = os.path.getsize(temp_glb_path)
+    file_size_bytes = os.path.getsize(temp_obj_path)
     file_size_kb = file_size_bytes // 1024
-
-    logger.info("export_glb.success",
+    logger.info("export_obj.success",
                block_id=block_id,
                lod_level=lod_level,
                file_size_kb=file_size_kb,
-               path=temp_glb_path)
+               path=temp_obj_path)
 
-    # Step 3: Upload to Supabase Storage with LOD-specific path
+    # Upload to Supabase Storage with LOD-specific path
     supabase = get_supabase_client()
-    glb_key = f"{LOD_PREFIXES[lod_level]}{block_id}.glb"
+    obj_key = f"{LOD_PREFIXES[lod_level]}{block_id}.obj"
 
-    with open(temp_glb_path, 'rb') as f:
-        glb_data = f.read()
+    with open(temp_obj_path, 'rb') as f:
+        obj_data = f.read()
 
     supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).upload(
-        glb_key,
-        glb_data,
-        {'content-type': 'model/gltf-binary', 'upsert': 'true'}
+        obj_key,
+        obj_data,
+        {'content-type': 'model/obj', 'upsert': 'true'}
     )
 
     # Get public URL
-    public_url = supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).get_public_url(glb_key)
+    public_url = supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).get_public_url(obj_key)
+    
+    # BUG FIX: Remove trailing '?' from Supabase URLs (causes issues with OBJLoader)
+    # Supabase client appends '?' for cache busting, but some loaders don't handle it well
+    public_url = public_url.rstrip('?')
 
-    logger.info("upload_glb.success",
+    logger.info("upload_obj.success",
                block_id=block_id,
                lod_level=lod_level,
                url=public_url,
-               key=glb_key)
+               key=obj_key)
 
-    # Step 4: Cleanup compressed temp file
+    # Cleanup temp file
     try:
-        os.remove(temp_glb_path)
+        os.remove(temp_obj_path)
     except Exception as e:
-        logger.warning("cleanup.temp_glb_failed", block_id=block_id, lod_level=lod_level, error=str(e))
+        logger.warning("cleanup.temp_obj_failed", block_id=block_id, lod_level=lod_level, error=str(e))
 
     return public_url, file_size_kb
 
 
-def _generate_lod_glbs(
+def _generate_lod_objs(
     merged_mesh: trimesh.Trimesh,
     block_id: str
 ) -> dict:
-    """Generate 3-level LOD GLB files (high/mid/low) from merged mesh.
+    """Generate 3-level LOD OBJ files (high/mid/low) from merged mesh.
 
     US-015: Real LOD System Implementation
     
@@ -789,8 +783,8 @@ def _generate_lod_glbs(
     3. Low-poly: Aggressive decimation to ~500 faces (~90-95% reduction)
     
     Each mesh is:
-    - Exported to GLB with Z-up → Y-up rotation
-    - Draco compressed (~level 7)
+    - Exported to OBJ format (Z-up coordinates preserved)
+    - Frontend applies Z-up → Y-up rotation during rendering
     - Uploaded to Supabase Storage (separate folders: high-poly/, mid-poly/, low-poly/)
     
     Args:
@@ -808,7 +802,7 @@ def _generate_lod_glbs(
         }
         
     Example:
-        lod_data = _generate_lod_glbs(mesh, "123e4567-e89b-12d3-a456-426614174000")
+        lod_data = _generate_lod_objs(mesh, "123e4567-e89b-12d3-a456-426614174000")
         # Returns URLs for all 3 LOD levels + metadata
     """
     original_faces = len(merged_mesh.faces)
@@ -827,7 +821,7 @@ def _generate_lod_glbs(
                 target_faces="no decimation (original)")
     
     high_poly_mesh = merged_mesh.copy()  # Work with copy to preserve original
-    high_url, high_size = _export_and_upload_glb(high_poly_mesh, block_id, 'high')
+    high_url, high_size = _export_and_upload_obj(high_poly_mesh, block_id, 'high')
     results['high_poly_url'] = high_url
     results['file_sizes_kb']['high'] = high_size
     results['face_counts']['high'] = len(high_poly_mesh.faces)
@@ -839,7 +833,7 @@ def _generate_lod_glbs(
                 target_faces=target_mid)
     
     mid_poly_mesh, mid_faces = _apply_decimation(merged_mesh.copy(), target_mid, block_id)
-    mid_url, mid_size = _export_and_upload_glb(mid_poly_mesh, block_id, 'mid')
+    mid_url, mid_size = _export_and_upload_obj(mid_poly_mesh, block_id, 'mid')
     results['mid_poly_url'] = mid_url
     results['file_sizes_kb']['mid'] = mid_size
     results['face_counts']['mid'] = mid_faces
@@ -851,7 +845,7 @@ def _generate_lod_glbs(
                 target_faces=target_low)
     
     low_poly_mesh, low_faces = _apply_decimation(merged_mesh.copy(), target_low, block_id)
-    low_url, low_size = _export_and_upload_glb(low_poly_mesh, block_id, 'low')
+    low_url, low_size = _export_and_upload_obj(low_poly_mesh, block_id, 'low')
     results['low_poly_url'] = low_url
     results['file_sizes_kb']['low'] = low_size
     results['face_counts']['low'] = low_faces
@@ -1014,7 +1008,7 @@ def generate_low_poly_glb(self, block_id: str):
 
         # Step 6: Generate 3-level LOD GLBs (US-015: Real LOD System)
         # Creates high-poly (~5000-8000 faces), mid-poly (~2000 faces), low-poly (~500 faces)
-        lod_data = _generate_lod_glbs(merged_mesh, block_id)
+        lod_data = _generate_lod_objs(merged_mesh, block_id)
 
         # Step 7: Update database with all LOD URLs + bbox + material_type
         _update_block_lod_urls(

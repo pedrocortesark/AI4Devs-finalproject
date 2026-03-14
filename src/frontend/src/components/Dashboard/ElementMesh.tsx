@@ -6,8 +6,13 @@
  * T-0507-FRONT: Added 3-level LOD system
  * US-015: Complete 4-level LOD system (high/mid/low/bbox)
  * 
+ * RECENT CHANGES (2026-03-13):
+ * - Switched from GLB to OBJ format (trimesh GLB export has persistent bugs in v4.0.5 & 4.11.3)
+ * - Replaced drei's <Detailed> component with custom useLOD hook (Detailed incompatible with OBJ geometry)
+ * - OBJ files preserve absolute Rhino Z-up coordinates from backend (no centering)
+ * - Frontend applies Z→Y rotation via group rotation prop
+ * 
  * Renders elements at their real building coordinates from Rhino (absolute positioning).
- * GLB geometry includes Z→Y rotation applied during backend export.
  * LOD system: 
  *   - Level 0 (0-5m): high-poly ~7k tris, maximum detail for close inspection
  *   - Level 1 (5-20m): mid-poly ~2k tris, normal working distance
@@ -18,10 +23,14 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { useGLTF, Html, Detailed } from '@react-three/drei';
+import { useLoader } from '@react-three/fiber';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { Html } from '@react-three/drei';
+import * as THREE from 'three';
 import { STATUS_COLORS } from '@/constants/dashboard3d.constants';
 import { FILTER_VISUAL_FEEDBACK } from '@/constants/parts.constants';
 import { usePartsStore } from '@/stores/parts.store';
+import { useLOD } from '@/hooks/useLOD';
 import { BBoxProxy } from './BBoxProxy';
 // import { WireframeHelper } from './WireframeHelper'; // DISABLED
 import type { ElementMeshProps } from './PartsScene.types';
@@ -85,24 +94,26 @@ function calculatePartOpacity(
 }
 
 /**
- * ElementMesh: Renders individual element with GLB geometry and optional LOD
+ * ElementMesh: Renders individual element with OBJ geometry and LOD system
  * 
- * GLB files contain geometry in absolute Rhino world coordinates (not centered at origin).
- * Backend geometry_processing.py exports meshes in world-space, so no position offset needed.
+ * OBJ files contain ABSOLUTE Rhino coordinates (Z-up) exported by geometry_processing.py.
+ * Frontend applies Z→Y rotation to align with Three.js coordinate system.
+ * Custom useLOD hook calculates camera distance for LOD level switching.
  * 
  * @param props.part - Element data (iso_code, status, low_poly_url, mid_poly_url, bbox, etc.)
+ * @param props.position - 3D position [x, y, z] calculated from bbox center (used for LOD distance)
  * @param props.enableLod - Enable LOD system (default true). Set false for T-0505 backward compatibility
  * 
  * @example
  * ```tsx
  * // With LOD (default)
- * <ElementMesh part={element} />
+ * <ElementMesh part={element} position={[10, 20, 30]} />
  * 
  * // Without LOD (backward compatibility)
- * <ElementMesh part={element} enableLod={false} />
+ * <ElementMesh part={element} position={[10, 20, 30]} enableLod={false} />
  * ```
  */
-export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
+export function ElementMesh({ part, position, enableLod = true }: ElementMeshProps) {
   const [hovered, setHovered] = useState(false);
   
   // Debug logging - DISABLED (too noisy with React StrictMode)
@@ -125,7 +136,7 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
     filters.workshop_id !== null
   );
   
-  // Load GLB geometries for complete LOD system (US-015: 4 levels)
+  // Load OBJ geometries for complete LOD system (US-015: 4 levels)
   // Level 0 (0-5m): high_poly (~7k tris, max detail)
   // Level 1 (5-20m): mid_poly (~2k tris, normal working distance)
   // Level 2 (20-50m): low_poly (~500 tris, overview)
@@ -136,7 +147,8 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
   // - mid_poly missing → use low_poly
   // - low_poly missing → component will error (low_poly_url required field)
   // 
-  // BUG FIX: Remove trailing '?' from URLs (database has invalid query strings)
+  // BUG FIX: Sanitize URLs to remove trailing '?' (legacy compatibility)
+  // Backend now strips '?' during export, but old URLs may still have it
   const sanitizeUrl = (url: string) => url.replace(/\?$/, '');
   
   // Required URLs
@@ -151,40 +163,28 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
     ? sanitizeUrl(part.high_poly_url)
     : midPolyUrl; // Fallback: use mid_poly (or its fallback) if high missing
 
-  // useGLTF suspends during loading (handled by parent <Suspense> boundary)
+  // useLoader suspends during loading (handled by parent <Suspense> boundary)
   // IMPORTANT: These hooks always return valid scenes or suspend - no need for null checks
-  const { scene: lowPolyScene } = useGLTF(lowPolyUrl);
-  const { scene: midPolyScene } = useGLTF(midPolyUrl);
-  const { scene: highPolyScene } = useGLTF(highPolyUrl);
+  // OBJ format used instead of GLB due to trimesh GLB export bugs (versions 4.0.5, 4.11.3)
+  const lowPolyScene = useLoader(OBJLoader, lowPolyUrl);
+  const midPolyScene = useLoader(OBJLoader, midPolyUrl);
+  const highPolyScene = useLoader(OBJLoader, highPolyUrl);
 
   // Clone scenes so each LOD level owns its own Three.js Object3D.
-  // useGLTF returns the same cached object for the same URL; a Three.js
+  // useLoader returns the same cached object for the same URL; a Three.js
   // object can only have one parent, so sharing the reference across
   // multiple <primitive> elements causes the second to reparent the scene,
   // removing it from the first LOD level.
   //
-  // GLB geometry is already positioned at absolute Rhino world coordinates
-  // by geometry_processing.py. No JavaScript offset calculation needed.
+  // OBJ geometry preserves Rhino Z-up absolute coordinates from backend.
+  // Frontend applies Z→Y rotation via group rotation prop.
   const lowPolyClone = useMemo(() => lowPolyScene.clone(true), [lowPolyScene]);
   const midPolyClone = useMemo(() => midPolyScene.clone(true), [midPolyScene]);
   const highPolyClone = useMemo(() => highPolyScene.clone(true), [highPolyScene]);
   
-  // Triangle counts logged on initial load (disabled for production)
-  // useEffect(() => { ... }, [lowPolyClone, midPolyClone, part.iso_code]);
-
-  // Preload LOD assets on mount for smoother transitions
-  useEffect(() => {
-    if (enableLod) {
-      // Preload all 3 LOD levels
-      if (part.high_poly_url) {
-        useGLTF.preload(part.high_poly_url);
-      }
-      if (part.mid_poly_url) {
-        useGLTF.preload(part.mid_poly_url);
-      }
-      useGLTF.preload(lowPolyUrl);
-    }
-  }, [part.high_poly_url, part.mid_poly_url, lowPolyUrl, enableLod]);
+  // Calculate LOD level based on camera distance (replaces drei's <Detailed>)
+  // position prop is bbox center in Three.js Y-up coordinates (from usePartsSpatialLayout)
+  const lodLevel = useLOD(position);
 
   // Handle cursor change on hover
   useEffect(() => {
@@ -211,7 +211,7 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
   );
 
   // Apply material properties to all LOD clones (high, mid, low)
-  // Traverse clones and update existing materials (GLTF objects already have materials)
+  // Traverse clones and update existing materials from OBJ geometry
   // PRESERVE Rhino materials: only modify emissive/opacity, NOT base color
   useEffect(() => {
     [highPolyClone, midPolyClone, lowPolyClone].forEach((clone) => {
@@ -248,12 +248,13 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
   // Backward compatibility: Single-level rendering when enableLod=false
   if (!enableLod) {
     return (
-      // CRITICAL: GLB geometry is in absolute world coordinates from Rhino.
-      // Backend geometry_processing.py exports meshes in world-space (NOT centered at origin).
-      // Therefore, NO position offset needed - applying position would double-translate.
+      // OBJ geometry contains ABSOLUTE RHINO COORDINATES in Z-up coordinate system.
+      // Apply Z→Y rotation (Rhino → Three.js) and render at absolute building locations.
       // userData stores partId for camera focus functionality ('F' key)
       <group 
         name={`part-${part.iso_code}`}
+        position={[0, 0, 0]}
+        rotation={[-Math.PI / 2, 0, 0]} // Rotate -90° on X axis: Z-up → Y-up
         userData={{ partId: part.id }}
       >
         <primitive
@@ -284,12 +285,14 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
   // Level 3 (>50m): bbox (12 tris, wireframe proxy for distant view)
   
   return (
-    // CRITICAL: GLB geometry is in absolute world coordinates from Rhino.
-    // Backend geometry_processing.py exports meshes in world-space (NOT centered at origin).
-    // Therefore, NO position offset needed - applying position would double-translate.
+    // OBJ geometry contains ABSOLUTE RHINO COORDINATES in Z-up coordinate system.
+    // Apply Z→Y rotation (Rhino → Three.js) and render at absolute building locations.
+    // Custom LOD system: useLOD calculates distance from camera to bbox center.
     // userData stores partId for camera focus functionality ('F' key)
     <group 
       name={`part-${part.iso_code}`}
+      position={[0, 0, 0]}
+      rotation={[-Math.PI / 2, 0, 0]} // Rotate -90° on X axis: Z-up → Y-up
       userData={{ partId: part.id }}
     >
       {/* Tooltip on hover or selection (shared across all LOD levels) */}
@@ -303,45 +306,45 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
         </Html>
       )}
 
-      <Detailed distances={[0, 5, 20, 50]}>
-        {/* Level 0: High-poly geometry (0-5m) - CLOSEST (maximum detail) */}
-        <group name="lod-0-high-poly">
-          <primitive
-            name={`part-${part.iso_code}-high`}
-            object={highPolyClone}
-            onClick={handleClick}
-            onPointerOver={() => setHovered(true)}
-            onPointerOut={() => setHovered(false)}
-            castShadow
-            receiveShadow
-          />
-        </group>
+      {/* LOD Level 0: High-poly geometry (0-5m) */}
+      {lodLevel === 0 && (
+        <primitive
+          name={`part-${part.iso_code}-high`}
+          object={highPolyClone}
+          onClick={handleClick}
+          onPointerOver={() => setHovered(true)}
+          onPointerOut={() => setHovered(false)}
+          castShadow
+          receiveShadow
+        />
+      )}
 
-        {/* Level 1: Mid-poly geometry (5-20m) - NORMAL WORKING DISTANCE */}
-        <group name="lod-1-mid-poly">
-          <primitive
-            name={`part-${part.iso_code}-mid`}
-            object={midPolyClone}
-            onClick={handleClick}
-            onPointerOver={() => setHovered(true)}
-            onPointerOut={() => setHovered(false)}
-            castShadow
-            receiveShadow
-          />
-        </group>
+      {/* LOD Level 1: Mid-poly geometry (5-20m) */}
+      {lodLevel === 1 && (
+        <primitive
+          name={`part-${part.iso_code}-mid`}
+          object={midPolyClone}
+          onClick={handleClick}
+          onPointerOver={() => setHovered(true)}
+          onPointerOut={() => setHovered(false)}
+          castShadow
+          receiveShadow
+        />
+      )}
 
-        {/* Level 2: Low-poly geometry (20-50m) - OVERVIEW */}
-        <group name="lod-2-low-poly">
-          <primitive
-            name={`part-${part.iso_code}-low`}
-            object={lowPolyClone}
-            onClick={handleClick}
-            onPointerOver={() => setHovered(true)}
-            onPointerOut={() => setHovered(false)}
-          />
-        </group>
+      {/* LOD Level 2: Low-poly geometry (20-50m) */}
+      {lodLevel === 2 && (
+        <primitive
+          name={`part-${part.iso_code}-low`}
+          object={lowPolyClone}
+          onClick={handleClick}
+          onPointerOver={() => setHovered(true)}
+          onPointerOut={() => setHovered(false)}
+        />
+      )}
 
-        {/* Level 3: BBox proxy (>50m) - FURTHEST (shown when far away) */}
+      {/* LOD Level 3: BBox proxy (>50m) - Wireframe for distant view */}
+      {lodLevel === 3 && (
         <group
           name="lod-3-bbox"
           onClick={handleClick}
@@ -360,7 +363,7 @@ export function ElementMesh({ part, enableLod = true }: ElementMeshProps) {
             <primitive object={lowPolyClone} />
           )}
         </group>
-      </Detailed>
+      )}
     </group>
   );
 }

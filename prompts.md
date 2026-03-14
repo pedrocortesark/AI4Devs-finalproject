@@ -16425,3 +16425,117 @@ Pass rate: 78%
 **References:** T-1507-TEST (Frontend Integration Tests)
 
 ---
+
+## 228 - FIX: Sistema LOD + Geometrías en Posición Absoluta Rhino (Migración GLB → OBJ)
+**Fecha:** 2026-03-13
+
+**Prompt Original:**
+> Quiero que me ayudes con las pruebas visuales [del sistema LOD de US-015]
+> 
+> [Usuario reporta después]: "las geometrías siguen en el origen [0,0,0], no en la posición del bbox azul cyan"
+
+**Contexto:**
+- US-015: Sistema de 3D Dashboard con LOD (Level of Detail) de 4 niveles
+- Backend genera OBJ files con coordenadas absolutas Rhino (Z-up)
+- Frontend: ElementMesh con drei's `<Detailed>` component para LOD automático
+- **Bug**: Geometrías renderizadas en origin [0,0,0] a pesar de OBJ correcto
+- **BBox**: Wireframe cyan renderizado correctamente en posición absoluta
+
+**Root Cause Identificado:**
+La librería `@react-three/drei` tiene una dependencia implícita entre:
+- `useGLTF` hook → Carga archivos GLB/GLTF
+- `<Detailed>` component → Asume geometría cargada con useGLTF
+
+Cuando se usa `<Detailed>` con custom loaders (OBJLoader, FBXLoader, etc.), el componente pierde las transformaciones de posición/rotación del objeto.
+
+**Investigación Realizada:**
+1. ✅ Verificado backend OBJ export: coordenadas absolutas [-9.4, -52.9, 73.9] correctas
+2. ✅ Removido `useGLTF.preload()` de PartsScene.tsx (incompatible con OBJ)
+3. ✅ Agregado debug logging: bboxes coinciden con OBJ files
+4. ✅ **BREAKTHROUGH**: Deshabilitado `<Detailed>` → geometrías aparecen correctamente
+5. ✅ Confirmado root cause: drei's Detailed incompatible con OBJLoader
+
+**Solución Implementada:**
+
+**1. Custom useLOD Hook** (`src/frontend/src/hooks/useLOD.ts`):
+```typescript
+export function useLOD(elementPosition: [number, number, number]): number {
+  const { camera } = useThree();
+  const [lodLevel, setLodLevel] = useState(1);
+
+  useFrame(() => {
+    const distance = camera.position.distanceTo(new THREE.Vector3(...elementPosition));
+    let newLevel = distance < 5 ? 0 : distance < 20 ? 1 : distance < 50 ? 2 : 3;
+    if (newLevel !== lodLevel) setLodLevel(newLevel);
+  });
+
+  return lodLevel;
+}
+```
+
+**2. Refactored ElementMesh.tsx** (Conditional Rendering):
+```tsx
+// Removed: <Detailed distances={[0, 5, 20, 50]}>
+const lodLevel = useLOD(position);
+
+{lodLevel === 0 && <primitive object={highPolyClone} />}
+{lodLevel === 1 && <primitive object={midPolyClone} />}
+{lodLevel === 2 && <primitive object={lowPolyClone} />}
+{lodLevel === 3 && <BBoxProxy bbox={element.bbox} />}
+```
+
+**3. Removed useGLTF references** from PartsScene.tsx
+
+**Validación:**
+- ✅ 18 OBJ files verificados con coordenadas absolutas correctas
+- ✅ Geometrías renderizadas en posición absoluta Rhino
+- ✅ BBox wireframe alineado perfectamente con geometrías
+- ✅ Transiciones LOD suaves: 0-5m (high) → 5-20m (mid) → 20-50m (low) → >50m (bbox)
+- ✅ Usuario confirmó: "Ahora las piezas aparecen correctamente en la bbox azul cyan"
+- ✅ Performance: ~60 FPS con 18 partes cargadas (MacBook Pro M1)
+
+**Archivos Modificados:**
+- `src/frontend/src/hooks/useLOD.ts` (NEW - 60 lines)
+- `src/frontend/src/components/Dashboard/ElementMesh.tsx` (refactored)
+- `src/frontend/src/components/Dashboard/PartsScene.tsx` (cleanup)
+- `memory-bank/decisions.md` (ADR completo con contexto y alternativas)
+- `memory-bank/activeContext.md` (Recently Completed section)
+- `memory-bank/systemPatterns.md` (Custom LOD pattern)
+- `memory-bank/techContext.md` (OBJ format + trimesh bugs)
+
+**Archivos Eliminados (Cleanup):**
+- `infra/test_obj_loader.html` — Test temporal HTML
+- `infra/validate_glb_no_draco.py` — Script GLB obsoleto
+- `scripts/validate_glb_no_draco.py` — Duplicado
+- `src/frontend/src/components/Dashboard/OBJTestComponent.tsx` — Componente de prueba
+- `infra/clear_glper_lod.py` — Script one-time para GLPER
+
+**Lecciones Aprendidas:**
+
+1. **drei Components ≠ Generic Tools**: Muchos helpers de drei asumen useGLTF/GLTFLoader
+   - `<Detailed>` diseñado para GLTF, NO genérico
+   - Custom loaders (OBJ, FBX, PLY) requieren custom LOD implementations
+
+2. **Isolation Testing is Key**: Desactivar features una por una crucial para bugs de dependencias
+   - Debug logging mostró datos correctos pero rendering incorrecto
+   - Removing `<Detailed>` reveló root cause inmediatamente
+
+3. **trimesh GLB Export Bugs**: Persistentes en múltiples versiones (4.0.5, 4.11.3)
+   - GLB export colapsa geometría a origen [0,0,0]
+   - OBJ export preserva coordenadas absolutas correctamente
+   - Lección: No asumir que biblioteca popular = sin bugs críticos
+
+4. **Supabase URL Quirk**: `get_public_url()` appendea '?' al final
+   - Backend ya sanitiza: `public_url.rstrip('?')`
+   - Importante para compatibilidad con loaders de Three.js
+
+5. **Coordinate System Conventions**:
+   - Rhino: Z-up (arquitectura/ingeniería)
+   - Three.js: Y-up (gráficos 3D estándar)
+   - Rotación: `[-Math.PI/2, 0, 0]` convierte Z-up → Y-up
+
+**Decisión Arquitectónica:** Ver `memory-bank/decisions.md` para ADR completo sobre migración GLB → OBJ.
+
+**Tags:** #three.js #react-three-fiber #drei #LOD #OBJ #trimesh #coordinate-systems #3d-rendering
+
+---

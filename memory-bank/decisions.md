@@ -466,3 +466,90 @@ Este archivo documenta todas las decisiones importantes tomadas durante el desar
   - ⚠️ **Pendiente:** Rotar password Supabase y service role key (expuestos en git history)
 
 ---
+
+## 2026-03-13 - Cambio de Formato GLB a OBJ + Sistema LOD Personalizado
+
+- **Contexto:** Durante pruebas visuales de US-015 (3D LOD System), las geometrías aparecían en el origen [0,0,0] en lugar de sus coordenadas absolutas Rhino Z-up `[-9.4, -52.9, 73.9]`. Investigación reveló DOS problemas independientes: (1) trimesh GLB export (v4.0.5, v4.11.3) colapsa vertices durante export, (2) Componente `<Detailed>` de `@react-three/drei` asume `useGLTF` y no funciona correctamente con `useLoader(OBJLoader, url)`.
+
+- **Decisión #1:** **Cambiar formato de geometría procesada de GLB a OBJ** en backend (`geometry_processing.py`). OBJ es formato text-based más simple, mejor soportado por trimesh, y preserva coordenadas absolutas sin centering. Código modificado para exportar OBJ con Rhino Z-up absoluto. Frontend aplica rotación Z→Y mediante `rotation={[-Math.PI/2, 0, 0]}` en group prop de Three.js. Añadido sanitization de URLs: `public_url.rstrip('?')` para bug de Supabase `get_public_url()`.
+
+- **Decisión #2:** **Reemplazar `<Detailed>` con custom `useLOD` hook** en frontend. Hook calcula distancia camera-elemento cada frame con `useFrame()`, retorna nivel LOD (0-3) basado en thresholds [5, 20, 50] metros. ElementMesh usa conditional rendering: `{lodLevel === 0 && <primitive object={highPoly} />}`, etc. Removido `useGLTF.preload()` de PartsScene (incompatible con OBJ URLs).
+
+- **Decisión #3:** **Sanitizar URLs de Supabase en backend** añadiendo `.rstrip('?')` tras `get_public_url()`. Bug de libreria `storage-py` apenda trailing '?' que rompe compatibilidad con algunos loaders de Three.js.
+
+- **Alternativas Descartadas:**
+  - **Actualizar trimesh a v5.x:** No resuelve GLB export bug, requiere numpy 2.x (breaking changes masivos)
+  - **Crear adapter para drei's Detailed:** Demasiado complejo, dependencia interna no documentada con useGLTF
+  - **Centrar geometría en backend y ajustar frontend:** Rompe semántica de coordenadas absolutas, dificulta debugging
+
+- **Implementación:**
+
+Backend (`src/agent/tasks/geometry_processing.py`):
+```python
+def _export_and_upload_obj(mesh, block_id, lod_level='low'):
+    # Export OBJ with ABSOLUTE RHINO COORDINATES (Z-up)
+    temp_obj_path = f"/tmp/{block_id}_{lod_level}.obj"
+    mesh.export(temp_obj_path, file_type='obj')
+    
+    # Upload to Supabase Storage
+    with open(temp_obj_path, 'rb') as f:
+        obj_key = f"lod/{block_id}/{lod_level}.obj"
+        supabase.storage.from_("raw-uploads").upload(obj_key, f, ...)
+    
+    # BUG FIX: Remove trailing '?' from Supabase URL
+    public_url = supabase.storage.get_public_url(obj_key)
+    public_url = public_url.rstrip('?')
+    
+    return public_url, file_size_kb
+```
+
+Frontend (`src/frontend/src/hooks/useLOD.ts`):
+```typescript
+export function useLOD(elementPosition: [number, number, number]): number {
+  const { camera } = useThree();
+  const [lodLevel, setLodLevel] = useState(1);
+
+  useFrame(() => {
+    const distance = camera.position.distanceTo(new THREE.Vector3(...elementPosition));
+    let newLevel = distance < 5 ? 0 : distance < 20 ? 1 : distance < 50 ? 2 : 3;
+    if (newLevel !== lodLevel) setLodLevel(newLevel);
+  });
+
+  return lodLevel;
+}
+```
+
+Frontend (`src/frontend/src/components/Dashboard/ElementMesh.tsx`):
+```tsx
+const lodLevel = useLOD(position);
+
+return (
+  <group position={position} rotation={[-Math.PI/2, 0, 0]}>
+    {lodLevel === 0 && highPoly && <primitive object={highPoly.clone()} />}
+    {lodLevel === 1 && midPoly && <primitive object={midPoly.clone()} />}
+    {lodLevel === 2 && lowPoly && <primitive object={lowPoly.clone()} />}
+    {lodLevel === 3 && <BBoxProxy bbox={element.bbox} />}
+  </group>
+);
+```
+
+- **Validación del Fix:**
+  - 18 archivos OBJ (6 GLPER × 3 LODs) generados correctamente con coordenadas absolutas
+  - URLs limpias sin trailing '?' confirmadas en base de datos
+  - Geometrías renderizadas correctamente alineadas con bbox wireframe cyan
+  - Transiciones LOD suaves: 0-5m (high) → 5-20m (mid) → 20-50m (low) → >50m (bbox)
+  - Performance: ~60 FPS con 18 partes cargadas (MacBook Pro M1)
+  - Usuario confirmó: "Ahora las piezas aparecen correctamente en la bbox azul cyan"
+
+- **Archivos Modificados:**
+  - `src/agent/tasks/geometry_processing.py` — Renamed `_export_and_upload_glb()` → `_export_and_upload_obj()`, added URL cleanup
+  - `src/frontend/src/hooks/useLOD.ts` — NEW (60 lines): Custom LOD hook replacing drei's `<Detailed>`
+  - `src/frontend/src/components/Dashboard/ElementMesh.tsx` — Conditional rendering by LOD level, removed `<Detailed>`
+  - `src/frontend/src/components/Dashboard/PartsScene.tsx` — Removed `useGLTF.preload()` calls
+
+- **Notas de Mantenimiento:**
+  - Backend worker debe reiniciarse tras cambio de export format: `docker compose build agent-worker && docker compose up -d agent-worker`
+  - Elements ya procesados antes del fix requieren reprocessing para regenerar OBJ files
+  - Frontend requiere hard refresh (Cmd+Shift+R) para limpiar cache de GLTFLoader
+
+---

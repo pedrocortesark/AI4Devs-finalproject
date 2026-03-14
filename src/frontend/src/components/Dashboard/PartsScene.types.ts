@@ -29,12 +29,15 @@ export interface PartsSceneProps {
  * Renders single element with useGLTF, status color, tooltip
  * US-015: Renamed from PartMeshProps to ElementMeshProps
  * 
- * IMPORTANT: GLB geometry is in absolute world coordinates from Rhino.
- * No position prop needed - geometry_processing.py exports in world-space.
+ * UPDATED: GLB geometry is now centered at origin [0,0,0].
+ * Frontend applies position offset via group position prop for LOD system compatibility.
  */
 export interface ElementMeshProps {
   /** Part data including low_poly_url, status, iso_code */
   part: PartCanvasItem;
+  
+  /** 3D position in scene [x, y, z] - calculated from bbox center with Z-up → Y-up rotation */
+  position: [number, number, number];
   
   /** T-0507: Enable LOD system (default: true). Set false for backward compat with T-0505 tests */
   enableLod?: boolean;
