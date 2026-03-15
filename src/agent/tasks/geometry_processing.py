@@ -14,10 +14,10 @@ from contextlib import contextmanager
 import structlog
 import requests
 
-# Conditional imports: direct for Celery worker, src.agent.* for tests
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
 try:
-    from celery_app import celery_app
-    from constants import (
+    from src.agent.celery_app import celery_app
+    from src.agent.constants import (
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
         LOD_DECIMATION_TARGETS,
@@ -41,8 +41,8 @@ try:
         MATERIAL_USERSTRING_KEY,
     )
 except ImportError:
-    from src.agent.celery_app import celery_app
-    from src.agent.constants import (
+    from celery_app import celery_app
+    from constants import (
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
         LOD_DECIMATION_TARGETS,

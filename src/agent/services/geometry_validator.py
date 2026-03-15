@@ -19,9 +19,9 @@ try:
 except ImportError:
     rhino3dm = None  # For test environment without rhino3dm installed
 
-# Conditional imports: direct for Celery worker, src.agent.* for tests
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
 try:
-    from constants import (
+    from src.agent.constants import (
         GEOMETRY_CATEGORY_NAME,
         MIN_VALID_VOLUME,
         GEOMETRY_ERROR_INVALID,
@@ -30,7 +30,7 @@ try:
         GEOMETRY_ERROR_ZERO_VOLUME,
     )
 except ImportError:
-    from src.agent.constants import (
+    from constants import (
         GEOMETRY_CATEGORY_NAME,
         MIN_VALID_VOLUME,
         GEOMETRY_ERROR_INVALID,

@@ -10,13 +10,13 @@ import re
 import structlog
 from typing import List
 
-# Conditional imports: direct for Celery worker, src.agent.* for tests
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
 try:
-    from constants import ISO_19650_LAYER_NAME_PATTERN, ISO_19650_PATTERN_DESCRIPTION
-    from models import LayerInfo
-except ImportError:
     from src.agent.constants import ISO_19650_LAYER_NAME_PATTERN, ISO_19650_PATTERN_DESCRIPTION
     from src.agent.models import LayerInfo
+except ImportError:
+    from constants import ISO_19650_LAYER_NAME_PATTERN, ISO_19650_PATTERN_DESCRIPTION
+    from models import LayerInfo
 
 # Import backend schema for validation errors
 try:

@@ -5,10 +5,10 @@ This module contains all async tasks executed by the Celery worker,
 including health checks and file validation workflows.
 """
 
-# Conditional imports: direct for Celery worker, src.agent.* for tests
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
 try:
-    from celery_app import celery_app
-    from constants import (
+    from src.agent.celery_app import celery_app
+    from src.agent.constants import (
         TASK_HEALTH_CHECK,
         TASK_VALIDATE_FILE,
         TASK_REGISTER_3DM_BLOCKS,
@@ -17,8 +17,8 @@ try:
         TASK_RETRY_DELAY_SECONDS,
     )
 except ImportError:
-    from src.agent.celery_app import celery_app
-    from src.agent.constants import (
+    from celery_app import celery_app
+    from constants import (
         TASK_HEALTH_CHECK,
         TASK_VALIDATE_FILE,
         TASK_REGISTER_3DM_BLOCKS,
