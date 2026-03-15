@@ -1,14 +1,73 @@
 # Active Context
 
 ## Current Sprint
-Sprint 7 — US-015 Element Model Refactoring (2026-03-09 STARTED)
+**Sprint 8 — PRODUCTION DEPLOYMENT CONSOLIDATION (2026-03-15 STARTED)**  
+**Strategy:** Deployment First, Features Later — Consolidate MVP (45.8%, 5 US complete) to production BEFORE resuming feature development.
 
 ## Active Ticket
-NONE — Visual Testing Complete / Preparing US-016
+**NEXT: Production Deployment - Day 1 Railway Setup (Monday 16/03)** — Create Railway project, add Redis plugin, deploy Backend + Agent Worker services. Validate `/health` and `/ready` endpoints return 200 OK. Reference: [docs/DEPLOYMENT-READINESS-CHECKLIST.md](../docs/DEPLOYMENT-READINESS-CHECKLIST.md)
+
+## Sprint 8 Backlog — DEPLOYMENT TIMELINE (1 Week)
+
+**Objective:** Deploy MVP to production (Railway + Vercel + Supabase) — 5 US live: US-001 Upload, US-002 Validation, US-005 Dashboard, US-010 Visor 3D, US-015 Element Model (81 SP complete)
+
+| Day | Phase | Tasks | DoD |
+|-----|-------|-------|-----|
+| **Mon 16/03** | Railway Setup | Create project, add Redis plugin, deploy Backend + Agent Worker | Backend `/health` OK, Celery worker logs "ready" |
+| **Tue 17/03** | Railway Validation | Upload .3dm via Postman, verify Celery tasks execute, check logs | Full pipeline works: upload → validation → LOD generation |
+| **Wed 18/03** | Vercel Deployment | Deploy frontend to Vercel, add ENV variables, update CORS | Frontend loads, API calls work, NO CORS errors |
+| **Thu 19/03** | E2E Validation | Upload 5 test files via frontend, verify Dashboard 3D, check Storage | Full user flow works end-to-end |
+| **Fri 20/03** | Documentation & Demo | Update README, create screenshots, record 5-min demo video | Demo ready for TFM evaluation |
+
+**Acceptance Criteria:**
+- ✅ Backend health checks green (Railway)
+- ✅ Frontend loads production URL (Vercel)
+- ✅ Full upload flow works (browser test)
+- ✅ 419+ tests passing (zero regressions)
+- ✅ Dashboard 3D displays parts correctly
+- ✅ Supabase Storage has .glb files
+
+---
+
+## US-018 LangGraph Agent (21 SP) — ⏸️ PAUSED UNTIL DEPLOYMENT COMPLETE
+
+**Prioridad: P0 MUST-HAVE** (core diferenciador TFM — deferred to Sprint 9 after production deployment)
+
+| Ticket | Title | SP | Status | Notes |
+|--------|-------|---:|--------|-------|
+| **T-1801-AGENT** | StateGraph Setup (8 nodos + ValidationState) | 5 | ⏸️ DEFERRED | Resume after deployment |
+| **T-1802-AGENT** | LLM Classification GPT-4 + Circuit Breaker | 5 | ⏸️ DEFERRED | Requires OpenAI API key setup |
+| **T-1803-AGENT** | Refactor Validators as LangGraph Nodes | 3 | ⏸️ DEFERRED | — |
+| **T-1804-AGENT** | Report Generator Node (Jinja2) | 2 | ⏸️ DEFERRED | — |
+| **T-1805-AGENT** | Audit Trail per Node Transition | 3 | ⏸️ DEFERRED | — |
+| **T-1806-TEST** | E2E Integration Test (6 .3dm files) | 3 | ⏸️ DEFERRED | — |
+
+**Reactivation:** Sprint 9 (start 2026-03-23) after MVP deployed to production
 
 ---
 
 ## Recently Completed
+
+- **US-015: Element Model Refactoring (Epic)** —  ✅ COMPLETE (2026-03-15 14:30) | **21/21 SP DONE, All tickets completed** | Parts → Elements refactoring across full stack
+  - **Context:** End-to-end refactoring from "Part" to "Element" model with English nomenclature, 62 real materials (Montjuïc/Ulldecona/Floresta), mandatory fields (low_poly_url + bbox), Zod validation, workshops table removed.
+  - **Tickets Completed:**
+    - T-1501-DB: Element model database schema migration (3 SP) ✅
+    - T-1502-INFRA: Storage path conventions (3 SP) ✅
+    - T-1503-AGENT: Material extraction with real dictionary (5 SP) ✅
+    - T-1504-AGENT: Material dictionary enhancement RGB (4 SP) ✅
+    - T-1504-BACK: Element API Integration (4 SP) ✅
+    - T-1505-FRONT: Frontend Element integration Zod (3 SP) ✅
+    - T-1507-TEST: E2E Integration Test (3 SP) ✅
+  - **Deliverables:**
+    - Database: `material_type` TEXT (62 values), `workshop_id/workshop_name` dropped, `bbox` CHECK constraint
+    - Agent: MATERIAL_COLORS dict (62 entries + RGB), `_extract_material_type()` object-level only
+    - Backend: Element schemas (Pydantic), /api/elements endpoints, material validation
+    - Frontend: Zod schemas, element services, Zustand store, 38/38 tests PASS
+    - Tests: E2E integration tests backend 11/14, frontend 443/459 PASS (96.5% vs 81.8% baseline +14.7%)
+  - **Tests Obsoletos Eliminados:** parts_service.py, part_detail_service.py, navigation_service.py, cdn_config.py (incompatibles con Element model)
+  - **Documentation:** docs/09-mvp-backlog.md updated (US-015 → DONE), docs/US-015/ (technical specs + audits), prompts.md #232
+  - **Zero Regression:** Backend baseline maintained, frontend improved +72 PASS / -58 FAIL vs baseline
+  - **Production-Ready:** Element model fully functional, contract-first validation enforced, Clean Architecture maintained
 
 - **FIX CRÍTICO: Sistema LOD + Migración Formato OBJ** —  ✅ RESOLVED (2026-03-13 15:30) | **Custom useLOD Hook Replacing drei's Detailed** | Formato OBJ con coordenadas absolutas
   - **Context:** Durante pruebas visuales de US-015, geometrías aparecían en origen [0,0,0] en lugar de coordenadas reales `[-9.4, -52.9, 73.9]`. Root cause: (1) trimesh GLB export bug (v4.0.5, v4.11.3) colapsaba geometría al exportar, (2) drei's `<Detailed>` incompatible con OBJLoader (diseñado para useGLTF/GLTF format).

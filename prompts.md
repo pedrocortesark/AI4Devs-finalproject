@@ -16725,3 +16725,62 @@ const lodLevel = useLOD(position);
 3. UI Enhancement: Añadir botón "Retry" para bloques en `error_processing` (post-MVP)
 
 ---
+
+## [232] - Cierre US-015 Element Model Refactoring + Creacion US-018 LangGraph Agent
+**Fecha:** 2026-03-15 14:30
+**Prompt Original:**
+> En primer lugar quiero cerrar la US-015, para despues crear la US-XXX detallada (continua la serie)
+
+**Resumen de la Respuesta/Accion:**
+**1. Cierre US-015 Element Model Refactoring:**
+- Todos los tickets tecnicos completados (T-1501 a T-1507): 21/21 SP DONE
+- Tests obsoletos eliminados (parts_service, part_detail_service, navigation_service, cdn_config)
+- Refactoring parts a elements completado en toda la stack (DB + Agent + Backend + Frontend)
+- Marcado US-015 como DONE en docs/09-mvp-backlog.md
+- US-015 entrega: Element model con 62 materiales reales (Montjuic/Ulldecona/Floresta), Zod validation, material colors RGB, E2E tests
+
+**2. Creacion US-016 LangGraph Agent The Librarian:**
+- User Story creada continuando serie numerica (US-016)
+- Scope: StateGraph 8 estados + GPT-4 classification + Circuit Breaker + Retry Logic avanzado
+- Valoracion: 21 Story Points (6 tickets tecnicos)
+- Prioridad: P0 MUST-HAVE (core diferenciador TFM, componente tecnico avanzado esperado)
+- Tickets creados: T-1601 a T-1606 (StateGraph Setup, LLM Node, Refactor Validators, Report Generator, Audit Trail, E2E Tests)
+
+**3. Documentacion actualizada:**
+- docs/09-mvp-backlog.md: US-015 a DONE, US-016 añadido con especificacion completa
+- docs/MVP-AUDIT-CORRECTED-2026-03-15.md: Audit corregido con US-016 P0 + US-013 Auth a P3
+- Prompt 232 registrado en prompts.md
+
+**Rationale US-016 Prioridad P0:**
+- LangGraph Agent diseñado en docs/07-agent-design.md (~600 lineas) pero NUNCA implementado
+- US-002 actual solo tiene Celery workers simples (NO LangGraph, NO LLM, NO Circuit Breaker avanzado)
+- Componente tecnico avanzado (AI/ML aplicado) es diferenciador clave para TFM academico vs CRUD generico
+
+**Next Actions:**
+1. PoC Spike LangGraph (1 dia) - Validar StateGraph basico antes de planificar sprint
+2. Setup OpenAI API - Config ENV + budget alerts 50 USD max
+3. Planificar US-016 Sprint (2.5-3 semanas, semanas 2-4 del roadmap)
+4. Actualizar memory-bank/activeContext.md con US-016 como Active Ticket
+
+---
+
+## [233] - Planning de 2 Semanas (Sprint 8 + Sprint 9)
+**Fecha:** 2026-03-15 14:30
+**Prompt Original:**
+> estupendo.. ahora hazme un planning de 2 semanas con lo que tienes
+
+**Contexto Usuario:**
+> "Vamos primero con la correccion del Us 016.... por lo demas, lo veo un poco justo para tener todo en produccion corriendo."
+
+**Resumen de la Respuesta/Acción:**
+(1) Correccion US-016 duplicate → US-018 DONE (15 cambios: backlog + memory-bank + prompts #232). (2) Planning 2 semanas REALISTA creado en docs/PLANNING-2-SEMANAS-REALISTA.md: Opcion A Optimista (18.5 SP, 56.2% MVP) vs Opcion B Conservadora RECOMENDADA (15 SP, 54.2% MVP) - foco en core LangGraph funcional, defer T-1805 Audit Trail + T-1806 E2E completos a Sprint 10. Usuario tenia razon: timeline original demasiado ambicioso (21 SP en 14 dias con learning curve LangGraph 60% prob delays). Plan ajustado con checkpoints mid-week, contingencias documentadas, roadmap post-2-weeks incluido.
+---
+
+## [234] - CAMBIO ESTRATÉGICO: Deployment First (Consolidación MVP Before Feature Development)
+**Fecha:** 2026-03-15 15:00
+**Prompt Original:**
+> Mira, como hay que tener todo en produccion, prefiero mejor tener una version inicial completamente funcional antes de realizar mas modificaciones
+
+**Resumen de la Respuesta/Acción:**
+Usuario decide PAUSAR desarrollo de nuevas features (US-018 LangGraph, US-007, US-009) y priorizar DEPLOYMENT de MVP actual (45.8%, 81/177 SP, 5 US completas: US-001 Upload, US-002 Validation, US-005 Dashboard, US-010 Visor 3D, US-015 Element Model). Estrategia: Consolidar version funcional en produccion (Railway + Vercel + Supabase ya configurado), validar zero bugs, luego continuar desarrollo. Crear checklist de Production Readiness + plan de deployment 1 semana (vs 2 semanas desarrollo features).
+---

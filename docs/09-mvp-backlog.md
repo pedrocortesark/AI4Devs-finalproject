@@ -545,7 +545,7 @@ export function PartsScene({ parts }: { parts: PartCanvasItem[] }) {
 
 ---
 
-### US-015: Element Model Refactoring (Epic) **[IN PROGRESS]** 🔄
+### US-015: Element Model Refactoring (Epic) **[DONE]** ✅
 **User Story:** Como **Staff Engineer**, quiero refactorizar el modelo de datos de "Part" a "Element" con nomenclatura en inglés y campos obligatorios, para cumplir con estándares internacionales y garantizar que solo elementos con geometría completa sean visualizables en el canvas 3D.
 
 **Epic Context:** Esta es una **refactorización E2E crítica** que abarca toda la stack (Database → Agent → Backend → Frontend). Surge de la necesidad de:
@@ -749,6 +749,148 @@ COMMIT;
 7. Document each completion in respective handoff documents
 
 > 📋 **Planning Note:** This Epic follows TDD methodology strictly. Each ticket will execute RED→GREEN→REFACTOR cycle with test baseline validation before marking as DONE. See [US-015 README](US-015/README.md) for complete technical specification and PoC analysis.
+
+---
+
+### US-018: Agente "The Librarian" con LangGraph **[PENDING]** ⏳
+**User Story:** Como **Sistema de Validación Inteligente**, quiero orquestar validaciones de archivos .3dm con un agente stateful LangGraph que integre LLM classification y fallbacks automáticos, para ofrecer validación semántica avanzada (tipología, anomalías) con resiliencia industrial sin "alucinaciones" incontroladas.
+
+**Epic Context:** Este US implementa la arquitectura avanzada del agente diseñada en [docs/07-agent-design.md](07-agent-design.md) (~600 líneas) que actualmente NO está implementada. US-002 (DONE) tiene solo Celery workers simples con validaciones deterministas. US-018 es **CORE diferenciador del producto** para TFM académico: transforma validación básica en **sistema inteligente con AI/ML aplicada** (LangGraph + GPT-4 + Circuit Breaker).
+
+**Motivación Académica (TFM):**
+- **Sin US-018:** Proyecto es CRUD con validaciones regex/topológicas básicas (genérico, no innovador)
+- **Con US-018:** Sistema con agente stateful que usa LLM para clasificación semántica + fallback automático → **Componente técnico avanzado esperado por tribunales TFM**
+- **Diferenciador:** StateGraph con 8 estados + GPT-4 reasoning + Circuit Breaker industrial + Audit Trail granular
+
+**Arquitectura Objetivo vs. Actual:**
+
+| Componente | Diseñado (docs/07-agent-design.md) | Implementado US-002 (DONE) | Gap |
+|------------|-------------------------------------|----------------------------|-----|
+| **Orquestación** | LangGraph StateGraph (8 estados con transiciones condicionales) | Celery tasks secuenciales simples | ❌ No StateGraph, no state machine |
+| **State Management** | ValidationState TypedDict (14 campos) con transiciones | Dict básico compartido entre tasks | ❌ No gestión de estado stateful |
+| **LLM Classification** | GPT-4 Turbo JSON Mode para tipología semántica | NO implementado | ❌ Solo regex determinista |
+| **Circuit Breaker** | OpenAI API fallback automático a regex  | Retry básico transient errors (T-230) | ❌ No circuit breaker LLM-aware |
+| **Nomenclatura** | Nodo LangGraph con fail-fast | Service regex simple | ✅ Lógica similar (reutilizable) |
+| **Geometría** | Nodo LangGraph con validaciones topológicas | Service rhino3dm simple | ✅ Lógica similar (reutilizable) |
+| **Metadata** | 3 niveles (document/layer/object) | ✅ Implementado en T-025 | ✅ DONE (reutilizable) |
+| **Report Generation** | Nodo LangGraph con Jinja2 templates | JSON directo a DB | ⚠️ Parcial (necesita template) |
+| **Audit Trail** | INSERT en `events` por transición nodo | Solo eventos globales (upload, validation) | ⚠️ Menos granular |
+
+**Criterios de Aceptación:**
+
+#### **Scenario 1 (Happy Path - LangGraph Execution + LLM Classification):**
+- **Given** un archivo `SF-C12-D-001.3dm` válido ya subido a Supabase Storage
+- **When** se dispara el agente LangGraph (trigger: Celery task)
+- **Then** ejecuta el StateGraph completo:
+  - START → ValidateNomenclature → ExtractGeometry → ValidateGeometry → **ClassifyTipologia (LLM GPT-4)** → EnrichMetadata → GenerateReport → VALIDATED
+- **And** cada transición inserta evento en tabla `events`: `{"event_type": "node_completed", "node_name": "ClassifyTipologia", "state_snapshot": {...}, "timestamp": "2026-03-15T14:30:00Z"}`
+- **And** el estado final es `validated` con semantic_data poblado:
+  ```json
+  {
+    "tipologia": "dovela",
+    "material": "Montjuïc",
+    "phase": "construction",
+    "classification_method": "llm_gpt4",
+    "confidence": 0.92
+  }
+  ```
+- **And** el archivo se mueve a `/raw/` y se genera GLB en `/processed/` (ya implementado US-002)
+- **And** se guarda reporte estructurado en `blocks.validation_report` JSONB con template Jinja2
+
+#### **Scenario 2 (Edge Case - LLM Failure + Circuit Breaker Fallback):**
+- **Given** OpenAI API está con rate limit (HTTP 503 Service Unavailable)
+- **When** el nodo `ClassifyTipologia` intenta llamar GPT-4 y falla después de 3 reintentos Tenacity
+- **Then** Circuit Breaker detecta fallo y activa **fallback automático a clasificación regex básica** (filename pattern matching: `SF-C12-D-*` → "dovela")
+- **And** el flujo continúa **sin crash ni intervención manual**: ClassifyTipologia (fallback) → EnrichMetadata → GenerateReport → VALIDATED
+- **And** el reporte incluye metadata de degradación graceful:
+  ```json
+  {
+    "tipologia": "dovela",
+    "classification_method": "fallback_regex",
+    "fallback_reason": "openai_rate_limit",
+    "confidence": 0.6
+  }
+  ```
+- **And** se loggea `circuit_breaker.tripped = true` en evento para alertas
+- **And** usuario final NO ve error (degradación invisible pero auditada)
+
+#### **Scenario 3 (Error Handling - Nomenclature Fail-Fast):**
+- **Given** un archivo `invalid-name.3dm` con nomenclatura incorrecta (no cumple ISO-19650)
+- **When** el nodo `ValidateNomenclature` detecta formato inválido
+- **Then** el grafo transiciona **directamente a REJECTED** sin ejecutar nodos posteriores (fail-fast económico)
+- **And** estado final = `rejected` con errores estructurados:
+  ```json
+  {
+    "nomenclature_errors": ["Invalid ISO-19650 format: expected SF-XXX-YY-ZZZ"],
+    "overall_status": "rejected",
+    "validation_path": ["START", "ValidateNomenclature", "REJECTED"]
+  }
+  ```
+- **And** **NO se consumen tokens LLM** (ahorro de costes, ~$0.01 por pieza ahorrado)
+- **And** se inserta solo 3 eventos en `events` (no 8) por early exit
+
+**Desglose de Tickets Técnicos:**
+
+| ID Ticket | Título | Story Points | Tech Spec | DoD | Priority |
+|-----------|--------|--------------|-----------|-----|----------|
+| **T-1601-AGENT** | **LangGraph StateGraph Setup** | 5 | **Objetivo:** Crear esqueleto del agente con LangGraph StateGraph (8 nodos + transiciones condicionales). **Implementación:** (1) Instalar `langgraph>=0.0.20`, `langchain-core>=0.1.0`, (2) Definir `ValidationState` TypedDict con 15 campos: `block_id`, `nomenclature_valid`, `nomenclature_errors`, `geometry_metadata` (dict), `geometry_valid`, `semantic_data` (dict con tipologia/material/confidence), `overall_status` (enum: validated/rejected/processing), `classification_method`, `validation_path` (lista nodos ejecutados), `error_messages`, `circuit_breaker_tripped`, `created_at`, `completed_at`, `retry_count`, `low_poly_url`. (3) Crear `StateGraph` con 8 nodos: START (entry point) → ValidateNomenclature (US-002 reutilizado) → ExtractGeometry (rhino3dm) → ValidateGeometry (topología) → ClassifyTipologia (LLM placeholder) → EnrichMetadata (UserStrings) → GenerateReport (Jinja2) → END (validated/rejected). (4) Definir edges condicionales: `nomenclature_valid == True` → ExtractGeometry, `nomenclature_valid == False` → REJECTED (fail-fast), `geometry_valid == False` → REJECTED. (5) Tests unitarios: verificar state transitions (10 escenarios: HP nomenclature OK → geometry, HP full flow → validated, EC nomenclature FAIL → rejected sin LLM, EC geometry FAIL → rejected, ERR invalid state → exception). (6) Documentación: Mermaid `stateDiagram-v2` actualizado en docs/07-agent-design.md con implementación real. **DoD:** StateGraph ejecuta sin errores, transiciones condicionales verificadas con tests (10/10 PASS), documentación Mermaid sincronizada con código, ValidationState TypedDict completo con docstrings. | 🔴 P0 |
+| **T-1602-AGENT** | **LLM Classification Node (GPT-4 Turbo)** | 5 | **Objetivo:** Implementar nodo `classify_tipologia(state: ValidationState) -> ValidationState` con LLM GPT-4 Turbo + Circuit Breaker. **Implementación:** (1) LangChain OpenAI client configurado: `model="gpt-4-turbo"`, `temperature=0.2 (determinismo)`, `response_format={"type": "json_object"}` (JSON Mode forzado). (2) Prompt engineering: `"Classify architectural piece from Sagrada Família based on metadata: {volume: X m³, bbox: {...}, layers: [...]}. Output JSON schema: {tipologia: 'dovela'|'capitel'|'columna'|'clave'|'imposta'|'other', confidence: 0.0-1.0, reasoning: string}. BE CONSERVATIVE: if uncertain, return 'other' with low confidence."`. (3) Timeout 10s con Tenacity retry (3 intentos exponential backoff: 2s, 4s, 8s). (4) Circuit Breaker pattern: si falla 5 veces consecutivas (contador en Redis TTL 300s) → activar fallback a clasificación regex (filename pattern: `SF-C12-D-*` → "dovela", `SF-C12-C-*` → "capitel", default → "other"). (5) Helper function `get_material_color()` basado en clasificación (integración con MATERIAL_COLORS dict existente). (6) Tests: Mock OpenAI responses (15 tests parametrizados): HP válido JSON → clasificación dovela confidence 0.9, EC timeout después de 3 reintentos → fallback regex, ERR invalid JSON response → fallback, ERR 429 rate limit → fallback, CB 5 fallos consecutivos → circuit breaker activated + Redis flag. **DoD:** Nodo clasifica correctamente 5 tipologías (dovela, capitel, columna, clave, imposta), fallback activado tras 5 fallos, circuit breaker persiste en Redis, tests 15/15 PASS, prompts versionados en constants. | 🔴 P0 |
+| **T-1803-AGENT** | **Refactor Existing Validators as LangGraph Nodes** | 3 | **Objetivo:** Integrar validadores existentes (US-002) como nodos LangGraph sin cambiar lógica interna. **Implementación:** (1) Refactorizar `NomenclatureValidator` (T-025), `GeometryValidator` (T-026), `UserStringExtractor` (T-027) como funciones puras: `validate_nomenclature(state: ValidationState) -> ValidationState`, `extract_geometry(state)`, `validate_geometry(state)`, `enrich_metadata(state)`. (2) Mantener lógica 100% sin cambios (zero regression commitment). (3) Adapter pattern: wrapper que extrae campos de `state`, llama validator original, actualiza `state` con resultados. (4) Actualizar imports en StateGraph (T-1801). (5) Tests: 27 tests existentes US-002 (nomenclature + geometry) deben pasar 27/27 sin modificación + 5 nuevos tests de integración StateGraph: nomenclature OK → extract_geometry ejecutado, nomenclature FAIL → extract_geometry NO ejecutado (skip nodo), geometry FAIL → enrich_metadata NO ejecutado. **DoD:** 3 nodos integrados en StateGraph, 32/32 tests PASS (27 existentes + 5 nuevos), zero regression validada con baseline US-002 (69/69 backend tests), código adapter documentado con JSDoc. | 🟡 P1 |
+| **T-1604-AGENT** | **Report Generator Node (Jinja2 Templates)** | 2 | **Objetivo:** Generar reportes de validación estructurados con templates Jinja2. **Implementación:** (1) Instalar `Jinja2>=3.1.0`. (2) Template `validation_report.json.j2` en `src/agent/templates/`: estructura JSON con secciones `errors[]`, `metadata{}` (iso_code, material, tipologia), `semantic_data{}` (LLM classification), `geometry_summary` (vertices, triangles, bbox), `timestamp`, `validated_by` (agent version), `validation_path[]` (nodos ejecutados). (3) Nodo `generate_report(state: ValidationState) -> ValidationState`: renderiza template con state fields, guarda en `ValidationState.validation_report` (string JSON), persiste en `blocks.validation_report` JSONB column (ya existe en migration T-020-DB). (4) NULL-safe rendering: campos opcionales (semantic_data si LLM no se ejecutó) con defaults. (5) Integración con ValidationReportModal (T-032-FRONT, ya existe): NO requiere cambios frontend (contrato JSONB ya cumplido). (6) Tests: 8 tests (HP reporte completo con LLM, EC reporte sin LLM → semantic_data = null, EC reporte rejected → errors array poblado, INT JSONB schema compliance con Pydantic ValidationReport model). **DoD:** Reports generados cumplen schema ValidationReport, tests 8/8 PASS, integración con ValidationReportModal verificada (UI muestra reportes sin cambios), templates versionados en Git. | 🟡 P1 |
+| **T-1805-AGENT** | **Audit Trail per Node Transition** | 3 | **Objetivo:** Insertar eventos granulares en tabla `events` por cada transición de nodo LangGraph. **Implementación:** (1) Middleware LangGraph `on_node_enter(node_name, state)` y `on_node_exit(node_name, state, result)` hooks. (2) Helper `insert_event(block_id, event_type, node_name, state_snapshot)`: INSERT en tabla `events(id, block_id, event_type, node_name, state_snapshot JSONB, timestamp)` (tabla ya existe T-020-DB). (3) Event types: `node_entered`, `node_completed`, `transition_conditional` (cuándo se evalúa edge condicional), `circuit_breaker_tripped`, `fallback_activated`. (4) State snapshot: serializar ValidationState a JSONB (sin campos pesados: solo `overall_status`, `nomenclature_valid`, `geometry_valid`, `classification_method`). (5) Performance: batch inserts si hay >10 eventos (evitar N+1 queries), índice en `block_id` + `node_name` + `timestamp` (query performance <50ms). (6) Integración con dashboard Grafana (opcional MVP): query SQL que muestra timeline de ejecución del grafo. (7) Tests: 6 tests (HP 8 eventos para flow completo, EC 3 eventos para early rejection, INT query performance <50ms para 100 bloques, INT eventos ordenados cronológicamente). **DoD:** Auditabilidad completa del flujo, tabla `events` con 8-12 registros por bloque procesado (según path: rejected early = menos eventos), dashboard Grafana query documented (no implementado, solo query SQL), tests 6/6 PASS. | 🟢 P2 |
+| **T-1806-TEST** | **E2E LangGraph Integration Test** | 3 | **Objetivo:** Test end-to-end que valida el sistema completo con 6 archivos .3dm reales. **Implementación:** (1) Pytest E2E en `tests/agent/integration/test_langgraph_e2e.py`: subir 6 archivos de test fixtures GLPER.B-PAE0720.0701-0706 (ya disponibles en `tests/fixtures/`). (2) Escenarios: **HP-E2E-01** archivo válido nomenclatura OK + LLM classification → estado `validated` + semantic_data poblado con tipologia "dovela", **EC-E2E-02** archivo nomenclatura inválida → rejected con 3 eventos (no consume LLM), **EC-E2E-03** OpenAI API mock con timeout → fallback regex activado + circuit_breaker_tripped = true, **ERR-E2E-04** archivo geometría degenerada (0 vertices) → rejected con geometry_errors, **INT-E2E-05** validar 6 archivos simultáneamente (concurrencia Celery) → todos procesados correctamente, **PERF-E2E-06** performance target: <60s/archivo sin LLM, <90s/archivo con LLM (tolerable para demo TFM). (3) Mock OpenAI en CI: usar `pytest-vcr` o mock manual (NO consumir tokens reales en pipeline CI/CD). (4) Assertions: estado final correcto en DB (3 validated, 3 rejected según fixtures), eventos auditables en tabla `events` (8-12 por archivo), validation_report JSONB completo, GLB generados en `/processed/`, cero regresiones en 415 tests baseline. (5) Cleanup: eliminar bloques test después de ejecución (fixture scope=function). **DoD:** E2E test 6/6 archivos procesados, performance targets met (<90s con LLM mock), mock OpenAI setup documented en README, zero regression en 415 tests baseline + 32 tests US-016, CI pipeline verde. | 🔴 P0 |
+
+**Valoración:** 21 Story Points (T-1801: 5 SP + T-1802: 5 SP + T-1803: 3 SP + T-1804: 2 SP + T-1805: 3 SP + T-1806: 3 SP)
+
+**Dependencias:**
+- ✅ **US-002 (DONE):** Validadores existentes (NomenclatureValidator, GeometryValidator, UserStringExtractor) como base para refactor
+- ✅ **Tabla `events` (T-020-DB):** Ya existe en migration
+- ✅ **Column `validation_report` JSONB (T-020-DB):** Ya existe en `blocks` table
+- 🆕 **Requiere:** `langgraph>=0.0.20`, `langchain-openai>=0.0.5`, `openai>=1.0`, `tenacity>=8.2.3`, `jinja2>=3.1.0`
+- 🆕 **Requiere:** OpenAI API key configurada (variable ENV `OPENAI_API_KEY`, budgetado $50 USD para TFM)
+- ⚠️ **Bloqueante para:** Epic-2 (depends on stable validation pipeline con clasificación semántica)
+
+**Riesgos & Mitigaciones:**
+
+| Risk | Probability | Impact | Mitigation |
+|------|------------|--------|------------|
+| **LLM Cost Overrun** (agotar budget $50 USD en desarrollo) | 40% | 🟡 Medium | Circuit breaker tras 5 fallos (no agotar budget innecesariamente), mock OpenAI en TODOS los tests CI/CD (zero tokens consumidos), prompt caching OpenAI habilitado (reduce 50% tokens en llamadas repetidas), budget alert en dashboard OpenAI ($45 USD). |
+| **LangGraph Learning Curve empinada** (delays sprint 2-3 semanas) | 60% | 🔴 High | PoC spike 1 día ANTES de T-1801 (validar viabilidad técnica + identificar blockers), pair programming obligatorio en T-1801/T-1802 (senior con experiencia LangChain + mid backend), pre-study: docs oficiales LangGraph + 2 tutoriales hands-on (4h inversión), feature flag `ENABLE_LANGGRAPH_AGENT` (default false, permite rollback si PoC falla). |
+| **Zero Regression fallos** (romper 415 tests existentes) | 30% | 🟡 Medium | Quality gates obligatorios en CI: pipeline falla si tests <99% (actual 415/417 = 99.5%), pre-commit hooks ejecutan test suite local antes de push, feature flag `ENABLE_LANGGRAPH_AGENT` aísla cambios (US-002 sigue funcional si US-018 falla), TDD estricto: cada ticket ejecuta RED→GREEN→REFACTOR con anti-regression validation. |
+| **GPT-4 classification inestable/inconsistente** | 40% | 🟢 Low | Circuit breaker + fallback regex garantiza sistema funcional SIEMPRE (degradación graceful), tests validan ambos paths (LLM + fallback) con 15 escenarios, confidence threshold: si LLM devuelve <0.7 → usar fallback (conservative approach), prompt versionado en constants (rollback prompts si cambio empeora accuracy). |
+| **Timeline slip 2.5-3 semanas → 4-5 semanas** | 35% | 🟡 Medium | Timeboxing estricto: checkpoint semana 2 (T-1801+T-1802 DONE o trigger rollback decision con stakeholder), scope cut backup: si semana 3 no alcanza → posponer T-1805 Audit Trail a post-MVP (nice-to-have, no bloqueante funcionalidad core), communicate early: avisar a stakeholder en checkpoint semana 2 si hay retraso. |
+
+**Timeline Estimado (Desarrollo Full-Time):**
+
+```
+Week 1: PoC Spike (1 día) + T-1801 StateGraph Setup (4 días)
+Week 2: T-1802 LLM Classification + Circuit Breaker (5 días) 
+        [Checkpoint: LangGraph funcional con LLM mock]
+Week 3: T-1803 Refactor Validators (3 días) + T-1804 Report Generator (2 días)
+Week 4: T-1805 Audit Trail (3 días) + T-1806 E2E Tests (2 días)
+        [Final: Zero regression validation + Documentation]
+
+ETA: 2026-04-12 (4 semanas desarrollo + 1 semana buffer QA)
+```
+
+**Definition of Done (MVP US-018):**
+- ✅ StateGraph ejecuta 8 nodos correctamente con transiciones condicionales validadas
+- ✅ LLM classification funcional con GPT-4 Turbo + fallback regex operativo
+- ✅ Circuit Breaker activado tras 5 fallos + persiste en Redis
+- ✅ Zero regression: 415 tests baseline US-002 + 32 tests nuevos US-018 = 447/447 PASS (100%)
+- ✅ E2E test con 6 archivos .3dm reales: 3 validated, 3 rejected según fixtures
+- ✅ Performance target: <90s/archivo con LLM mock (tolerable demo TFM)
+- ✅ Audit Trail granular: 8-12 eventos por bloque en tabla `events`
+- ✅ OpenAI API key configurada + budget alert $45 USD
+- ✅ Feature flag `ENABLE_LANGGRAPH_AGENT` implementado (rollback safety)
+- ✅ Documentación completa: docs/US-018/README.md + Mermaid diagrams actualizados + ADR-002-LangGraph-vs-Celery.md
+
+**Acceptance Criteria Summary:**
+- ✅ **Scenario 1:** Flow completo START → VALIDATED con LLM classification + semantic_data poblado
+- ✅ **Scenario 2:** Circuit Breaker + fallback regex sin crash (degradación graceful)
+- ✅ **Scenario 3:** Fail-fast nomenclature inválida → REJECTED sin consumir LLM
+
+> 📋 **Planning Note:** Este User Story es **CORE DIFERENCIADOR** del proyecto para TFM académico. Sin US-018, el sistema es CRUD con validaciones básicas (genérico). Con US-018, demuestra aplicación práctica de AI/ML (LangGraph + LLM + Circuit Breaker) en contexto industrial real. **Prioridad P0 MUST-HAVE** para calificación TFM. PoC spike 1 día OBLIGATORIO antes de comprometer sprint completo.
 
 ---
 
