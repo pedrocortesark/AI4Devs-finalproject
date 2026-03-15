@@ -254,7 +254,8 @@ describe('T-1009-TEST-FRONT: 3D Viewer Integration Tests - Edge Cases', () => {
       <PartDetailModal 
         isOpen={true} 
         partId={mockPartDetailCapitel.id} 
-        onClose={mockOnClose} 
+        onClose={mockOnClose}
+        enableNavigation={true}
       />
     );
 
@@ -300,7 +301,8 @@ describe('T-1009-TEST-FRONT: 3D Viewer Integration Tests - Edge Cases', () => {
       <PartDetailModal 
         isOpen={true} 
         partId={mockPartDetailCapitel.id} 
-        onClose={mockOnClose} 
+        onClose={mockOnClose}
+        enableNavigation={true}
       />
     );
 

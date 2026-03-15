@@ -38,7 +38,7 @@ export function usePartsSpatialLayout(parts: PartCanvasItem[]): Position3D[] {
     // DEBUG: Disabled to reduce console noise during React StrictMode
     // console.log('🎯 usePartsSpatialLayout: Calculating positions for', parts.length, 'parts');
     
-    const positions = parts.map((part, index) => {
+    const positions = parts.map((part) => {
       if (!part.bbox) {
         // Fallback: if bbox is NULL (processing), default to origin
         console.warn(`Part ${part.iso_code} has no bbox, defaulting to [0,0,0]`);

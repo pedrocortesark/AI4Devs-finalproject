@@ -29,9 +29,6 @@ function calculateGlobalBounds(parts: PartCanvasItem[]) {
   const partsWithBbox = parts.filter(p => p.bbox);
   if (partsWithBbox.length === 0) return null;
 
-  const globalMin = [Infinity, Infinity, Infinity];
-  const globalMax = [-Infinity, -Infinity, -Infinity];
-
   // Calculate bounds in Rhino coordinates first
   const rhinoMin = [Infinity, Infinity, Infinity];
   const rhinoMax = [-Infinity, -Infinity, -Infinity];

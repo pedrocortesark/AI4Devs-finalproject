@@ -26,7 +26,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { Html } from '@react-three/drei';
-import * as THREE from 'three';
 import { STATUS_COLORS } from '@/constants/dashboard3d.constants';
 import { FILTER_VISUAL_FEEDBACK } from '@/constants/parts.constants';
 import { usePartsStore } from '@/stores/parts.store';

@@ -159,6 +159,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -178,6 +179,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -201,6 +203,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -251,6 +254,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -273,6 +277,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -293,6 +298,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -452,6 +458,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -474,6 +481,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -496,6 +504,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -572,6 +581,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
         />
       );
 
@@ -599,6 +609,7 @@ describe('PartDetailModal - T-1007-FRONT Integration', () => {
           isOpen={true}
           partId={mockPartId}
           onClose={mockOnClose}
+          enableNavigation={true}
           filters={mockFilters}
         />
       );

@@ -12,6 +12,7 @@ import redis
 
 from api.upload import router as upload_router
 from api.elements import router as elements_router
+from api.parts import router as parts_router
 
 app = FastAPI(
     title="SF-PM API",
@@ -155,4 +156,5 @@ async def readiness_check():
 
 app.include_router(upload_router, prefix="/api/upload", tags=["Upload"])
 app.include_router(elements_router, prefix="/api/elements", tags=["Elements"])
+app.include_router(parts_router, prefix="/api", tags=["Parts"])
 

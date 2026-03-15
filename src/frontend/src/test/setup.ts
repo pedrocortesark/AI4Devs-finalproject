@@ -88,6 +88,48 @@ vi.mock('@react-three/fiber', () => {
       // Otherwise return full state
       return mockState;
     }),
+    // Mock useLoader for OBJ/GLB file loading
+    // IMPORTANT: useLoader returns the loaded asset directly (scene object for OBJ/GLB)
+    // NOT an object with {scene, nodes, materials} - that's useGLTF specific
+    useLoader: vi.fn((loader: any, url: string) => {
+      // Return mock scene directly (as OBJLoader would)
+      const mockScene = {
+        isObject3D: true,
+        clone: vi.fn((recursive: boolean = false) => ({
+          isObject3D: true,
+          traverse: vi.fn((callback: (child: any) => void) => {
+            // Simulate traversing a mesh with material
+            callback({
+              isMesh: true,
+              material: {
+                color: { set: vi.fn() },
+                emissive: { set: vi.fn() },
+                emissiveIntensity: 0,
+                opacity: 1.0,
+                transparent: false,
+                needsUpdate: false,
+              },
+            });
+          }),
+          clone: vi.fn(() => mockScene),
+        })),
+        traverse: vi.fn((callback: (child: any) => void) => {
+          callback({
+            isMesh: true,
+            material: {
+              color: { set: vi.fn() },
+              emissive: { set: vi.fn() },
+              emissiveIntensity: 0,
+              opacity: 1.0,
+              transparent: false,
+              needsUpdate: false,
+            },
+          });
+        }),
+      };
+      // Return scene directly, not wrapped in an object
+      return mockScene;
+    }),
   };
 });
 

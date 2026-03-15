@@ -634,6 +634,7 @@ def test_sql_injection_prevention(supabase_client: Client):
 
 # ===== INTEGRATION (Performance, RLS, Index Usage) =====
 
+@pytest.mark.skip(reason="workshop_id parameter removed in T-1501-DB (workshops not used in MVP)")
 def test_query_uses_idx_blocks_canvas_query_index(supabase_client: Client):
     """
     T-0501-BACK (TDD-RED Test 16): Query uses idx_blocks_canvas_query index.

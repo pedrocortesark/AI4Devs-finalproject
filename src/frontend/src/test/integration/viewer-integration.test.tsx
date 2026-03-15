@@ -227,6 +227,7 @@ describe('T-1009-TEST-FRONT: 3D Viewer Integration Tests - Happy Path', () => {
         isOpen={true}
         partId={mockPartDetailCapitel.id}
         onClose={mockOnClose}
+        enableNavigation={true}
       />
     );
 
@@ -291,6 +292,7 @@ describe('T-1009-TEST-FRONT: 3D Viewer Integration Tests - Happy Path', () => {
         isOpen={true}
         partId={mockPartDetailCapitel.id}
         onClose={mockOnClose}
+        enableNavigation={true}
       />
     );
 

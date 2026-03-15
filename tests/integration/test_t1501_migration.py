@@ -213,16 +213,16 @@ def test_material_type_index_created(db_cursor):
 # ===== TEST SUITE 2: Constraint Enforcement =====
 
 def test_material_type_accepts_null_when_not_provided(db_cursor, clean_test_blocks):
-    """Verify material_type accepts NULL when not provided (no DEFAULT in new model)."""
-    # Insert block without specifying material_type (should be NULL, agent populates later)
+    """Verify material_type has DEFAULT 'Stone' when not provided (updated in fix_element_model_constraints)."""
+    # Insert block without specifying material_type (gets DEFAULT 'Stone')
     db_cursor.execute("""
         INSERT INTO blocks (iso_code, status, tipologia)
         VALUES ('TEST-DEFAULT-MAT', 'uploaded', 'imposta')
         RETURNING material_type
     """)
     result = db_cursor.fetchone()
-    # New model: No DEFAULT, agent extracts from Rhino UserString "Material"
-    assert result[0] is None, f"Expected NULL (agent populates material), got: {result[0]}"
+    # Migration 20260307000002_fix_element_model_constraints: Sets DEFAULT 'Stone' for backward compatibility
+    assert result[0] == 'Stone', f"Expected 'Stone' (DEFAULT value), got: {result[0]}"
 
 
 @pytest.mark.skip(reason="CHECK constraint removed in T-1504-AGENT (62 real materials model)")

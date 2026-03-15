@@ -75,8 +75,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'
+          memory: 2G
     restart: "no"  # Dev mode: don't auto-restart
     labels:
       - "com.sagradafamilia.environment=development"

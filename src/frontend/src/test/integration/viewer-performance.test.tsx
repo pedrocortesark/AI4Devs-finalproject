@@ -28,6 +28,7 @@ import * as navigationService from '@/services/navigation.service';
 // Fixtures
 import {
   mockPartDetailCapitel,
+  mockAdjacentPartsDefault,
 } from '../fixtures/viewer.fixtures';
 
 // Store
@@ -291,12 +292,14 @@ describe('T-1009-TEST-FRONT: 3D Viewer Integration Tests - Performance & Accessi
   it('A11Y-INT-02: should support full keyboard navigation and focus trap', async () => {
     // Arrange: Mock backend response
     vi.mocked(uploadService.getPartDetail).mockResolvedValue(mockPartDetailCapitel);
+    vi.mocked(navigationService.getPartNavigation).mockResolvedValue(mockAdjacentPartsDefault);
 
     render(
       <PartDetailModal 
         isOpen={true} 
         partId={mockPartDetailCapitel.id} 
-        onClose={mockOnClose} 
+        onClose={mockOnClose}
+        enableNavigation={true}
       />
     );
 

@@ -211,21 +211,24 @@ export function CameraController({ parts, selectedId }: CameraControllerProps) {
         return;
       }
 
-      // Force matrix update before bounding box calculation
-      selectedMesh.updateMatrixWorld(true);
+      // Type assertion: After null check above, we know selectedMesh is not null
+      const mesh = selectedMesh as THREE.Object3D;
 
-      const meshPos = selectedMesh.position;
-      const worldPos = selectedMesh.getWorldPosition(new THREE.Vector3());
+      // Force matrix update before bounding box calculation
+      mesh.updateMatrixWorld(true);
+
+      const meshPos = mesh.position;
+      const worldPos = mesh.getWorldPosition(new THREE.Vector3());
       console.log('🎯 Selected mesh found:');
-      console.log(`   name: ${selectedMesh.name}`);
+      console.log(`   name: ${mesh.name}`);
       console.log(`   position: [${meshPos.x.toFixed(2)}, ${meshPos.y.toFixed(2)}, ${meshPos.z.toFixed(2)}]`);
       console.log(`   worldPosition: [${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}]`);
-      console.log(`   children: ${selectedMesh.children.length}, type: ${selectedMesh.type}`);
+      console.log(`   children: ${mesh.children.length}, type: ${mesh.type}`);
 
       // Calculate fit for selected object
       const result = calculateCameraFit(
         camera as THREE.PerspectiveCamera,
-        selectedMesh,
+        mesh,
         CAMERA_FIT_CONFIG.FIT_OFFSET,
         controls
       );

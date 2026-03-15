@@ -84,9 +84,14 @@ describe('Dashboard3D Selection & Modal Integration', () => {
 
     render(<Dashboard3D />);
 
-    // Verify modal is visible
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeInTheDocument();
+    // Open modal with 'D' key (CAD-style UX: selection + 'D' key opens details)
+    fireEvent.keyDown(window, { key: 'D' });
+
+    // Verify modal is visible (wait for useEffect to set showDetailsModal = true)
+    await waitFor(() => {
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+    });
 
     // When: Press ESC key
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -116,8 +121,14 @@ describe('Dashboard3D Selection & Modal Integration', () => {
 
     render(<Dashboard3D />);
 
+    // Open modal with 'D' key (CAD-style: selection + 'D' opens details)
+    fireEvent.keyDown(window, { key: 'D' });
+
+    // Wait for modal to appear (useEffect sets showDetailsModal = true)
+    const backdrop = await screen.findByTestId('modal-backdrop');
+    expect(backdrop).toBeInTheDocument();
+
     // When: Click backdrop (the dialog div IS the backdrop)
-    const backdrop = screen.getByTestId('modal-backdrop');
     fireEvent.click(backdrop);
 
     // Then: clearSelection was called
@@ -135,7 +146,7 @@ describe('Dashboard3D Selection & Modal Integration', () => {
    * NOTE: Testing 3D material properties in jsdom is limited.
    * This test verifies that the selectedId state is accessible to PartMesh.
    */
-  it('applies emissive glow to selected part', () => {
+  it('applies emissive glow to selected part', async () => {
     // Given: Part is selected
     setupStoreMock({
       parts: [mockPartCapitel, mockPartColumna],
@@ -146,9 +157,15 @@ describe('Dashboard3D Selection & Modal Integration', () => {
     // When: Render Dashboard
     const { container } = render(<Dashboard3D />);
 
+    // Open modal with 'D' key (CAD-style: selection + 'D' opens details)
+    fireEvent.keyDown(window, { key: 'D' });
+
     // Then: Verify modal is rendered (indicates selection works)
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeInTheDocument();
+    // Wait for useEffect to set showDetailsModal = true
+    await waitFor(() => {
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+    });
 
     // In real implementation, PartMesh checks:
     // const isSelected = selectedId === part.id;

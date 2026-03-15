@@ -165,7 +165,11 @@ def validate_file(self, part_id: str, s3_key: str):
 
             db_service.update_block_status(part_id, "error_processing")
 
-            raise Exception(download_error)  # Propagate as exception
+            return {
+                "success": False,
+                "part_id": part_id,
+                "error": download_error
+            }
 
         # Step 3: Parse .3dm file
         parse_result = rhino_parser.parse_file(local_path)
@@ -206,7 +210,11 @@ def validate_file(self, part_id: str, s3_key: str):
 
             db_service.update_block_status(part_id, "error_processing")
 
-            raise Exception(parse_result.error_message)  # Propagate as exception
+            return {
+                "success": False,
+                "part_id": part_id,
+                "error": parse_result.error_message
+            }
 
         # Step 6: Build metadata from parsed layers
         layers_metadata = [
@@ -289,7 +297,11 @@ def validate_file(self, part_id: str, s3_key: str):
         except Exception as db_error:
             logger.exception("validate_file.db_error_during_error_handling", error=str(db_error))
 
-        raise  # Propagate exception
+        return {
+            "success": False,
+            "part_id": part_id,
+            "error": str(e)
+        }
 
 
 @celery_app.task(

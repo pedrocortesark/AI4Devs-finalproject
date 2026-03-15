@@ -38,7 +38,7 @@ class TestValidateFileTaskHappyPath:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",  # Unique code per test run
             "tipologia": "stone",  # Required field (stone/concrete/metal)
-            "url_original": f"s3://raw-uploads/{s3_key}",  # S3 URL of original file
+            "url_original": s3_key,  # S3 URL of original file
             "status": "uploaded"
         }
 
@@ -82,7 +82,7 @@ class TestValidateFileTaskHappyPath:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -125,7 +125,7 @@ class TestValidateFileTaskHappyPath:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -157,7 +157,6 @@ class TestValidateFileTaskHappyPath:
 
 class TestValidateFileTaskErrorHandling:
     """Test error scenarios and failure modes."""
-
     @pytest.mark.integration
     def test_validate_file_s3_key_not_found(self):
         """
@@ -176,7 +175,7 @@ class TestValidateFileTaskErrorHandling:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -221,7 +220,7 @@ class TestValidateFileTaskErrorHandling:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -310,7 +309,7 @@ class TestValidateFileTaskCeleryIntegration:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 

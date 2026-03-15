@@ -17,7 +17,7 @@ from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
-from schemas import ElementsListResponse, ElementDetail, ElementStatus
+from schemas import ElementsListResponse, ElementDetail, ElementStatus, ElementNavigationResponse
 from infra.supabase_client import get_supabase_client
 from services.elements_service import ElementsService
 from services.element_detail_service import ElementDetailService
@@ -26,6 +26,7 @@ from constants import (
     ERROR_MSG_INVALID_UUID,
     ERROR_MSG_ELEMENT_NOT_FOUND,
     ERROR_MSG_FETCH_ELEMENTS_FAILED,
+    TABLE_BLOCKS,
 )
 
 
@@ -186,4 +187,75 @@ async def get_element_detail(
             raise HTTPException(status_code=404, detail=ERROR_MSG_ELEMENT_NOT_FOUND)
 
     return ElementDetail(**data)
+
+
+@router.get("/{element_id}/navigation", response_model=ElementNavigationResponse)
+async def get_element_navigation(
+    element_id: str
+) -> ElementNavigationResponse:
+    """
+    Get prev/next element IDs for navigation in 3D viewer.
+
+    Args:
+        element_id: UUID of the current element
+
+    Returns:
+        ElementNavigationResponse with prev_id, next_id, current_index, total_count
+
+    Raises:
+        HTTPException 400: Invalid UUID format
+        HTTPException 404: Element not found
+        HTTPException 500: Database error
+    """
+    # Validate UUID format
+    _validate_uuid_format(element_id)
+
+    try:
+        supabase = get_supabase_client()
+
+        # Query all render-ready elements ordered by created_at ASC (chronological)
+        # This matches user expectation: position 1 = oldest, last = newest
+        response = supabase.table(TABLE_BLOCKS) \
+            .select("id, created_at") \
+            .filter("low_poly_url", "not.is", "null") \
+            .filter("bbox", "not.is", "null") \
+            .filter("is_archived", "eq", False) \
+            .order("created_at", desc=False) \
+            .execute()
+
+        elements = response.data
+
+        # Find current element index
+        current_index = None
+        for idx, element in enumerate(elements):
+            if element["id"] == element_id:
+                current_index = idx
+                break
+
+        if current_index is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ERROR_MSG_ELEMENT_NOT_FOUND
+            )
+
+        # Calculate prev/next in chronological order
+        # prev = older element (lower index)
+        # next = newer element (higher index)
+        prev_id = elements[current_index - 1]["id"] if current_index > 0 else None
+        next_id = elements[current_index + 1]["id"] if current_index < len(elements) - 1 else None
+
+        return ElementNavigationResponse(
+            prev_id=prev_id,
+            next_id=next_id,
+            current_index=current_index + 1,  # Convert to 1-based
+            total_count=len(elements)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch navigation: {str(e)}"
+        )
 

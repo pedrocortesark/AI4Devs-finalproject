@@ -12,11 +12,10 @@
  * @module PartsScene
  */
 
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { ElementMesh } from './ElementMesh';
 import { CameraController } from './CameraController';
 import { DebugOverlay } from './DebugOverlay';
-import { MeshDebugger } from './MeshDebugger';
 import { usePartsSpatialLayout } from '@/hooks/usePartsSpatialLayout';
 import type { PartsSceneProps } from './PartsScene.types';
 
