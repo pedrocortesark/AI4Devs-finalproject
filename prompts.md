@@ -16784,3 +16784,10 @@ const lodLevel = useLOD(position);
 **Resumen de la Respuesta/Acción:**
 Usuario decide PAUSAR desarrollo de nuevas features (US-018 LangGraph, US-007, US-009) y priorizar DEPLOYMENT de MVP actual (45.8%, 81/177 SP, 5 US completas: US-001 Upload, US-002 Validation, US-005 Dashboard, US-010 Visor 3D, US-015 Element Model). Estrategia: Consolidar version funcional en produccion (Railway + Vercel + Supabase ya configurado), validar zero bugs, luego continuar desarrollo. Crear checklist de Production Readiness + plan de deployment 1 semana (vs 2 semanas desarrollo features).
 ---
+
+## [235] - Fix Redis Authentication URL for Railway (ACL User 'default' Missing)
+**Fecha:** 2026-03-16 15:00
+
+**Resumen de la Respuesta/Acción:**
+Corregir construcción de CELERY_BROKER_URL en docker-compose files para incluir usuario 'default' (redis://default:password@) y solucionar autenticación en Railway Redis 6+ ACLs.
+---

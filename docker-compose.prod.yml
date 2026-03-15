@@ -18,7 +18,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0
       - PYTHONPATH=/app:/app/src
     depends_on:
       db:
@@ -108,8 +108,8 @@ services:
     tmpfs:
       - /tmp:size=2G,mode=1777
     environment:
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://default:${REDIS_PASSWORD}@redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - DATABASE_URL=${SUPABASE_DATABASE_URL}
