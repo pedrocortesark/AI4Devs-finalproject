@@ -119,8 +119,6 @@ jobs:
         run: |
           echo "=== Backend container logs ==="
           docker compose logs backend
-          echo "=== Database container logs ==="
-          docker compose logs db
           echo "=== Redis container logs ==="
           docker compose logs redis
           echo "=== Agent worker container logs ==="

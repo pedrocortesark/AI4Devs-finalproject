@@ -15,7 +15,7 @@ Endpoints:
 
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query
 
 from schemas import ElementsListResponse, ElementDetail, ElementStatus, ElementNavigationResponse
 from infra.supabase_client import get_supabase_client

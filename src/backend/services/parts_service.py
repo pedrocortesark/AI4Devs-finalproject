@@ -14,7 +14,6 @@ from constants import (
     PARTS_LIST_SELECT_FIELDS,
     QUERY_FIELD_IS_ARCHIVED,
     QUERY_FIELD_CREATED_AT,
-    QUERY_ORDER_DESC,
 )
 
 
