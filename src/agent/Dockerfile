@@ -12,6 +12,7 @@ WORKDIR /app
 # Install system dependencies for rhino3dm (T-024-AGENT)
 # CMake required for rhino3dm compilation (C++ bindings)
 # nodejs/npm required for gltf-pipeline (Draco compression)
+# hadolint ignore=DL3008,DL3016
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \

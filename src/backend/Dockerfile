@@ -12,6 +12,7 @@ WORKDIR /app
 # Install system dependencies for rhino3dm + open3d (required for agent test execution)
 # CMake required for rhino3dm compilation (C++ bindings)
 # libx11-6, libgl1, libgomp1, libglib2.0-0 required for open3d (decimation backend)
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
