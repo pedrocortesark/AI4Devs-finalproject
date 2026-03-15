@@ -44,7 +44,8 @@ celery_app = Celery(
     CELERY_APP_NAME,
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=['tasks.file_validation', 'tasks.geometry_processing'],
+    # Do NOT use include=[] - causes circular import
+    # Tasks will be imported explicitly after app initialization
 )
 
 # Configuration
@@ -77,3 +78,11 @@ celery_app.conf.update(
     # Celery 6.0 compatibility
     broker_connection_retry_on_startup=True,
 )
+
+# Import tasks AFTER celery_app is fully initialized to avoid circular imports
+# This registers the @celery_app.task decorated functions with the Celery instance
+try:
+    from tasks import file_validation, geometry_processing  # noqa: F401
+except ImportError:
+    # In test/dev context with full module paths
+    from src.agent.tasks import file_validation, geometry_processing  # noqa: F401
