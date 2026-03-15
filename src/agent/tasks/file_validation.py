@@ -5,16 +5,27 @@ This module contains all async tasks executed by the Celery worker,
 including health checks and file validation workflows.
 """
 
-# Import from celery_app in same PYTHONPATH (/app)
-from celery_app import celery_app
-from constants import (
-    TASK_HEALTH_CHECK,
-    TASK_VALIDATE_FILE,
-    TASK_REGISTER_3DM_BLOCKS,
-    TASK_GENERATE_LOW_POLY_GLB,
-    TASK_MAX_RETRIES,
-    TASK_RETRY_DELAY_SECONDS,
-)
+# Conditional imports: direct for Celery worker, src.agent.* for tests
+try:
+    from celery_app import celery_app
+    from constants import (
+        TASK_HEALTH_CHECK,
+        TASK_VALIDATE_FILE,
+        TASK_REGISTER_3DM_BLOCKS,
+        TASK_GENERATE_LOW_POLY_GLB,
+        TASK_MAX_RETRIES,
+        TASK_RETRY_DELAY_SECONDS,
+    )
+except ImportError:
+    from src.agent.celery_app import celery_app
+    from src.agent.constants import (
+        TASK_HEALTH_CHECK,
+        TASK_VALIDATE_FILE,
+        TASK_REGISTER_3DM_BLOCKS,
+        TASK_GENERATE_LOW_POLY_GLB,
+        TASK_MAX_RETRIES,
+        TASK_RETRY_DELAY_SECONDS,
+    )
 
 import structlog
 from datetime import datetime

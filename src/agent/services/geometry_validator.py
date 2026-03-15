@@ -19,15 +19,25 @@ try:
 except ImportError:
     rhino3dm = None  # For test environment without rhino3dm installed
 
-# Direct imports from agent modules (PYTHONPATH=/app)
-from constants import (
-    GEOMETRY_CATEGORY_NAME,
-    MIN_VALID_VOLUME,
-    GEOMETRY_ERROR_INVALID,
-    GEOMETRY_ERROR_NULL,
-    GEOMETRY_ERROR_DEGENERATE_BBOX,
-    GEOMETRY_ERROR_ZERO_VOLUME,
-)
+# Conditional imports: direct for Celery worker, src.agent.* for tests
+try:
+    from constants import (
+        GEOMETRY_CATEGORY_NAME,
+        MIN_VALID_VOLUME,
+        GEOMETRY_ERROR_INVALID,
+        GEOMETRY_ERROR_NULL,
+        GEOMETRY_ERROR_DEGENERATE_BBOX,
+        GEOMETRY_ERROR_ZERO_VOLUME,
+    )
+except ImportError:
+    from src.agent.constants import (
+        GEOMETRY_CATEGORY_NAME,
+        MIN_VALID_VOLUME,
+        GEOMETRY_ERROR_INVALID,
+        GEOMETRY_ERROR_NULL,
+        GEOMETRY_ERROR_DEGENERATE_BBOX,
+        GEOMETRY_ERROR_ZERO_VOLUME,
+    )
 
 # Import backend schema for validation errors
 try:

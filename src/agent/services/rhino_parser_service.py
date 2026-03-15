@@ -7,8 +7,14 @@ Extracts layer information and file metadata.
 
 from pathlib import Path
 import structlog
-from models import FileProcessingResult, LayerInfo
-from services.user_string_extractor import UserStringExtractor
+
+# Conditional imports: direct for Celery worker, src.agent.* for tests
+try:
+    from models import FileProcessingResult, LayerInfo
+    from services.user_string_extractor import UserStringExtractor
+except ImportError:
+    from src.agent.models import FileProcessingResult, LayerInfo
+    from src.agent.services.user_string_extractor import UserStringExtractor
 
 # Import rhino3dm at module level for testability
 # Mock in unit tests with: @patch('src.agent.services.rhino_parser_service.rhino3dm')

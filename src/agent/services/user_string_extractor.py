@@ -8,7 +8,11 @@ for ISO-19650 compliance and manufacturing traceability.
 
 import structlog
 from typing import Dict
-from models import UserStringCollection
+# Conditional imports: direct for Celery worker, src.agent.* for tests
+try:
+    from models import UserStringCollection
+except ImportError:
+    from src.agent.models import UserStringCollection
 
 logger = structlog.get_logger()
 

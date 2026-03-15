@@ -10,9 +10,13 @@ import re
 import structlog
 from typing import List
 
-# Direct imports from agent modules (PYTHONPATH=/app)
-from constants import ISO_19650_LAYER_NAME_PATTERN, ISO_19650_PATTERN_DESCRIPTION
-from models import LayerInfo
+# Conditional imports: direct for Celery worker, src.agent.* for tests
+try:
+    from constants import ISO_19650_LAYER_NAME_PATTERN, ISO_19650_PATTERN_DESCRIPTION
+    from models import LayerInfo
+except ImportError:
+    from src.agent.constants import ISO_19650_LAYER_NAME_PATTERN, ISO_19650_PATTERN_DESCRIPTION
+    from src.agent.models import LayerInfo
 
 # Import backend schema for validation errors
 try:
