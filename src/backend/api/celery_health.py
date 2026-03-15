@@ -3,10 +3,9 @@ Health check endpoint for Celery connectivity.
 
 This endpoint verifies that the backend can connect to Redis and send tasks.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from infra.celery_client import get_celery_client
-from constants import TASK_REGISTER_3DM_BLOCKS
 import structlog
 
 router = APIRouter()
@@ -25,14 +24,14 @@ class CeleryHealthResponse(BaseModel):
 async def check_celery_health() -> CeleryHealthResponse:
     """
     Check if backend can connect to Celery/Redis.
-    
+
     Returns:
         CeleryHealthResponse: Status of Celery connectivity
     """
     try:
         celery = get_celery_client()
         broker_url = celery.conf.broker_url
-        
+
         # Mask password in URL for security
         masked_url = broker_url
         if "@" in broker_url and ":" in broker_url:
@@ -41,9 +40,9 @@ async def check_celery_health() -> CeleryHealthResponse:
                 prefix = parts[0].split(":")[0]  # redis://
                 suffix = parts[1]  # redis.railway.internal:6379/0
                 masked_url = f"{prefix}://:****@{suffix}"
-        
+
         logger.info("celery_health_check.broker_url", url=masked_url)
-        
+
         # Try to send a dummy task
         try:
             result = celery.send_task(
@@ -52,7 +51,7 @@ async def check_celery_health() -> CeleryHealthResponse:
                 countdown=0
             )
             logger.info("celery_health_check.task_sent", task_id=result.id)
-            
+
             return CeleryHealthResponse(
                 celery_configured=True,
                 broker_url=masked_url,
@@ -67,7 +66,7 @@ async def check_celery_health() -> CeleryHealthResponse:
                 can_send_task=False,
                 error=f"Cannot send task: {str(send_error)}"
             )
-            
+
     except Exception as e:
         logger.error("celery_health_check.failed", error=str(e))
         return CeleryHealthResponse(

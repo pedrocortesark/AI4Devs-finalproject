@@ -197,13 +197,13 @@ class UploadService:
         """
         # Step 1: Verify file exists
         logger.info("confirm_upload.started", file_id=file_id, file_key=file_key)
-        
+
         if not self.verify_file_exists_in_storage(file_key):
             logger.error("confirm_upload.file_not_found", file_key=file_key)
             return False, None, None, f"File not found in storage: {file_key}"
 
         logger.info("confirm_upload.file_verified", file_key=file_key)
-        
+
         # Step 2: Validate file content (magic bytes) - SECURITY CRITICAL
         # Download file to check file signature (Supabase returns full file)
         logger.info("confirm_upload.downloading_file", file_key=file_key)
@@ -227,7 +227,7 @@ class UploadService:
                     logger.error("malicious_file.delete_failed", file_key=file_key, error=str(delete_error))
 
                 return False, None, None, "Invalid .3dm file format - content validation failed"
-            
+
             logger.info("confirm_upload.magic_bytes_validated", file_key=file_key)
 
         except Exception as e:
