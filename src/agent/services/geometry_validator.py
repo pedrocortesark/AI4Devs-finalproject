@@ -19,8 +19,8 @@ try:
 except ImportError:
     rhino3dm = None  # For test environment without rhino3dm installed
 
-# Direct imports from src.agent namespace
-from src.agent.constants import (
+# Direct imports from agent modules (PYTHONPATH=/app)
+from constants import (
     GEOMETRY_CATEGORY_NAME,
     MIN_VALID_VOLUME,
     GEOMETRY_ERROR_INVALID,

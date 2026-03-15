@@ -14,58 +14,31 @@ from contextlib import contextmanager
 import structlog
 import requests
 
-# Import from parent package
-try:
-    from ..celery_app import celery_app
-    from ..constants import (
-        TASK_GENERATE_LOW_POLY_GLB,
-        DECIMATION_TARGET_FACES,
-        LOD_DECIMATION_TARGETS,
-        LOD_PREFIXES,
-        PROCESSED_GEOMETRY_BUCKET,
-        RAW_UPLOADS_BUCKET,
-        LOW_POLY_PREFIX,
-        TEMP_DIR,
-        ERROR_MSG_NO_MESHES_FOUND,
-        ERROR_MSG_BLOCK_NOT_FOUND,
-        ERROR_MSG_FAILED_PARSE_3DM,
-        TASK_MAX_RETRIES,
-        TASK_RETRY_DELAY_SECONDS,
-        MAX_3DM_FILE_SIZE_MB,
-        DRACO_COMPRESSION_LEVEL,
-        DRACO_QUANTIZE_POSITION_BITS,
-        DRACO_QUANTIZE_NORMAL_BITS,
-        DRACO_QUANTIZE_TEXCOORD_BITS,
-        VALID_MATERIALS,
-        DEFAULT_MATERIAL,
-        MATERIAL_USERSTRING_KEY,
-    )
-except ImportError:
-    # Fallback for test environment
-    from src.agent.celery_app import celery_app
-    from src.agent.constants import (
-        TASK_GENERATE_LOW_POLY_GLB,
-        DECIMATION_TARGET_FACES,
-        LOD_DECIMATION_TARGETS,
-        LOD_PREFIXES,
-        PROCESSED_GEOMETRY_BUCKET,
-        RAW_UPLOADS_BUCKET,
-        LOW_POLY_PREFIX,
-        TEMP_DIR,
-        ERROR_MSG_NO_MESHES_FOUND,
-        ERROR_MSG_BLOCK_NOT_FOUND,
-        ERROR_MSG_FAILED_PARSE_3DM,
-        TASK_MAX_RETRIES,
-        TASK_RETRY_DELAY_SECONDS,
-        MAX_3DM_FILE_SIZE_MB,
-        DRACO_COMPRESSION_LEVEL,
-        DRACO_QUANTIZE_POSITION_BITS,
-        DRACO_QUANTIZE_NORMAL_BITS,
-        DRACO_QUANTIZE_TEXCOORD_BITS,
-        VALID_MATERIALS,
-        DEFAULT_MATERIAL,
-        MATERIAL_USERSTRING_KEY,
-    )
+# Import from celery_app in same PYTHONPATH (/app)
+from celery_app import celery_app
+from constants import (
+    TASK_GENERATE_LOW_POLY_GLB,
+    DECIMATION_TARGET_FACES,
+    LOD_DECIMATION_TARGETS,
+    LOD_PREFIXES,
+    PROCESSED_GEOMETRY_BUCKET,
+    RAW_UPLOADS_BUCKET,
+    LOW_POLY_PREFIX,
+    TEMP_DIR,
+    ERROR_MSG_NO_MESHES_FOUND,
+    ERROR_MSG_BLOCK_NOT_FOUND,
+    ERROR_MSG_FAILED_PARSE_3DM,
+    TASK_MAX_RETRIES,
+    TASK_RETRY_DELAY_SECONDS,
+    MAX_3DM_FILE_SIZE_MB,
+    DRACO_COMPRESSION_LEVEL,
+    DRACO_QUANTIZE_POSITION_BITS,
+    DRACO_QUANTIZE_NORMAL_BITS,
+    DRACO_QUANTIZE_TEXCOORD_BITS,
+    VALID_MATERIALS,
+    DEFAULT_MATERIAL,
+    MATERIAL_USERSTRING_KEY,
+)
 
 import rhino3dm
 import trimesh

@@ -8,7 +8,7 @@ for ISO-19650 compliance and manufacturing traceability.
 
 import structlog
 from typing import Dict
-from src.agent.models import UserStringCollection
+from models import UserStringCollection
 
 logger = structlog.get_logger()
 
