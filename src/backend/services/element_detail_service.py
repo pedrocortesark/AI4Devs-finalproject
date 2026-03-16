@@ -141,9 +141,12 @@ class ElementDetailService:
             'status': element.get('status'),
             'material_type': element.get('material_type'),
             'created_at': element.get('created_at'),
+            'high_poly_url': element.get('high_poly_url'),
+            'mid_poly_url': element.get('mid_poly_url'),
             'low_poly_url': element.get('low_poly_url'),
             'bbox': element.get('bbox'),
             'validation_report': element.get('validation_report'),
+            'rhino_metadata': element.get('rhino_metadata'),
             'glb_size_bytes': None,  # Not in current schema
             'triangle_count': None,  # Not in current schema
         }

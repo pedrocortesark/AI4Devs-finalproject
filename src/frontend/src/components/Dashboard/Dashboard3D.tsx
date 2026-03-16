@@ -1,12 +1,12 @@
 /**
  * Dashboard3D Component
  * T-0504-FRONT: Main dashboard with 3D canvas and dockable sidebar
- * T-0508-FRONT: Part selection and modal integration
- * 
+ * T-0508-FRONT: Part selection and details panel integration
+ *
  * Orchestrates:
  * - Canvas3D for 3D visualization
  * - DraggableFiltersSidebar for filters UI
- * - PartDetailModal for selected part details (T-0508)
+ * - DetailsPanel for selected part details (non-blocking side panel)
  * - EmptyState when no parts loaded
  * - LoadingOverlay during data fetch
  */
@@ -19,7 +19,7 @@ import DraggableFiltersSidebar from './DraggableFiltersSidebar';
 import FiltersSidebar from './FiltersSidebar';
 import EmptyState from './EmptyState';
 import LoadingOverlay from './LoadingOverlay';
-import { PartDetailModal } from './PartDetailModal';
+import { DetailsPanel } from '@/components/details/DetailsPanel';
 import { usePartsStore } from '@/stores/parts.store';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
@@ -36,28 +36,26 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
   );
   const [floatingPosition, setFloatingPosition] = useState({ x: 100, y: 100 });
   
-  // CAD-style modal control: separate from selection state
-  // Click on part → selects visually, Press 'D' → opens details modal
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  // CAD-style panel control: separate from selection state
+  // Click on part → selects visually, Press 'D' → toggles details panel
+  const [showDetailsPanel, setShowDetailsPanel] = useState(false);
 
-  // Open details modal with 'D' key (CAD-style)
+  // Toggle details panel with 'D' key (CAD-style)
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
       if (event.key === 'd' || event.key === 'D') {
-        if (selectedId) {
-          setShowDetailsModal(true);
-        }
+        setShowDetailsPanel((prev) => (selectedId ? !prev : false));
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [selectedId]);
-  
-  // Close modal when selection cleared
+
+  // Close panel when selection cleared
   useEffect(() => {
     if (!selectedId) {
-      setShowDetailsModal(false);
+      setShowDetailsPanel(false);
     }
   }, [selectedId]);
 
@@ -151,8 +149,8 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
         {/* Loading Overlay */}
         {isLoading && <LoadingOverlay message={MESSAGES.LOADING} />}
         
-        {/* CAD-style Selection Hint (when part selected but modal not open) */}
-        {selectedId && !showDetailsModal && (
+        {/* CAD-style Selection Hint (when part selected but panel not open) */}
+        {selectedId && !showDetailsPanel && (
           <div
             style={{
               position: 'absolute',
@@ -182,7 +180,7 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
             }}>F</kbd> Zoom</span>
             <span style={{ opacity: 0.6 }}>|</span>
             <button
-              onClick={() => setShowDetailsModal(true)}
+              onClick={() => setShowDetailsPanel(true)}
               style={{
                 padding: '4px 12px',
                 backgroundColor: '#3B82F6',
@@ -207,19 +205,12 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
         )}
       </div>
 
-      {/* Part Detail Modal - Only opens with 'D' key or button (CAD-style) */}
-      {selectedId && showDetailsModal && (
-        <PartDetailModal
-          isOpen={showDetailsModal}
-          partId={selectedId}
-          onClose={() => {
-            setShowDetailsModal(false);
-            clearSelection();
-          }}
-          enableNavigation={false}
-          filters={null}
-        />
-      )}
+      {/* Details Panel - Non-blocking side panel, toggles with 'D' key */}
+      <DetailsPanel
+        partId={selectedId}
+        isOpen={showDetailsPanel}
+        onClose={() => setShowDetailsPanel(false)}
+      />
 
       {/* Sidebar with Filters */}
       <DraggableFiltersSidebar

@@ -122,4 +122,10 @@ export interface PartDetail {
   
   /** Triangle count (for performance monitoring) */
   triangle_count: number | null;
+
+  /** Stone/material type (e.g., "Montjuïc", "Ulldecona") — maps to MATERIAL_COLORS */
+  material_type?: string | null;
+
+  /** Raw Rhino metadata attributes from .3dm file (key/value pairs) */
+  rhino_metadata?: Record<string, unknown> | null;
 }
