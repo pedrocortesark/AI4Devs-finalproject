@@ -82,7 +82,7 @@ MATERIAL_COLORS = {
     "Pedra de calafell": (225, 215, 190),      # Light cream
     "Udelfangen": (230, 220, 200),             # Fine light beige
     "Stanton Moor": (220, 190, 170),           # Light reddish beige
-    
+
     # Browns and reds
     "Granit moreno ingemarga": (145, 95, 60),  # Brown
     "Granit boveda moreno": (110, 80, 60),     # Dark brown
@@ -95,7 +95,7 @@ MATERIAL_COLORS = {
     "Zarcilla": (170, 130, 110),               # Reddish brown
     "Pulpis": (180, 160, 140),                 # Light brown
     "Pedra de mistretta": (190, 160, 120),     # Golden brown
-    
+
     # Grays (light to dark)
     "Pedra del garraf": (220, 220, 220),       # White gray
     "Blanc cardenal": (230, 230, 235),         # Light grayish white
@@ -110,26 +110,26 @@ MATERIAL_COLORS = {
     "Granit gudiña": (90, 90, 95),             # Dark gray
     "Granit merufe": (100, 100, 110),          # Veined dark gray
     "Granit del tarn": (180, 180, 190),        # Silvery gray
-    
+
     # Greenish grays
     "Cantàbria": (120, 150, 140),              # Greenish gray
     "Escòcia": (140, 160, 150),                # Greenish gray
     "Llisós": (180, 190, 180),                 # Light greenish gray
     "Granit orrius o ull de serp": (130, 150, 130),  # Green gray
-    
+
     # Bluish tones
     "Blavozy": (160, 170, 190),                # Bluish gray
     "Pedra del figueró": (140, 150, 175),      # Blue gray
     "Granit blau bahia": (60, 80, 130),        # Dark blue
     "Granit de fraguas": (100, 110, 130),      # Dark bluish gray
     "Ocean Black": (50, 60, 70),               # Bluish black
-    
+
     # Blacks and dark tones
     "Basalt de castellfollit": (70, 70, 75),   # Grayish black
     "Basalt italià": (50, 50, 55),             # Intense black
     "Granit negre zimbawe": (40, 40, 45),      # Graphite black
     "Volcanica": (80, 80, 90),                 # Textured dark gray
-    
+
     # Whites and very light tones
     "Blanc macael": (250, 250, 250),           # Pure white
     "Granit blanco cristal": (240, 240, 240),  # Crystal white
@@ -138,14 +138,14 @@ MATERIAL_COLORS = {
     "Marbre de tassos": (240, 235, 230),       # Veined white
     "Marbre de carrara": (245, 245, 245),      # Carrara white
     "Himàlaia": (240, 235, 225),               # Veined crystal white
-    
+
     # Pinks
     "Jodhpur Pink": (230, 200, 200),           # Light pink
-    
+
     # Special tones
     "Pòrfir": (150, 100, 150),                 # Purple
     "Ònix": (180, 220, 200),                   # Translucent green
-    
+
     # Travertines
     "Travertí romà": (220, 200, 170),          # Travertine beige
     "Travertí de terol": (210, 180, 150),      # Reddish beige
