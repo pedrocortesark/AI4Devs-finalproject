@@ -16,6 +16,9 @@ try:
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
     )
+    from src.agent.services.file_download_service import FileDownloadService
+    from src.agent.services.db_service import DBService
+    from src.agent.services.rhino_parser_service import RhinoParserService
 except ImportError:
     from celery_app import celery_app
     from constants import (
@@ -26,9 +29,13 @@ except ImportError:
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
     )
+    from services.file_download_service import FileDownloadService
+    from services.db_service import DBService
+    from services.rhino_parser_service import RhinoParserService
 
 import structlog
 from datetime import datetime
+import rhino3dm
 
 logger = structlog.get_logger()
 
@@ -104,16 +111,6 @@ def validate_file(self, part_id: str, s3_key: str):
         dict: Result with success status and metadata
     """
     logger.info("validate_file.started", part_id=part_id, s3_key=s3_key)
-
-    # Import services
-    try:
-        from services.file_download_service import FileDownloadService
-        from services.rhino_parser_service import RhinoParserService
-        from services.db_service import DBService
-    except ModuleNotFoundError:
-        from src.agent.services.file_download_service import FileDownloadService
-        from src.agent.services.rhino_parser_service import RhinoParserService
-        from src.agent.services.db_service import DBService
 
     # Initialize services
     file_download = FileDownloadService()
@@ -333,16 +330,6 @@ def register_3dm_blocks(self, file_key: str):
         dict: {success, registered, skipped, block_ids}
     """
     logger.info("register_3dm_blocks.started", file_key=file_key)
-
-    # Import services
-    try:
-        from services.file_download_service import FileDownloadService
-        from services.db_service import DBService
-    except ModuleNotFoundError:
-        from src.agent.services.file_download_service import FileDownloadService
-        from src.agent.services.db_service import DBService
-
-    import rhino3dm
 
     file_download = FileDownloadService()
     db_service = DBService()
