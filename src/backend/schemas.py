@@ -491,7 +491,7 @@ class Element(BaseModel):
         Raises:
             ValueError: If material not in VALID_MATERIALS list
         """
-        from agent.constants import VALID_MATERIALS
+        from constants import VALID_MATERIALS
 
         if v not in VALID_MATERIALS:
             raise ValueError(
@@ -592,7 +592,7 @@ class ElementDetail(BaseModel):
     @classmethod
     def validate_material_type(cls, v: str) -> str:
         """Validate material_type against 62 real materials."""
-        from agent.constants import VALID_MATERIALS
+        from constants import VALID_MATERIALS
 
         if v not in VALID_MATERIALS:
             raise ValueError(f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} valid materials.")
