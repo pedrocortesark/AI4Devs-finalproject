@@ -22,6 +22,16 @@ import { setupStoreMock } from './test-helpers';
 // Mock the Zustand store
 vi.mock('@/stores/parts.store');
 
+// Mock usePartDetail hook (DetailsPanel not relevant to filter tests)
+vi.mock('@/components/Dashboard/PartDetailModal.hooks', () => ({
+  usePartDetail: vi.fn(() => ({ partData: null, loading: false, error: null, retry: vi.fn() })),
+}));
+
+// Mock PartViewer3D (Three.js canvas doesn't work in jsdom)
+vi.mock('@/components/details/PartViewer3D', () => ({
+  PartViewer3D: () => <div data-testid="part-viewer-3d-mock" />,
+}));
+
 describe('Dashboard3D Filters & State Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,16 +48,16 @@ describe('Dashboard3D Filters & State Integration', () => {
   });
 
   /**
-   * Test 6: Filtering by tipologia updates canvas opacity
-   * 
-   * Integration Point: FiltersSidebar → partsStore.setFilters → PartMesh opacity
-   * Expected: getFilteredParts returns only matching parts
+   * Test 6: Filtering by tipologia updates store state
+   *
+   * Integration Point: FilterBar dropdown → partsStore.setFilters
+   * Expected: setFilters called with tipologia: ['capitel']
    */
-  it('filters parts by tipologia when checkbox selected', async () => {
+  it('filters parts by tipologia when dropdown item selected', async () => {
     const user = userEvent.setup();
     const mockSetFilters = vi.fn();
-    const mockGetFilteredParts = vi.fn(() => 
-      mockPartsForFilterTesting.filter(p => p.tipologia === 'capitel')
+    const mockGetFilteredParts = vi.fn(() =>
+      mockPartsForFilterTesting.filter((p) => p.tipologia === 'capitel')
     );
 
     setupStoreMock({
@@ -55,14 +65,17 @@ describe('Dashboard3D Filters & State Integration', () => {
       getFilteredParts: mockGetFilteredParts,
     });
 
-    // When: Render Dashboard and click "capitel" filter
     render(<Dashboard3D />);
-    
-    // Find the capitel checkbox (assuming CheckboxGroup renders with label)
-    const capitelCheckbox = screen.getByRole('checkbox', { name: /capitel/i });
-    await user.click(capitelCheckbox);
 
-    // Then: setFilters was called with tipologia: ['capitel']
+    // Open the Tipología dropdown pill
+    const tipologiaPill = screen.getByRole('button', { name: /tipología/i });
+    await user.click(tipologiaPill);
+
+    // Click the Capitel option inside the dropdown
+    const capitelOption = screen.getByRole('option', { name: /capitel/i });
+    await user.click(capitelOption);
+
+    // setFilters was called with tipologia containing 'capitel'
     expect(mockSetFilters).toHaveBeenCalledWith(
       expect.objectContaining({
         tipologia: expect.arrayContaining(['capitel']),

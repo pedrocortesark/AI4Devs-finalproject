@@ -22,6 +22,16 @@ import { setupStoreMock } from './test-helpers';
 // Mock the Zustand store
 vi.mock('@/stores/parts.store');
 
+// Mock usePartDetail hook (DetailsPanel not relevant to rendering tests)
+vi.mock('@/components/Dashboard/PartDetailModal.hooks', () => ({
+  usePartDetail: vi.fn(() => ({ partData: null, loading: false, error: null, retry: vi.fn() })),
+}));
+
+// Mock PartViewer3D (Three.js canvas doesn't work in jsdom)
+vi.mock('@/components/details/PartViewer3D', () => ({
+  PartViewer3D: () => <div data-testid="part-viewer-3d-mock" />,
+}));
+
 describe('Dashboard3D Rendering Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,8 +45,8 @@ describe('Dashboard3D Rendering Integration', () => {
   /**
    * Test 1: Dashboard renders Canvas + Sidebar when parts exist
    * 
-   * Integration Point: partsStore.parts → Dashboard3D → Canvas3D + DraggableFiltersSidebar
-   * Expected: Both canvas and sidebar are present in the DOM
+   * Integration Point: partsStore.parts → Dashboard3D → Canvas3D + FilterBar
+   * Expected: Canvas and filter bar are present in the DOM
    */
   it('renders Canvas and Sidebar when parts array has items', () => {
     // Given: Store has 2 parts
@@ -48,9 +58,9 @@ describe('Dashboard3D Rendering Integration', () => {
     // When: Render Dashboard3D
     render(<Dashboard3D />);
 
-    // Then: Canvas and Sidebar are both visible
+    // Then: Canvas and filter bar are both visible
     expect(screen.getByTestId('three-canvas')).toBeInTheDocument();
-    expect(screen.getByRole('complementary')).toBeInTheDocument(); // Sidebar has role="complementary"
+    expect(screen.getByTestId('filter-bar')).toBeInTheDocument();
   });
 
   /**
