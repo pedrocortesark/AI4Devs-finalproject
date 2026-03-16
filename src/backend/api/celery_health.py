@@ -46,7 +46,7 @@ async def check_celery_health() -> CeleryHealthResponse:
         # Try to send a dummy task
         try:
             result = celery.send_task(
-                "agent.health_check",
+                "agent.tasks.health_check",
                 args=[],
                 countdown=0
             )
