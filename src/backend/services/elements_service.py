@@ -146,13 +146,13 @@ class ElementsService:
         Raises:
             ValueError: If material not in VALID_MATERIALS list
         """
-        from agent.constants import VALID_MATERIALS
+        from constants import VALID_MATERIALS
 
         if material_type not in VALID_MATERIALS:
             raise ValueError(
                 f"Invalid material_type: '{material_type}'. Must be one of {len(VALID_MATERIALS)} "
                 f"valid materials (e.g., Montjuïc, Ulldecona, Floresta). "
-                f"See agent.constants.MATERIAL_COLORS for full list."
+                f"See constants.MATERIAL_COLORS for full list."
             )
 
     def list_elements(
