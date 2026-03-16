@@ -43,24 +43,37 @@ class Settings(BaseSettings):
         """
         Build Redis URLs after all env vars are loaded.
         Priority: REDIS_URL > REDIS_PRIVATE_URL > Manual construction
+        
+        RAILWAY FIX: Ignores template variables like ${REDIS_PASSWORD} and removes
+        'default:' username (Railway Redis uses password-only authentication).
         """
-        # Only build if not explicitly set via env var
+        import re
+        
+        # Ignore Railway template variables that contain ${...} placeholders (not expanded)
+        if self.CELERY_BROKER_URL and '${' in self.CELERY_BROKER_URL:
+            self.CELERY_BROKER_URL = None  # Force manual construction
+        
+        # Priority 1: Use Railway's auto-injected REDIS_URL (overrides any existing value)
+        redis_url = os.getenv("REDIS_URL")
+        # Ignore if it's a template
+        if redis_url and '${' not in redis_url:
+            # Railway Redis doesn't use ACL usernames, remove 'default:' if present
+            # Pattern: redis://default:password@ → redis://:password@
+            cleaned_url = re.sub(r'redis://default:', 'redis://:', redis_url)
+            self.CELERY_BROKER_URL = cleaned_url
+            self.CELERY_RESULT_BACKEND = cleaned_url
+            return self
+        
+        # Priority 2: Use Railway's alternative REDIS_PRIVATE_URL
+        redis_private_url = os.getenv("REDIS_PRIVATE_URL") 
+        if redis_private_url and '${' not in redis_private_url:
+            cleaned_url = re.sub(r'redis://default:', 'redis://:', redis_private_url)
+            self.CELERY_BROKER_URL = cleaned_url
+            self.CELERY_RESULT_BACKEND = cleaned_url
+            return self
+        
+        # Priority 3: Manual construction (Docker local) - only if no Railway vars
         if not self.CELERY_BROKER_URL:
-            # Priority 1: Use Railway's auto-injected REDIS_URL
-            redis_url = os.getenv("REDIS_URL")
-            if redis_url:
-                self.CELERY_BROKER_URL = redis_url
-                self.CELERY_RESULT_BACKEND = redis_url
-                return self
-            
-            # Priority 2: Use Railway's alternative REDIS_PRIVATE_URL
-            redis_private_url = os.getenv("REDIS_PRIVATE_URL")
-            if redis_private_url:
-                self.CELERY_BROKER_URL = redis_private_url
-                self.CELERY_RESULT_BACKEND = redis_private_url
-                return self
-            
-            # Priority 3: Manual construction (Docker local)
             redis_password = os.getenv("REDIS_PASSWORD", "")
             redis_host = os.getenv("REDIS_HOST", "redis")
             redis_port = os.getenv("REDIS_PORT", "6379")
@@ -69,7 +82,9 @@ class Settings(BaseSettings):
             # URL-encode password to handle special characters (@, #, /, etc.)
             if redis_password:
                 encoded_password = quote_plus(redis_password)
-                url = f"redis://default:{encoded_password}@{redis_host}:{redis_port}/{redis_db}"
+                # Railway Redis doesn't use ACL usernames, only password
+                # Format: redis://:password@host:port/db (note the colon before password)
+                url = f"redis://:{encoded_password}@{redis_host}:{redis_port}/{redis_db}"
             else:
                 # No password (development/testing)
                 url = f"redis://{redis_host}:{redis_port}/{redis_db}"
@@ -78,10 +93,6 @@ class Settings(BaseSettings):
             self.CELERY_RESULT_BACKEND = url
         
         return self
-
-
-# Instantiate settings
-settings = Settings()
 
 
 # Instantiate settings

@@ -5,7 +5,17 @@ This module initializes the Celery application instance with secure
 configurations for distributed task processing.
 """
 
+import os
 from celery import Celery
+
+
+# RAILWAY FIX: Remove template env vars that Celery can't parse.
+# Railway injects CELERY_BROKER_URL=${REDIS_PASSWORD} which takes precedence
+# over constructor parameters. Delete them so config.py settings are used.
+if 'CELERY_BROKER_URL' in os.environ and '${' in os.environ['CELERY_BROKER_URL']:
+    del os.environ['CELERY_BROKER_URL']
+if 'CELERY_RESULT_BACKEND' in os.environ and '${' in os.environ['CELERY_RESULT_BACKEND']:
+    del os.environ['CELERY_RESULT_BACKEND']
 
 
 # Conditional import: support both direct execution and module import
