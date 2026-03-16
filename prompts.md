@@ -16798,3 +16798,21 @@ Corregir construcción de CELERY_BROKER_URL en docker-compose files para incluir
 **Resumen de la Respuesta/Acción:**
 Refactorizar construcción de CELERY_BROKER_URL para usar REDIS_URL de Railway como fuente primaria, implementar URL encoding con urllib.parse.quote_plus() para caracteres especiales en contraseñas, y mantener compatibilidad con Docker local.
 ---
+
+## [237] - Fix Race Condition en Validación de Archivos (Multi-Worker Celery)
+**Fecha:** 2026-03-16 21:30
+
+**Prompt Original:**
+> Si, haz las modificaciones oportunas para que esto se solucione y las geometrías puedan procesarse
+
+**Contexto:**
+Después de solucionar los issues de autenticación Redis, imports cross-module y task names, se detectó un problema crítico en producción: 100% de las validaciones de geometría fallan con errores "File not found" o "read_failed". Análisis de logs reveló race condition: 4 ForkPoolWorkers paralelos descargan el mismo archivo .3dm a `/tmp/sf-pm-agent/test-model.3dm`, causando que cuando Worker-4 termina y elimina el archivo, Workers 1-3 fallan al intentar leerlo. Patrón confirmado en 12/12 blocks (2 uploads diferentes).
+
+**Resumen de la Respuesta/Acción:**
+Modificar `FileDownloadService.download_from_s3()` para aceptar parámetro opcional `task_id` y usarlo como prefijo en nombre de archivo temporal (`{task_id}-{filename}`) para garantizar unicidad entre workers paralelos. Actualizar `validate_file()` para pasar `self.request.id` (Celery task ID) al servicio de descarga. Esto elimina la race condition permitiendo que cada worker tenga su propia copia temporal del archivo.
+
+**Archivos Modificados:**
+- src/agent/services/file_download_service.py: Añadir parámetro task_id, prefixar filename
+- src/agent/tasks/file_validation.py: Pasar self.request.id al download service
+
+---

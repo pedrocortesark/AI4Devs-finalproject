@@ -28,12 +28,13 @@ class FileDownloadService:
         self.temp_dir = Path("/tmp/sf-pm-agent")
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
-    def download_from_s3(self, s3_key: str) -> tuple[bool, str, str]:
+    def download_from_s3(self, s3_key: str, task_id: str = None) -> tuple[bool, str, str]:
         """
         Download file from S3 to temporary directory.
 
         Args:
             s3_key: S3 key/path of the file (e.g., "uploads/file.3dm")
+            task_id: Optional Celery task ID to create unique temp filename (prevents race conditions)
 
         Returns:
             Tuple of (success, local_path, error_message)
@@ -41,11 +42,14 @@ class FileDownloadService:
             - local_path: Absolute path to downloaded file if success=True
             - error_message: Error description if success=False
         """
-        logger.info("file_download.download_from_s3.started", s3_key=s3_key)
+        logger.info("file_download.download_from_s3.started", s3_key=s3_key, task_id=task_id)
 
         try:
-            # Generate unique temp filename
+            # Generate unique temp filename using task_id to avoid race conditions
             filename = Path(s3_key).name
+            if task_id:
+                # Prefix filename with task_id for uniqueness across parallel workers
+                filename = f"{task_id}-{filename}"
             local_path = self.temp_dir / filename
 
             # Download file from Supabase Storage

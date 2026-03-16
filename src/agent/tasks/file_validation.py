@@ -124,8 +124,8 @@ def validate_file(self, part_id: str, s3_key: str):
         # Step 1: Update status to processing
         db_service.update_block_status(part_id, "processing")
 
-        # Step 2: Download file from S3
-        success, local_path, download_error = file_download.download_from_s3(s3_key)
+        # Step 2: Download file from S3 (pass task_id to avoid race conditions)
+        success, local_path, download_error = file_download.download_from_s3(s3_key, task_id=self.request.id)
 
         if not success:
             logger.error("validate_file.download_failed", part_id=part_id, error=download_error)
