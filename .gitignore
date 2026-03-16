@@ -99,3 +99,6 @@ data/processed/*
 *.backup
 *.bak
 *.old
+
+# Added by ggshield
+.cache_ggshield

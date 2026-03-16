@@ -16791,3 +16791,10 @@ Usuario decide PAUSAR desarrollo de nuevas features (US-018 LangGraph, US-007, U
 **Resumen de la Respuesta/Acción:**
 Corregir construcción de CELERY_BROKER_URL en docker-compose files para incluir usuario 'default' (redis://default:password@) y solucionar autenticación en Railway Redis 6+ ACLs.
 ---
+
+## [236] - Fix Celery/Redis 'Invalid username-password pair' en Railway (URL Encoding)
+**Fecha:** 2026-03-16 15:30
+
+**Resumen de la Respuesta/Acción:**
+Refactorizar construcción de CELERY_BROKER_URL para usar REDIS_URL de Railway como fuente primaria, implementar URL encoding con urllib.parse.quote_plus() para caracteres especiales en contraseñas, y mantener compatibilidad con Docker local.
+---

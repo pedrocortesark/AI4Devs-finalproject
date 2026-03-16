@@ -18,7 +18,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-      - CELERY_BROKER_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # Used by config.py to build CELERY_BROKER_URL with URL encoding
       - PYTHONPATH=/app:/app/src
     depends_on:
       db:
@@ -108,8 +108,7 @@ services:
     tmpfs:
       - /tmp:size=2G,mode=1777
     environment:
-      - CELERY_BROKER_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://default:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # Used by config.py to build CELERY_BROKER_URL with URL encoding
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - DATABASE_URL=${SUPABASE_DATABASE_URL}
