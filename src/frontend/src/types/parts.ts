@@ -34,7 +34,8 @@ export interface PartCanvasItem {
   id: string;                      // UUID string
   iso_code: string;                // e.g., "SF-C12-D-001"
   status: BlockStatus;             // Enum value
-  tipologia: string;               // "capitel" | "columna" | "dovela" | etc.
+  tipologia: string;               // material_type (Montjuïc, Ulldecona, etc.) — mapped from API
+  agrupacio: string | null;        // SF_ARC_Agrupacio1 from Rhino metadata
   high_poly_url?: string | null;   // US-015: High-poly URL (~7k tris) for LOD Level 0 (0-5m)
   mid_poly_url?: string | null;    // US-015: Mid-poly URL (~2k tris) for LOD Level 1 (5-20m)
   low_poly_url: string | null;     // US-015: Low-poly URL (~500 tris) for LOD Level 2 (20-50m), required fallback

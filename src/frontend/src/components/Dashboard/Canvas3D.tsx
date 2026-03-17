@@ -154,7 +154,7 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         </Suspense>
 
         {/* Debug Helpers — TEMPORARILY RE-ENABLED for camera diagnosis */}
-        <DebugHelpers parts={filteredParts} enabled={true} />
+        <DebugHelpers parts={filteredParts} enabled={false} />
 
         {/* Stats Panel (dev only) */}
         {showStats && <Stats />}

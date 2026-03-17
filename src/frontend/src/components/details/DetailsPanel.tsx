@@ -419,7 +419,6 @@ export function DetailsPanel({ partId, isOpen, onClose }: DetailsPanelProps) {
             <PartViewer3D
               url={viewerUrl}
               materialType={partData?.material_type}
-              bbox={partData?.bbox}
             />
           </div>
 

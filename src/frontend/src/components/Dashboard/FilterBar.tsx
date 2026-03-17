@@ -5,14 +5,15 @@
  * Replaces the draggable sidebar + conditional hint bar.
  *
  * Layout (left → right):
- *   [Tipología ▾] [Estado ▾]  X/Y piezas  [× Limpiar]  |  <selection info when part selected>
+ *   [Agrupació ▾] [Material ▾]  X/Y piezas  [× Limpiar]  |  <selection info when part selected>
+ *
+ * Filter options are derived dynamically from the loaded parts data.
  *
  * @module FilterBar
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { usePartsStore } from '@/stores/parts.store';
-import { TIPOLOGIA_OPTIONS, STATUS_OPTIONS } from '@/constants/parts.constants';
 import styles from './FilterBar.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -112,27 +113,38 @@ function FilterDropdown({ label, icon, options, value, onChange }: FilterDropdow
 export function FilterBar({ selectedId, showDetailsPanel, onShowDetails }: FilterBarProps) {
   const { parts, filters, setFilters, clearFilters, getFilteredParts } = usePartsStore();
 
+  // Derive filter options dynamically from loaded parts (unique non-null values, sorted)
+  const agrupacioOptions = useMemo(() => {
+    const values = [...new Set(parts.map((p) => p.agrupacio).filter((v): v is string => v !== null))].sort();
+    return values.map((v) => ({ value: v, label: v }));
+  }, [parts]);
+
+  const materialOptions = useMemo(() => {
+    const values = [...new Set(parts.map((p) => p.tipologia).filter(Boolean))].sort();
+    return values.map((v) => ({ value: v, label: v }));
+  }, [parts]);
+
   const filteredCount = getFilteredParts().length;
   const totalCount = parts.length;
-  const hasFilters = filters.tipologia.length > 0 || filters.status.length > 0;
+  const hasFilters = filters.agrupacio.length > 0 || filters.material.length > 0;
 
   return (
     <div className={styles.bar} data-testid="filter-bar">
       {/* ── Filter pills ─────────────────────────── */}
       <FilterDropdown
-        label="Tipología"
+        label="Agrupació"
         icon="⬡"
-        options={TIPOLOGIA_OPTIONS}
-        value={filters.tipologia}
-        onChange={(tipologia) => setFilters({ tipologia })}
+        options={agrupacioOptions}
+        value={filters.agrupacio}
+        onChange={(agrupacio) => setFilters({ agrupacio })}
       />
 
       <FilterDropdown
-        label="Estado"
-        icon="●"
-        options={STATUS_OPTIONS}
-        value={filters.status}
-        onChange={(status) => setFilters({ status })}
+        label="Material"
+        icon="◈"
+        options={materialOptions}
+        value={filters.material}
+        onChange={(material) => setFilters({ material })}
       />
 
       {/* ── Counter ──────────────────────────────── */}
@@ -148,6 +160,12 @@ export function FilterBar({ selectedId, showDetailsPanel, onShowDetails }: Filte
           × Limpiar
         </button>
       )}
+
+      {/* ── Upload button ────────────────────────── */}
+      <span className={styles.divider} />
+      <a href="/upload" className={styles.uploadButton} title="Subir nuevo archivo .3dm">
+        + Subir
+      </a>
 
       {/* ── Selection info (only when part selected and panel not open) ─────── */}
       {selectedId && !showDetailsPanel && (

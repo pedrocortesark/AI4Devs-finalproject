@@ -190,6 +190,31 @@
   background: #2563eb;
 }
 
+/* ─── Upload button ──────────────────────────────────────────────────────────── */
+
+.uploadButton {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 28px;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  flex-shrink: 0;
+}
+
+.uploadButton:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.7);
+  color: #bfdbfe;
+}
+
 /* ─── Dropdown panel ─────────────────────────────────────────────────────────── */
 
 .dropdownAnchor {
