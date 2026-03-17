@@ -47,6 +47,8 @@ function parseURLToFilters(searchParams: URLSearchParams): PartsFilters {
   return {
     material: materialParam ? materialParam.split(FILTER_URL_PARAMS.SEPARATOR) : [],
     agrupacio: agrupacioParam ? agrupacioParam.split(FILTER_URL_PARAMS.SEPARATOR) : [],
+    tipologia: [],
+    status: [],
     workshop_id: workshopParam || null,
   };
 }
