@@ -128,10 +128,10 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   const matchesFilters = filteredParts.some((p: typeof part) => p.id === part.id);
   
   // Check if any filters are applied
-  const hasFilterSystem = filters && ('status' in filters || 'tipologia' in filters);
+  const hasFilterSystem = filters && ('material' in filters || 'agrupacio' in filters);
   const hasActiveFilters = hasFilterSystem && (
-    (filters.status?.length ?? 0) > 0 || 
-    (filters.tipologia?.length ?? 0) > 0 || 
+    (filters.material?.length ?? 0) > 0 ||
+    (filters.agrupacio?.length ?? 0) > 0 ||
     filters.workshop_id !== null
   );
   

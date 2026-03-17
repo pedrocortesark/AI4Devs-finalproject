@@ -36,19 +36,19 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export async function getPartNavigation(
   partId: string,
   filters?: {
-    status?: string[];
-    tipologia?: string[];
+    material?: string[];
+    agrupacio?: string[];
     workshop_id?: string;
   } | null
 ): Promise<AdjacentPartsInfo> {
   // Construct query params from filters
   const params = new URLSearchParams();
-  
-  if (filters?.status) {
-    filters.status.forEach(s => params.append('status', s));
+
+  if (filters?.material) {
+    filters.material.forEach(m => params.append('material_type', m));
   }
-  if (filters?.tipologia) {
-    filters.tipologia.forEach(t => params.append('tipologia', t));
+  if (filters?.agrupacio) {
+    filters.agrupacio.forEach(a => params.append('agrupacio', a));
   }
   if (filters?.workshop_id) {
     params.append('workshop_id', filters.workshop_id);

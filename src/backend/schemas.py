@@ -475,6 +475,10 @@ class Element(BaseModel):
         None,
         description="3D bounding box (used for camera centering and LOD Level 3: >50m wireframe proxy)"
     )
+    agrupacio: Optional[str] = Field(
+        None,
+        description="Architectural grouping from Rhino metadata (SF_ARC_Agrupacio1 attribute)"
+    )
 
     @field_validator('material_type')
     @classmethod

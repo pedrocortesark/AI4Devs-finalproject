@@ -15,13 +15,12 @@
  * @module details/PartViewer3D
  */
 
-import React, { Suspense, useMemo, useEffect, useRef } from 'react';
-import { Canvas, useLoader, useThree } from '@react-three/fiber';
-import { OrbitControls, Html } from '@react-three/drei';
+import React, { Suspense, useMemo, useEffect } from 'react';
+import { Canvas, useLoader } from '@react-three/fiber';
+import { OrbitControls, Html, Bounds } from '@react-three/drei';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { Box3, Vector3, MeshStandardMaterial, Color, GridHelper } from 'three';
+import { Box3, Vector3, MeshStandardMaterial, Color } from 'three';
 import { MATERIAL_COLORS, DEFAULT_MATERIAL } from '@/constants/materials';
-import type { BoundingBox } from '@/types/parts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,14 +29,12 @@ interface PartViewer3DProps {
   url: string | null;
   /** Material name from MATERIAL_COLORS dict (e.g. "Montjuïc") */
   materialType?: string | null;
-  /** Bounding box for camera positioning */
-  bbox?: BoundingBox | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const VIEWER_BG = '#1a1a2e';
-const DEFAULT_CAMERA_POSITION: [number, number, number] = [5, 5, 5];
+const DEFAULT_CAMERA_POSITION: [number, number, number] = [3, 3, 3];
 
 // ─── Helper: resolve material color ──────────────────────────────────────────
 
@@ -48,47 +45,6 @@ function resolveMaterialColor(materialType?: string | null): string {
   const [r, g, b] = MATERIAL_COLORS[key];
   const toHex = (v: number) => v.toString(16).padStart(2, '0');
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-// ─── Sub-component: CameraSetup ───────────────────────────────────────────────
-
-/**
- * Sets up the camera to frame the part geometry.
- * Uses bbox center + diagonal as camera distance.
- * Must be rendered inside <Canvas>.
- */
-function CameraSetup({ bbox }: { bbox?: BoundingBox | null }) {
-  const { camera } = useThree();
-  const initialized = useRef(false);
-
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    if (bbox) {
-      const min = new Vector3(...bbox.min);
-      const max = new Vector3(...bbox.max);
-      const center = new Vector3().addVectors(min, max).multiplyScalar(0.5);
-      const size = new Vector3().subVectors(max, min);
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const distance = maxDim * 2.5;
-
-      // Position camera at diagonal, looking at center
-      // Apply Z→Y rotation offset: bbox is in Rhino Z-up coords
-      camera.position.set(
-        center.x + distance * 0.6,
-        center.z + distance * 0.8,  // Z becomes Y after rotation
-        center.y + distance * 0.6,
-      );
-      camera.lookAt(center.x, center.z, center.y);
-    } else {
-      camera.position.set(...DEFAULT_CAMERA_POSITION);
-      camera.lookAt(0, 0, 0);
-    }
-    camera.updateProjectionMatrix();
-  }, [bbox, camera]);
-
-  return null;
 }
 
 // ─── Sub-component: OBJMesh ───────────────────────────────────────────────────
@@ -199,7 +155,7 @@ function NoGeometryFallback() {
  *   bbox={partData.bbox}
  * />
  */
-export function PartViewer3D({ url, materialType, bbox }: PartViewer3DProps) {
+export function PartViewer3D({ url, materialType }: PartViewer3DProps) {
   if (!url) {
     return <NoGeometryFallback />;
   }
@@ -216,11 +172,8 @@ export function PartViewer3D({ url, materialType, bbox }: PartViewer3DProps) {
         shadows
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: false }}
-        camera={{ fov: 45, near: 0.01, far: 5000 }}
+        camera={{ fov: 45, near: 0.01, far: 5000, position: DEFAULT_CAMERA_POSITION }}
       >
-        {/* Camera positioning from bbox */}
-        <CameraSetup bbox={bbox} />
-
         {/* Lighting */}
         <ambientLight intensity={0.6} />
         <directionalLight
@@ -232,11 +185,9 @@ export function PartViewer3D({ url, materialType, bbox }: PartViewer3DProps) {
         />
         <directionalLight position={[-5, 5, -5]} intensity={0.4} />
 
-        {/* Grid helper for scale reference */}
-        <primitive object={new GridHelper(20, 20, 0x333344, 0x222233)} />
-
         {/* Controls */}
         <OrbitControls
+          makeDefault
           enableDamping
           dampingFactor={0.05}
           enableZoom
@@ -245,10 +196,12 @@ export function PartViewer3D({ url, materialType, bbox }: PartViewer3DProps) {
           maxDistance={500}
         />
 
-        {/* Model */}
-        <Suspense fallback={<LoadingFallback />}>
-          <OBJMesh url={sanitizedUrl} colorHex={colorHex} />
-        </Suspense>
+        {/* Model — Bounds auto-fits camera to loaded geometry */}
+        <Bounds fit clip observe margin={1.1}>
+          <Suspense fallback={<LoadingFallback />}>
+            <OBJMesh url={sanitizedUrl} colorHex={colorHex} />
+          </Suspense>
+        </Bounds>
       </Canvas>
     </div>
   );

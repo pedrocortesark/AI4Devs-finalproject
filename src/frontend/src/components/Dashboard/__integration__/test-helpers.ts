@@ -32,7 +32,7 @@ export const setupStoreMock = (overrides: Partial<ReturnType<typeof usePartsStor
       parts: [],
       isLoading: false,
       error: null,
-      filters: { status: [], tipologia: [], workshop_id: null },
+      filters: { material: [], agrupacio: [], workshop_id: null },
       selectedId: null,
       setParts: vi.fn(),
       setLoading: vi.fn(),

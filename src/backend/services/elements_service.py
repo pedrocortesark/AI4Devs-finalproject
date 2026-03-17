@@ -107,6 +107,11 @@ class ElementsService:
         mid_poly_url = self._apply_cdn_transformation(row.get("mid_poly_url"))
         low_poly_url = self._apply_cdn_transformation(row.get("low_poly_url"))
 
+        # Extract SF_ARC_Agrupacio1 from rhino_metadata JSONB
+        rhino_metadata = row.get("rhino_metadata") or {}
+        agrupacio_raw = rhino_metadata.get("SF_ARC_Agrupacio1") if isinstance(rhino_metadata, dict) else None
+        agrupacio = str(agrupacio_raw) if agrupacio_raw is not None else None
+
         return Element(
             id=row["id"],
             iso_code=row["iso_code"],
@@ -115,7 +120,8 @@ class ElementsService:
             high_poly_url=high_poly_url,  # CDN-transformed or None
             mid_poly_url=mid_poly_url,    # CDN-transformed or None
             low_poly_url=low_poly_url,    # CDN-transformed or None
-            bbox=bbox
+            bbox=bbox,
+            agrupacio=agrupacio,
         )
 
     def _build_filters_applied(self, status: Optional[str], material_type: Optional[str]) -> Dict[str, str]:

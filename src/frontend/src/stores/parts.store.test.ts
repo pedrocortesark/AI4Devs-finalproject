@@ -1,7 +1,8 @@
 /**
  * T-0506-FRONT: Parts Store Tests - Filter Functionality
- * 
- * TDD RED Phase: Tests for Zustand store filter methods
+ *
+ * Tests for Zustand store filter methods using the new
+ * material (material_type) and agrupacio (SF_ARC_Agrupacio1) fields.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -13,7 +14,8 @@ const mockParts: PartCanvasItem[] = [
     id: '1',
     iso_code: 'SF-C12-D-001',
     status: 'validated' as BlockStatus,
-    tipologia: 'capitel',
+    tipologia: 'Montjuïc',
+    agrupacio: 'Nef Central',
     low_poly_url: 'https://example.com/1.glb',
     bbox: { min: [0, 0, 0], max: [1, 1, 1] },
     workshop_id: 'workshop-123',
@@ -22,7 +24,8 @@ const mockParts: PartCanvasItem[] = [
     id: '2',
     iso_code: 'SF-C12-D-002',
     status: 'uploaded' as BlockStatus,
-    tipologia: 'columna',
+    tipologia: 'Ulldecona',
+    agrupacio: 'Absis',
     low_poly_url: 'https://example.com/2.glb',
     bbox: { min: [0, 0, 0], max: [1, 1, 1] },
     workshop_id: 'workshop-456',
@@ -31,7 +34,8 @@ const mockParts: PartCanvasItem[] = [
     id: '3',
     iso_code: 'SF-C12-D-003',
     status: 'uploaded' as BlockStatus,
-    tipologia: 'capitel',
+    tipologia: 'Montjuïc',
+    agrupacio: 'Nef Central',
     low_poly_url: 'https://example.com/3.glb',
     bbox: { min: [0, 0, 0], max: [1, 1, 1] },
     workshop_id: null,
@@ -40,10 +44,9 @@ const mockParts: PartCanvasItem[] = [
 
 describe('PartsStore - Filter Functionality', () => {
   beforeEach(() => {
-    // Reset store to initial state
     usePartsStore.setState({
       parts: [],
-      filters: { status: [], tipologia: [], workshop_id: null },
+      filters: { material: [], agrupacio: [], workshop_id: null },
       selectedId: null,
       isLoading: false,
       error: null,
@@ -52,122 +55,110 @@ describe('PartsStore - Filter Functionality', () => {
 
   describe('setFilters', () => {
     it('should update filters with partial updates', () => {
-      const { setFilters, filters } = usePartsStore.getState();
-      
-      setFilters({ tipologia: ['capitel'] });
-      
-      expect(usePartsStore.getState().filters.tipologia).toEqual(['capitel']);
-      expect(usePartsStore.getState().filters.status).toEqual([]);
+      const { setFilters } = usePartsStore.getState();
+
+      setFilters({ material: ['Montjuïc'] });
+
+      expect(usePartsStore.getState().filters.material).toEqual(['Montjuïc']);
+      expect(usePartsStore.getState().filters.agrupacio).toEqual([]);
     });
 
     it('should merge new filters with existing filters', () => {
       const { setFilters } = usePartsStore.getState();
-      
-      setFilters({ tipologia: ['capitel'] });
-      setFilters({ status: ['validated'] });
-      
+
+      setFilters({ material: ['Montjuïc'] });
+      setFilters({ agrupacio: ['Nef Central'] });
+
       const state = usePartsStore.getState();
-      expect(state.filters.tipologia).toEqual(['capitel']);
-      expect(state.filters.status).toEqual(['validated']);
+      expect(state.filters.material).toEqual(['Montjuïc']);
+      expect(state.filters.agrupacio).toEqual(['Nef Central']);
     });
   });
 
   describe('clearFilters', () => {
     it('should reset all filters to initial empty state', () => {
       const { setFilters, clearFilters } = usePartsStore.getState();
-      
-      // Set some filters
-      setFilters({ tipologia: ['capitel'], status: ['validated'] });
-      
-      // Clear filters
+
+      setFilters({ material: ['Montjuïc'], agrupacio: ['Nef Central'] });
       clearFilters();
-      
+
       const state = usePartsStore.getState();
-      expect(state.filters.tipologia).toEqual([]);
-      expect(state.filters.status).toEqual([]);
+      expect(state.filters.material).toEqual([]);
+      expect(state.filters.agrupacio).toEqual([]);
       expect(state.filters.workshop_id).toBeNull();
     });
   });
 
   describe('getFilteredParts', () => {
     beforeEach(() => {
-      // Populate store with mock parts
       usePartsStore.setState({ parts: mockParts });
     });
 
     it('should return all parts when no filters applied', () => {
       const { getFilteredParts } = usePartsStore.getState();
-      
-      const filtered = getFilteredParts();
-      
-      expect(filtered).toHaveLength(3);
+      expect(getFilteredParts()).toHaveLength(3);
     });
 
-    it('should filter by single tipologia', () => {
+    it('should filter by single material (OR logic)', () => {
       const { setFilters, getFilteredParts } = usePartsStore.getState();
-      
-      setFilters({ tipologia: ['capitel'] });
+
+      setFilters({ material: ['Montjuïc'] });
       const filtered = getFilteredParts();
-      
+
       expect(filtered).toHaveLength(2);
-      expect(filtered.every(p => p.tipologia === 'capitel')).toBe(true);
+      expect(filtered.every((p) => p.tipologia === 'Montjuïc')).toBe(true);
     });
 
-    it('should filter by multiple tipologias (OR logic)', () => {
+    it('should filter by multiple materials (OR logic)', () => {
       const { setFilters, getFilteredParts } = usePartsStore.getState();
-      
-      setFilters({ tipologia: ['capitel', 'columna'] });
-      const filtered = getFilteredParts();
-      
-      expect(filtered).toHaveLength(3);
+
+      setFilters({ material: ['Montjuïc', 'Ulldecona'] });
+      expect(getFilteredParts()).toHaveLength(3);
     });
 
-    it('should filter by single status', () => {
+    it('should filter by single agrupacio', () => {
       const { setFilters, getFilteredParts } = usePartsStore.getState();
-      
-      setFilters({ status: ['validated'] });
+
+      setFilters({ agrupacio: ['Absis'] });
       const filtered = getFilteredParts();
-      
+
       expect(filtered).toHaveLength(1);
-      expect(filtered[0].id).toBe('1');
+      expect(filtered[0].id).toBe('2');
     });
 
-    it('should filter by multiple statuses (OR logic)', () => {
+    it('should filter by multiple agrupacions (OR logic)', () => {
       const { setFilters, getFilteredParts } = usePartsStore.getState();
-      
-      setFilters({ status: ['validated', 'uploaded'] });
-      const filtered = getFilteredParts();
-      
-      expect(filtered).toHaveLength(3);
+
+      setFilters({ agrupacio: ['Nef Central', 'Absis'] });
+      expect(getFilteredParts()).toHaveLength(3);
     });
 
-    it('should combine filters with AND logic (tipologia AND status)', () => {
+    it('should combine material and agrupacio with AND logic', () => {
       const { setFilters, getFilteredParts } = usePartsStore.getState();
-      
-      setFilters({ tipologia: ['capitel'], status: ['validated'] });
+
+      setFilters({ material: ['Montjuïc'], agrupacio: ['Nef Central'] });
       const filtered = getFilteredParts();
-      
-      expect(filtered).toHaveLength(1);
-      expect(filtered[0].id).toBe('1');
+
+      expect(filtered).toHaveLength(2);
+      expect(filtered.every((p) => p.tipologia === 'Montjuïc')).toBe(true);
+      expect(filtered.every((p) => p.agrupacio === 'Nef Central')).toBe(true);
     });
 
     it('should filter by workshop_id', () => {
       const { setFilters, getFilteredParts } = usePartsStore.getState();
-      
+
       setFilters({ workshop_id: 'workshop-123' });
       const filtered = getFilteredParts();
-      
+
       expect(filtered).toHaveLength(1);
       expect(filtered[0].id).toBe('1');
     });
 
     it('should return empty array when no parts match filters', () => {
       const { setFilters, getFilteredParts } = usePartsStore.getState();
-      
-      setFilters({ tipologia: ['dovela'] }); // No parts with dovela
-      const filtered = getFilteredParts();
-      
-      expect(filtered).toHaveLength(0);
+
+      setFilters({ material: ['Floresta'] }); // No parts with this material
+      expect(getFilteredParts()).toHaveLength(0);
     });
   });
 });

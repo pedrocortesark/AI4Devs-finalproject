@@ -15,8 +15,8 @@ import { listParts } from '@/services/parts.service';
  * Parts filter structure
  */
 export interface PartsFilters {
-  status: string[];
-  tipologia: string[];
+  material: string[];    // Filter by material_type (Montjuïc, Ulldecona, etc.)
+  agrupacio: string[];   // Filter by SF_ARC_Agrupacio1 Rhino metadata key
   workshop_id: string | null;
   [key: string]: string | string[] | null | undefined;  // Index signature for Record compatibility (allows undefined from Partial)
 }
@@ -82,8 +82,8 @@ interface PartsState {
 export const usePartsStore = create<PartsState>((set, get) => ({
   parts: [],
   filters: {
-    status: [],
-    tipologia: [],
+    material: [],
+    agrupacio: [],
     workshop_id: null,
   },
   selectedId: null,
@@ -126,8 +126,8 @@ export const usePartsStore = create<PartsState>((set, get) => ({
   clearFilters: () => {
     set({
       filters: {
-        status: [],
-        tipologia: [],
+        material: [],
+        agrupacio: [],
         workshop_id: null,
       }
     });
@@ -135,23 +135,23 @@ export const usePartsStore = create<PartsState>((set, get) => ({
 
   getFilteredParts: () => {
     const { parts, filters } = get();
-    
+
     return parts.filter(part => {
-      // Apply status filter (OR logic)
-      if (filters.status.length > 0 && !filters.status.includes(part.status)) {
+      // Apply material filter (OR logic) — filters by material_type via tipologia field
+      if (filters.material.length > 0 && !filters.material.includes(part.tipologia)) {
         return false;
       }
-      
-      // Apply tipologia filter (OR logic)
-      if (filters.tipologia.length > 0 && !filters.tipologia.includes(part.tipologia)) {
+
+      // Apply agrupacio filter (OR logic) — filters by SF_ARC_Agrupacio1
+      if (filters.agrupacio.length > 0 && (part.agrupacio === null || !filters.agrupacio.includes(part.agrupacio))) {
         return false;
       }
-      
+
       // Apply workshop_id filter
       if (filters.workshop_id && part.workshop_id !== filters.workshop_id) {
         return false;
       }
-      
+
       return true;
     });
   },
