@@ -17,6 +17,8 @@ import { listParts } from '@/services/parts.service';
 export interface PartsFilters {
   material: string[];    // Filter by material_type (Montjuïc, Ulldecona, etc.)
   agrupacio: string[];   // Filter by SF_ARC_Agrupacio1 Rhino metadata key
+  tipologia: string[];   // Filter by tipologia (capitel, columna, dovela, etc.)
+  status: string[];      // Filter by status (validated, uploaded, etc.)
   workshop_id: string | null;
   [key: string]: string | string[] | null | undefined;  // Index signature for Record compatibility (allows undefined from Partial)
 }
@@ -84,6 +86,8 @@ export const usePartsStore = create<PartsState>((set, get) => ({
   filters: {
     material: [],
     agrupacio: [],
+    tipologia: [],
+    status: [],
     workshop_id: null,
   },
   selectedId: null,
@@ -128,6 +132,8 @@ export const usePartsStore = create<PartsState>((set, get) => ({
       filters: {
         material: [],
         agrupacio: [],
+        tipologia: [],
+        status: [],
         workshop_id: null,
       }
     });
@@ -144,6 +150,16 @@ export const usePartsStore = create<PartsState>((set, get) => ({
 
       // Apply agrupacio filter (OR logic) — filters by SF_ARC_Agrupacio1
       if (filters.agrupacio.length > 0 && (part.agrupacio === null || !filters.agrupacio.includes(part.agrupacio))) {
+        return false;
+      }
+
+      // Apply tipologia filter (OR logic)
+      if (filters.tipologia && filters.tipologia.length > 0 && !filters.tipologia.includes(part.tipologia)) {
+        return false;
+      }
+
+      // Apply status filter (OR logic)
+      if (filters.status && filters.status.length > 0 && !filters.status.includes(part.status)) {
         return false;
       }
 

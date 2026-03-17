@@ -20,7 +20,7 @@
  * @module details/DetailsPanel
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import styles from './DetailsPanel.module.css';
 import {
   TAB_CONFIG,

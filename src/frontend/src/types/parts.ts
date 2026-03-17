@@ -103,7 +103,13 @@ export interface PartDetail {
   /** Creation timestamp (ISO 8601 datetime) */
   created_at: string;
   
-  /** Presigned CDN URL for GLB file (TTL 5min), null if not generated yet */
+  /** Presigned CDN URL for high-poly OBJ file (~7k tris), null if not generated yet */
+  high_poly_url: string | null;
+  
+  /** Presigned CDN URL for mid-poly OBJ file (~2k tris), null if not generated yet */
+  mid_poly_url: string | null;
+  
+  /** Presigned CDN URL for low-poly OBJ file (~500 tris), null if not generated yet */
   low_poly_url: string | null;
   
   /** 3D bounding box for camera positioning */

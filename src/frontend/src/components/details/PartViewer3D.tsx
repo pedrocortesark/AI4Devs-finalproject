@@ -15,7 +15,7 @@
  * @module details/PartViewer3D
  */
 
-import React, { Suspense, useMemo, useEffect } from 'react';
+import { Suspense, useMemo, useEffect } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
 import { OrbitControls, Html, Bounds } from '@react-three/drei';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';

@@ -145,7 +145,7 @@ export default function FiltersSidebar() {
         </h3>
         <CheckboxGroup
           options={TIPOLOGIA_OPTIONS}
-          value={filters.tipologia}
+          value={filters.tipologia || []}
           onChange={handleTipologiaChange}
           ariaLabel="Filtro de tipología"
         />
@@ -158,7 +158,7 @@ export default function FiltersSidebar() {
         </h3>
         <CheckboxGroup
           options={STATUS_OPTIONS}
-          value={filters.status}
+          value={filters.status || []}
           onChange={handleStatusChange}
           ariaLabel="Filtro de estado"
         />

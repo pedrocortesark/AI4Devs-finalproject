@@ -29,3 +29,17 @@ export const FILTER_URL_PARAMS = {
   WORKSHOP: 'workshop_id',
   SEPARATOR: ',', // For multi-select arrays: material=Montjuïc,Ulldecona
 } as const;
+
+/**
+ * Tipología filter options
+ * Note: These should be derived dynamically from loaded parts data
+ * Currently placeholder for FiltersSidebar compatibility
+ */
+export const TIPOLOGIA_OPTIONS = [] as const;
+
+/**
+ * Status filter options
+ * Note: These should be derived dynamically from loaded parts data
+ * Currently placeholder for FiltersSidebar compatibility
+ */
+export const STATUS_OPTIONS = [] as const;
