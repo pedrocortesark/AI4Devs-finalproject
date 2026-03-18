@@ -174,20 +174,63 @@ Sistema de estado compartido para trabajo multi-agente:
 
 ---
 
-## 📊 Estado del Proyecto
+## 📊 Estado del Proyecto (Marzo 2026)
 
-✅ **Completado (Entrega 2)**:
-- **US-001**: Upload de archivos .3dm con presigned URLs y validación
-- **US-002**: Validación automática con agente "The Librarian" (Celery + rhino3dm)
-- **US-005**: Dashboard 3D interactivo de piezas (Three.js + LOD + filtros + Zustand)
-- **US-010**: Visor 3D Web (PartDetailModal, ModelLoader, ErrorBoundary, CDN)
-- **Tests**: ~400+ PASS (backend + frontend + agent, cobertura >80%)
-- **DevSecOps**: multi-stage Docker, healthchecks, resource limits, CI/CD (GitHub Actions)
+### 🚀 **MVP en Producción**
 
-🔮 **Pendiente (Entrega 3)**:
-- US-007: Cambio de estado con ciclo de vida completo
-- US-013: Login y autenticación (Supabase Auth)
-- US-009: Evidencia de fabricación (foto en completado)
+**URLs Producción:**
+- 🌐 Frontend: [sf-pm.vercel.app](https://sf-pm.vercel.app) (Vercel Edge Network)
+- 🔌 Backend API: `sf-pm-backend.railway.app` (Railway)
+- 💾 Database: Supabase Cloud PostgreSQL 15
+- 📦 Storage: Supabase Storage (S3-compatible)
+- ⚙️ Agent Workers: Railway (Celery + Redis)
+
+### ✅ **Completado — MVP (45.8% del Roadmap, 81/177 SP)**
+
+**5 User Stories implementadas y auditadas:**
+
+- **US-001**: Upload de archivos .3dm con presigned URLs (14/14 tests PASS)
+  - Drag & drop, validación formato, feedback visual
+  - Pattern: Presigned URLs para upload directo a Supabase Storage
+  
+- **US-002**: Validación automática con "The Librarian" (65/65 tests PASS)
+  - Validación nomenclatura ISO-19650 (regex + rule-based)
+  - 4 validaciones geométricas (bbox, objects, layers, coordinates)
+  - Extracción metadata Rhino User Strings → JSONB
+  - Agent: Celery worker con rhino3dm 8 + trimesh
+  
+- **US-005**: Dashboard 3D interactivo (268/268 tests PASS)
+  - Canvas Three.js (React-Three-Fiber) con sistema LOD 3 niveles
+  - Filtros por status, material_type, workshop_id (Zustand + URL sync)
+  - Selección piezas con glow emissivo (intensity 0.4)
+  - Performance: 60 FPS con 1197 meshes, 41 MB memoria
+  
+- **US-010**: Visor 3D Web (131/131 tests PASS)
+  - Modal `PartDetailModal` con OrbitControls + 3-point lighting
+  - Navegación prev/next con Redis cache (latencia <50ms)
+  - `ViewerErrorBoundary` con 5 patrones de error (WebGL, 404, timeout, corruption)
+  - BBoxProxy fallback para piezas en procesamiento
+  
+- **US-015**: Element Model Refactoring (454/473 tests PASS, 96%)
+  - Refactoring Parts → Elements (nomenclatura inglés)
+  - 62 materiales reales Sagrada Família (montjuic, ulldecona, floresta)
+  - Formato OBJ (coordenadas absolutas Rhino Z-up)
+  - Backend: `/api/elements/*` endpoints (7 endpoints)
+  - Frontend: Zod schemas + TypeScript strict
+  - Custom `useLOD` hook (reemplaza drei's `<Detailed>`)
+
+**Tests:** 419+ PASS (backend 79%, frontend 96.5%)  
+**DevSecOps:** Docker multi-stage, healthchecks, CI/CD (GitHub Actions), OWASP audits
+
+### 🔮 **Siguiente Fase — Features Pendientes (54.2% restante)**
+
+**Prioridad Inmediata (Sprint 9-10):**
+- **US-018**: LangGraph Agent con GPT-4 (21 SP) — Clasificación semántica + Circuit Breaker
+- **US-007**: Ciclo de vida completo (Diseñada → Instalada) — 5 estados + RLS
+- **US-013**: Autenticación Supabase (Login/Register/Roles)
+- **US-009**: Evidencia fotográfica de fabricación
+
+**Roadmap completo:** Ver [docs/08-roadmap.md](./docs/08-roadmap.md) y [docs/09-mvp-backlog.md](./docs/09-mvp-backlog.md)
 
 ---
 

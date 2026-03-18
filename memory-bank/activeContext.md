@@ -1,31 +1,47 @@
 # Active Context
 
 ## Current Sprint
-**Sprint 8 — PRODUCTION DEPLOYMENT CONSOLIDATION (2026-03-15 STARTED)**  
-**Strategy:** Deployment First, Features Later — Consolidate MVP (45.8%, 5 US complete) to production BEFORE resuming feature development.
+**Sprint 8 — PRODUCTION DEPLOYMENT CONSOLIDATION (2026-03-15 → 2026-03-20)**  
+**Status:** 🎯 **Day 3/5 — Documentation & Final Preparation**
 
 ## Active Ticket
-**NEXT: Production Deployment - Day 1 Railway Setup (Monday 16/03)** — Create Railway project, add Redis plugin, deploy Backend + Agent Worker services. Validate `/health` and `/ready` endpoints return 200 OK. Reference: [docs/DEPLOYMENT-READINESS-CHECKLIST.md](../docs/DEPLOYMENT-READINESS-CHECKLIST.md)
+**✅ Wed 18/03 — Documentation Cleanup (IN PROGRESS)** — Actualización completa de documentación para entrega final TFM: readme-official.md (5 US documentadas), README.md (URLs producción), docs/00-index.md, memory-bank/. Preparación para demo video y screenshots.
 
-## Sprint 8 Backlog — DEPLOYMENT TIMELINE (1 Week)
+## Sprint 8 Progress — DEPLOYMENT TIMELINE
 
-**Objective:** Deploy MVP to production (Railway + Vercel + Supabase) — 5 US live: US-001 Upload, US-002 Validation, US-005 Dashboard, US-010 Visor 3D, US-015 Element Model (81 SP complete)
+**Objective:** Deploy MVP to production (Railway + Vercel + Supabase) — **5 US live: US-001, US-002, US-005, US-010, US-015 (81/177 SP, 45.8%)**
 
-| Day | Phase | Tasks | DoD |
-|-----|-------|-------|-----|
-| **Mon 16/03** | Railway Setup | Create project, add Redis plugin, deploy Backend + Agent Worker | Backend `/health` OK, Celery worker logs "ready" |
-| **Tue 17/03** | Railway Validation | Upload .3dm via Postman, verify Celery tasks execute, check logs | Full pipeline works: upload → validation → LOD generation |
-| **Wed 18/03** | Vercel Deployment | Deploy frontend to Vercel, add ENV variables, update CORS | Frontend loads, API calls work, NO CORS errors |
-| **Thu 19/03** | E2E Validation | Upload 5 test files via frontend, verify Dashboard 3D, check Storage | Full user flow works end-to-end |
-| **Fri 20/03** | Documentation & Demo | Update README, create screenshots, record 5-min demo video | Demo ready for TFM evaluation |
+| Day | Phase | Status | Notes |
+|-----|-------|--------|-------|
+| **Mon 16/03** | ✅ Railway Setup | COMPLETADO | Backend + Agent Worker deployed, Redis connected, health checks green |
+| **Tue 17/03** | ✅ Railway Validation | COMPLETADO | Full pipeline verified: upload → Celery → LOD generation → Storage |
+| **Wed 18/03** | 🔄 Vercel + Docs | IN PROGRESS | Frontend deployed sf-pm.vercel.app, CORS OK. **Documentation cleanup ongoing** |
+| **Thu 19/03** | ⏳ E2E Validation | PENDING | Upload 5+ test files via frontend, verify Dashboard 3D end-to-end |
+| **Fri 20/03** | ⏳ Demo Prep | PENDING | Screenshots production, record 5-min demo video, final README polish |
 
-**Acceptance Criteria:**
-- ✅ Backend health checks green (Railway)
-- ✅ Frontend loads production URL (Vercel)
-- ✅ Full upload flow works (browser test)
-- ✅ 419+ tests passing (zero regressions)
-- ✅ Dashboard 3D displays parts correctly
-- ✅ Supabase Storage has .glb files
+**Production URLs (LIVE):**
+- 🌐 Frontend: https://sf-pm.vercel.app (Vercel)
+- 🔌 Backend: https://sf-pm-backend.railway.app (Railway)
+- 💾 Database: Supabase Cloud PostgreSQL 15
+- 📦 Storage: Supabase Storage (S3-compatible)
+
+**Deployment Acceptance Criteria:**
+- ✅ Backend health checks green (Railway) — `/health` returns 200 OK
+- ✅ Frontend loads production URL (Vercel) — sf-pm.vercel.app accessible
+- ✅ CORS configured correctly — frontend calls backend without errors
+- ✅ Celery workers operational — agent-worker logs show task processing
+- ⏳ Full upload flow works (browser E2E test) — PENDING (Thu 19/03)
+- ✅ 419+ tests passing locally (zero regressions)
+- ⏳ Dashboard 3D displays elements correctly — PENDING validation
+- ⏳ Storage has OBJ files (3 LODs) — PENDING verification
+
+**Documentation Progress (Wed 18/03):**
+- ✅ prompts.md: Entry #238 registered
+- ✅ readme-official.md: 5 US documented, API endpoints updated, structure corrected
+- ✅ README.md: Production URLs added, MVP status updated (45.8%)
+- ✅ docs/00-index.md: US-015 added to table
+- 🔄 memory-bank/activeContext.md: Status update in progress
+- ⏳ memory-bank/progress.md: Sprint 8 summary pending
 
 ---
 

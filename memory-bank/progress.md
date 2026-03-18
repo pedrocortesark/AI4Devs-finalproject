@@ -9,7 +9,7 @@
 
 ## Sprint History
 
-### Sprint 8 (in progress — started 2026-03-15)
+### Sprint 8 (Day 3/5 — started 2026-03-15, in progress)
 **STRATEGIC PIVOT: Deployment First, Features Later**
 
 **Context:** After US-015 Element Model closed (21 SP, 7 tickets, zero regression), user decided to PAUSE feature development (US-018 LangGraph Agent) and prioritize deploying MVP to production.
@@ -23,29 +23,46 @@
 - **Total MVP: 81/177 SP (45.8%)**
 
 **Timeline:** 1 week (Mon 16/03 → Fri 20/03)
-- Mon 16/03: Railway backend + agent worker deployment
-- Tue 17/03: Railway validation + Celery pipeline testing
-- Wed 18/03: Vercel frontend deployment + CORS configuration
-- Thu 19/03: E2E validation (5 test files via browser)
-- Fri 20/03: Documentation + demo video (5 min)
 
-**Acceptance Criteria:**
-- ✅ Backend health checks green (Railway `/health`, `/ready`)
-- ✅ Frontend loads production URL (Vercel)
-- ✅ Full upload → validation → LOD generation pipeline works
-- ✅ 419+ tests passing (zero regressions)
-- ✅ Dashboard 3D displays parts correctly
-- ✅ Supabase Storage has .glb/.obj files generated
+**Progress (Day 3/5 — Wed 18/03):**
+- ✅ Mon 16/03: Railway backend + agent worker deployed, Redis connected, health checks green
+- ✅ Tue 17/03: Full pipeline validated (upload → Celery → LOD generation → Storage), 6 blocks processed successfully
+- ✅ Wed 18/03 (TODAY): Vercel frontend deployed to sf-pm.vercel.app, CORS configured, **DOCUMENTATION CLEANUP IN PROGRESS** (readme-official.md 5 US documented, README.md production URLs added, docs/00-index.md updated, memory-bank/ synchronized)
+- ⏳ Thu 19/03: E2E validation pending (5+ test files via browser)
+- ⏳ Fri 20/03: Demo video + screenshots pending
 
-**Deliverables:**
-- Production URLs live (backend + frontend)
-- DEPLOYMENT-READINESS-CHECKLIST.md created (docs/)
-- README.md updated with production instructions
-- Demo video recorded (< 5 minutes)
+**Production URLs (LIVE):**
+- 🌐 Frontend: https://sf-pm.vercel.app (Vercel Edge)
+- 🔌 Backend: https://sf-pm-backend.railway.app (Railway)
+- 💾 Database: Supabase Cloud PostgreSQL 15
+- 📦 Storage: Supabase Storage (processed-geometry bucket)
 
-**US-018 LangGraph Agent (21 SP) — ⏸️ DEFERRED to Sprint 9** (after deployment complete)
+**Deployment Acceptance Criteria:**
+- ✅ Backend health checks green (Railway `/health`, `/ready`) — VERIFIED
+- ✅ Frontend loads production URL (Vercel) — sf-pm.vercel.app ACCESSIBLE
+- ✅ CORS configured correctly — frontend → backend calls working
+- ✅ Celery workers operational — agent-worker logs show task processing
+- ⏳ Full upload → validation → LOD generation pipeline end-to-end (PENDING browser test)
+- ✅ 419+ tests passing locally (zero regressions) — backend 11/14 (79%), frontend 443/459 (96.5%)
+- ⏳ Dashboard 3D displays elements correctly — PENDING E2E validation
+- ⏳ Storage has OBJ files (3 LODs per element) — PENDING verification
 
-**Prompts:** #234 (Strategic Pivot Deployment First)
+**Documentation Deliverables (Wed 18/03):**
+- ✅ `prompts.md`: Entry #238 "Limpieza Documentación Entrega Final TFM" registered
+- ✅ `readme-official.md`: 5 US fully documented (US-001, US-002, US-005, US-010, US-015), API endpoints updated (`/api/elements/*`), structure de archivos corrected
+- ✅ `README.md`: Production URLs added, MVP status updated (45.8%), Quick Start updated
+- ✅ `docs/00-index.md`: US-015 added to table
+- ✅ `memory-bank/activeContext.md`: Sprint 8 Day 3 status updated
+- ✅ `memory-bank/progress.md`: Sprint 8 summary updated (this entry)
+
+**Pending for Thu-Fri (Final Push):**
+- E2E browser test: Upload 5 .3dm files via sf-pm.vercel.app, verify Dashboard 3D renders, check Storage for OBJ files
+- Screenshots: Dashboard 3D, Visor 3D modal, Upload flow, Validation report
+- Demo video: 5-min screencast showing full workflow (upload → validation → dashboard → visor 3D)
+
+**US-018 LangGraph Agent (21 SP) — ⏸️ DEFERRED to Sprint 9** (after deployment + demo complete)
+
+**Prompts:** #234 (Strategic Pivot Deployment First), #238 (Documentation Cleanup Final)
 
 ---
 

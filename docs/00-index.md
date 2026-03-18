@@ -57,6 +57,9 @@ La documentacion esta organizada en **7 fases** de desarrollo de producto:
 | US-002 | The Librarian (Agent Validation) | ✅ COMPLETED (2026-02-17) | [US-002/](US-002/) |
 | US-005 | Dashboard 3D Interactivo | ✅ COMPLETED (2026-02-23) — 268/268 tests | [US-005/](US-005/) |
 | US-010 | Visor 3D Web de Piezas | ✅ COMPLETED (2026-02-26) — 390/396 tests | [US-010/](US-010/) |
+| US-015 | Element Model Refactoring | ✅ COMPLETED (2026-03-15) — 454/473 tests (96%) | [US-015/](US-015/) |
+
+**MVP Progress:** 5/11 US completadas — **81/177 SP (45.8%)**
 
 ---
 
