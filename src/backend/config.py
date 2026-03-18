@@ -87,6 +87,8 @@ class Settings(BaseSettings):
 
             self.CELERY_BROKER_URL = url
             self.CELERY_RESULT_BACKEND = url
+        
+        return self  # CRITICAL: Pydantic model_validator must always return self
 
 # Instantiate settings
 settings = Settings()
