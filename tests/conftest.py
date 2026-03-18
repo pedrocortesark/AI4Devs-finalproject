@@ -280,3 +280,47 @@ def setup_database_schema(db_connection):
         pytest.skip(f"Failed to setup test prerequisites: {e}")
 
     yield
+
+
+@pytest.fixture(scope="session")
+def test_3dm_file_in_storage(supabase_client: Client):
+    """
+    Upload test .3dm file to Supabase Storage for validation tests.
+
+    This fixture ensures the test-model.3dm fixture exists in Supabase Storage
+    at the path expected by validation integration tests.
+
+    Scope: session (uploads once per test session)
+    Cleanup: Deletes the test file after all tests complete
+
+    Storage path: raw-uploads/test-fixtures/test-model.3dm
+
+    Returns:
+        str: The storage path of the uploaded file
+    """
+    from pathlib import Path
+    
+    BUCKET_NAME = "raw-uploads"
+    DESTINATION_PATH = "test-fixtures/test-model.3dm"
+    SOURCE_FILE = Path(__file__).parent / "fixtures" / "test-model.3dm"
+    
+    # Upload test file
+    try:
+        with open(SOURCE_FILE, 'rb') as file:
+            supabase_client.storage.from_(BUCKET_NAME).upload(
+                path=DESTINATION_PATH,
+                file=file,
+                file_options={"content-type": "application/octet-stream", "upsert": "true"}
+            )
+        print(f"✅ Test fixture uploaded to {BUCKET_NAME}/{DESTINATION_PATH}")
+    except Exception as e:
+        pytest.skip(f"Failed to upload test fixture: {e}")
+    
+    yield DESTINATION_PATH
+    
+    # Cleanup: Delete test file after session
+    try:
+        supabase_client.storage.from_(BUCKET_NAME).remove([DESTINATION_PATH])
+        print(f"🧹 Test fixture cleaned up from storage")
+    except Exception:
+        pass  # Ignore cleanup errors
