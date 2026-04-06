@@ -149,6 +149,65 @@ make test-front
 
 ---
 
+## 🚀 MVP en Producción
+
+**Estado:** 45.8% completado (81/177 SP) — Sistema desplegado en Railway + Vercel + Supabase Cloud
+
+### URLs de Producción
+- 🌐 **Frontend**: https://sf-pm.vercel.app (Vercel CDN)
+- 🔧 **Backend API**: https://sf-pm-backend.railway.app (Railway)
+- 💾 **Database**: Supabase Cloud (PostgreSQL + Storage)
+
+### User Stories Completadas (5/11)
+
+#### ✅ US-001: Upload de Archivos .3dm (5 SP)
+**Logro:** Upload directo a Supabase Storage con presigned URLs (hasta 500MB)
+- **Stack:** React 18 + FastAPI + Supabase Storage (S3-compatible)
+- **Patrón:** Presigned URL elimina backend como proxy de datos
+- **Tests:** 25/25 PASS (Backend 7/7 ✅ | Frontend 18/18 ✅)
+
+#### ✅ US-002: The Librarian Agent - Validación Automática (13 SP)
+**Logro:** Agente AI con rhino3dm + LangGraph valida nomenclatura ISO-19650 y geometría
+- **Stack:** Celery + Redis + rhino3dm + Pydantic v2
+- **Validadores:** Nomenclature (regex), Geometry (4 checks), UserStrings (3 niveles)
+- **Tests:** 146/147 PASS (99.3%) — Agent 69/69 ✅ | Backend 77/77 ✅ | Frontend 77/77 ✅
+
+#### ✅ US-005: Dashboard 3D Interactivo (35 SP)
+**Logro:** Canvas Three.js con LOD system (3 niveles), filtros dinámicos, 60 FPS con 1197 meshes
+- **Stack:** React-Three-Fiber 8.15 + drei 9.92 + Zustand + TanStack Query
+- **Performance:** 60 FPS, 41 MB heap (5x mejor que target), 53% latency reduction con Redis cache
+- **Tests:** 268/268 PASS (100%) — Integration 17/17 ✅ | Unit 251/251 ✅
+
+#### ✅ US-010: Visor 3D Modal (15 SP)
+**Logro:** Modal de detalle con visor 3D, navegación prev/next, metadata panel, error handling
+- **Stack:** Three.js + OrbitControls + Redis navigation cache + ViewerErrorBoundary
+- **Features:** Auto-centering, focus trap WCAG 2.1, 5 error patterns manejados, retry logic
+- **Tests:** 131/131 PASS (100%) — T-1002: 23/23 ✅ | T-1003: 22/22 ✅ | T-1004-1009: 86/86 ✅
+
+#### ✅ US-015: Element Model Refactoring (21 SP)
+**Logro:** Refactorización E2E — Parts → Elements, materiales reales (62 piedras Sagrada Família)
+- **Stack:** Pydantic 2.x + Zod + TypeScript strict + Material Colors RGB mapping
+- **Cambios:** `material_type` TEXT (62 valores: Montjuïc, Ulldecona, Floresta...), `GET /api/elements` primary endpoint
+- **Tests:** 454/473 PASS (96%) — Backend 11/14 (79%) | Frontend 443/459 (96.5%)
+
+### Métricas del MVP
+
+| Métrica | Valor |
+|---------|-------|
+| **Story Points** | 81/177 SP (45.8%) |
+| **Tests Totales** | 419+ PASS |
+| **Cobertura Backend** | 79% passing |
+| **Cobertura Frontend** | 96.5% passing (443/459 tests) |
+| **Performance** | 60 FPS Dashboard 3D, <200ms API response |
+| **Validación E2E** | ✅ Completada (2026-03-18): 5 archivos .3dm subidos, Dashboard + Visor funcionando |
+
+### Próximos Hitos
+- **Sprint 9 (Mar 19-26)**: US-018 LangGraph Agent (clasificación semántica GPT-4)
+- **Sprint 10 (Mar 27-Apr 3)**: US-007 Lifecycle Management (cambio de estado)
+- **Entrega Final TFM**: 21 de marzo de 2026
+
+---
+
 ## 🤖 Desarrollo Asistido por IA
 
 Este proyecto utiliza **Claude Code** (claude-sonnet-4-6) como asistente de desarrollo.

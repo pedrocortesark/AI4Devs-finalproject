@@ -2,10 +2,10 @@
 
 ## Current Sprint
 **Sprint 8 — PRODUCTION DEPLOYMENT CONSOLIDATION (2026-03-15 → 2026-03-20)**  
-**Status:** 🎯 **Day 3/5 — Documentation & Final Preparation**
+**Status:** 🎯 **Day 3/5 — Documentation & E2E Validation ✅ COMPLETED**
 
 ## Active Ticket
-**✅ Wed 18/03 — Documentation Cleanup (IN PROGRESS)** — Actualización completa de documentación para entrega final TFM: readme-official.md (5 US documentadas), README.md (URLs producción), docs/00-index.md, memory-bank/. Preparación para demo video y screenshots.
+**✅ Wed 18/03 — Documentation Cleanup + E2E Validation (COMPLETADO)** — Actualización completa de documentación para entrega final TFM: readme-official.md (5 US documentadas), README.md (URLs producción + sección MVP detallada), docs/00-index.md, memory-bank/. **E2E browser validation completada:** 5 archivos .3dm subidos a sf-pm.vercel.app, Dashboard 3D + Visor 3D verificados funcionales en producción.
 
 ## Sprint 8 Progress — DEPLOYMENT TIMELINE
 
@@ -15,9 +15,9 @@
 |-----|-------|--------|-------|
 | **Mon 16/03** | ✅ Railway Setup | COMPLETADO | Backend + Agent Worker deployed, Redis connected, health checks green |
 | **Tue 17/03** | ✅ Railway Validation | COMPLETADO | Full pipeline verified: upload → Celery → LOD generation → Storage |
-| **Wed 18/03** | 🔄 Vercel + Docs | IN PROGRESS | Frontend deployed sf-pm.vercel.app, CORS OK. **Documentation cleanup ongoing** |
-| **Thu 19/03** | ⏳ E2E Validation | PENDING | Upload 5+ test files via frontend, verify Dashboard 3D end-to-end |
-| **Fri 20/03** | ⏳ Demo Prep | PENDING | Screenshots production, record 5-min demo video, final README polish |
+| **Wed 18/03** | ✅ Vercel + Docs + E2E | COMPLETADO | Frontend deployed sf-pm.vercel.app, CORS OK. Documentation cleanup done. **E2E validation COMPLETED: 5 .3dm files uploaded, Dashboard + Visor 3D verified** |
+| **Thu 19/03** | ⏳ Demo Video | PENDING | Record 5-min demo video (upload flow + Dashboard + Visor 3D) |
+| **Fri 20/03** | ⏳ TFM Prep | PENDING | Screenshots production, final README polish, TFM submission package |
 
 **Production URLs (LIVE):**
 - 🌐 Frontend: https://sf-pm.vercel.app (Vercel)
@@ -30,18 +30,18 @@
 - ✅ Frontend loads production URL (Vercel) — sf-pm.vercel.app accessible
 - ✅ CORS configured correctly — frontend calls backend without errors
 - ✅ Celery workers operational — agent-worker logs show task processing
-- ⏳ Full upload flow works (browser E2E test) — PENDING (Thu 19/03)
+- ✅ **Full upload flow works (browser E2E test) — COMPLETADO (5 .3dm files uploaded successfully)**
 - ✅ 419+ tests passing locally (zero regressions)
-- ⏳ Dashboard 3D displays elements correctly — PENDING validation
-- ⏳ Storage has OBJ files (3 LODs) — PENDING verification
+- ✅ **Dashboard 3D displays elements correctly — VERIFIED (Wed 18/03)**
+- ✅ **Storage has OBJ files (3 LODs) — VERIFIED (Supabase Storage bucket checked)**
 
 **Documentation Progress (Wed 18/03):**
-- ✅ prompts.md: Entry #238 registered
+- ✅ prompts.md: Entries #238 (Documentation cleanup) + #239 (E2E validation) registered
 - ✅ readme-official.md: 5 US documented, API endpoints updated, structure corrected
-- ✅ README.md: Production URLs added, MVP status updated (45.8%)
+- ✅ README.md: Production URLs added, MVP section expanded with detailed US summaries
 - ✅ docs/00-index.md: US-015 added to table
-- 🔄 memory-bank/activeContext.md: Status update in progress
-- ⏳ memory-bank/progress.md: Sprint 8 summary pending
+- ✅ memory-bank/activeContext.md: Sprint 8 Day 3 status updated (E2E completed)
+- ✅ memory-bank/progress.md: Sprint 8 summary completed
 
 ---
 

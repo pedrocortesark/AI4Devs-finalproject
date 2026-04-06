@@ -24,12 +24,12 @@
 
 **Timeline:** 1 week (Mon 16/03 → Fri 20/03)
 
-**Progress (Day 3/5 — Wed 18/03):**
+**Progress (Day 3/5 — Wed 18/03 ✅ COMPLETED):**
 - ✅ Mon 16/03: Railway backend + agent worker deployed, Redis connected, health checks green
 - ✅ Tue 17/03: Full pipeline validated (upload → Celery → LOD generation → Storage), 6 blocks processed successfully
-- ✅ Wed 18/03 (TODAY): Vercel frontend deployed to sf-pm.vercel.app, CORS configured, **DOCUMENTATION CLEANUP IN PROGRESS** (readme-official.md 5 US documented, README.md production URLs added, docs/00-index.md updated, memory-bank/ synchronized)
-- ⏳ Thu 19/03: E2E validation pending (5+ test files via browser)
-- ⏳ Fri 20/03: Demo video + screenshots pending
+- ✅ **Wed 18/03 (TODAY): Vercel frontend deployed to sf-pm.vercel.app, CORS configured, DOCUMENTATION CLEANUP COMPLETED + E2E BROWSER VALIDATION COMPLETED** (readme-official.md 5 US documented, README.md production URLs + MVP section expanded, docs/00-index.md updated, memory-bank/ synchronized, **5 .3dm files uploaded via browser, Dashboard 3D + Visor 3D verified functional**)
+- ⏳ Thu 19/03: Demo video recording (5-min screencast) + screenshots pending
+- ⏳ Fri 20/03: TFM submission package preparation pending
 
 **Production URLs (LIVE):**
 - 🌐 Frontend: https://sf-pm.vercel.app (Vercel Edge)
@@ -42,27 +42,27 @@
 - ✅ Frontend loads production URL (Vercel) — sf-pm.vercel.app ACCESSIBLE
 - ✅ CORS configured correctly — frontend → backend calls working
 - ✅ Celery workers operational — agent-worker logs show task processing
-- ⏳ Full upload → validation → LOD generation pipeline end-to-end (PENDING browser test)
+- ✅ **Full upload → validation → LOD generation pipeline end-to-end — COMPLETADO (5 .3dm files uploaded via browser Wed 18/03)**
 - ✅ 419+ tests passing locally (zero regressions) — backend 11/14 (79%), frontend 443/459 (96.5%)
-- ⏳ Dashboard 3D displays elements correctly — PENDING E2E validation
-- ⏳ Storage has OBJ files (3 LODs per element) — PENDING verification
+- ✅ **Dashboard 3D displays elements correctly — VERIFIED (Wed 18/03)**
+- ✅ **Storage has OBJ files (3 LODs per element) — VERIFIED (Supabase Storage bucket checked)**
 
-**Documentation Deliverables (Wed 18/03):**
-- ✅ `prompts.md`: Entry #238 "Limpieza Documentación Entrega Final TFM" registered
-- ✅ `readme-official.md`: 5 US fully documented (US-001, US-002, US-005, US-010, US-015), API endpoints updated (`/api/elements/*`), structure de archivos corrected
-- ✅ `README.md`: Production URLs added, MVP status updated (45.8%), Quick Start updated
+**Documentation Deliverables (Wed 18/03 ✅ COMPLETED):**
+- ✅ `prompts.md`: Entry #238 "Limpieza Documentación Entrega Final TFM" + Entry #239 "Actualización Post E2E + MVP en Producción" registered
+- ✅ `readme-official.md`: 5 US fully documented (US-001, US-002, US-005, US-010, US-015), API endpoints updated (`/api/elements/*`), estructura de archivos corrected
+- ✅ `README.md`: Production URLs added, **MVP section expanded with detailed US summaries (logros técnicos, tests, performance metrics)**, Quick Start updated
 - ✅ `docs/00-index.md`: US-015 added to table
-- ✅ `memory-bank/activeContext.md`: Sprint 8 Day 3 status updated
+- ✅ `memory-bank/activeContext.md`: Sprint 8 Day 3 status updated (E2E completed)
 - ✅ `memory-bank/progress.md`: Sprint 8 summary updated (this entry)
 
 **Pending for Thu-Fri (Final Push):**
-- E2E browser test: Upload 5 .3dm files via sf-pm.vercel.app, verify Dashboard 3D renders, check Storage for OBJ files
-- Screenshots: Dashboard 3D, Visor 3D modal, Upload flow, Validation report
-- Demo video: 5-min screencast showing full workflow (upload → validation → dashboard → visor 3D)
+- ✅ **E2E browser test — COMPLETADO Wed 18/03:** 5 .3dm files uploaded via sf-pm.vercel.app, Dashboard 3D rendering verified, Visor 3D modal functional, Storage OBJ files confirmed
+- ⏳ **Thu 19/03 — Demo video recording:** 5-min screencast showing full workflow (upload → validation → dashboard → visor 3D)
+- ⏳ **Fri 20/03 — TFM submission:** Screenshots production (Dashboard 3D, Visor 3D modal, Upload flow, Validation report), final README polish
 
 **US-018 LangGraph Agent (21 SP) — ⏸️ DEFERRED to Sprint 9** (after deployment + demo complete)
 
-**Prompts:** #234 (Strategic Pivot Deployment First), #238 (Documentation Cleanup Final)
+**Prompts:** #234 (Strategic Pivot Deployment First), #238 (Documentation Cleanup Final), #239 (E2E Validation + MVP Section Expanded)
 
 ---
 
