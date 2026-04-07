@@ -28,6 +28,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { Html } from '@react-three/drei';
 import { STATUS_COLORS } from '@/constants/dashboard3d.constants';
 import { FILTER_VISUAL_FEEDBACK } from '@/constants/parts.constants';
+import { MATERIAL_COLORS, DEFAULT_MATERIAL, getMaterialColorHex } from '@/constants/materials';
 import { usePartsStore } from '@/stores/parts.store';
 import { useLOD } from '@/hooks/useLOD';
 import { BBoxProxy } from './BBoxProxy';
@@ -196,9 +197,17 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
     selectPart(part.id);
   };
 
-  // Color values
-  const color = STATUS_COLORS[part.status];
-  const emissive = isSelected ? color : '#000000';
+  // Stone material color: derived from part.tipologia (material_type from Rhino metadata)
+  // OBJ files do NOT carry Rhino layer colors — OBJLoader assigns default gray.
+  // We apply the stone color explicitly from MATERIAL_COLORS (62 types).
+  const stoneMaterial = (part.tipologia in MATERIAL_COLORS
+    ? part.tipologia
+    : DEFAULT_MATERIAL) as keyof typeof MATERIAL_COLORS;
+  const stoneColor = getMaterialColorHex(stoneMaterial);
+
+  // Status color: used only for selection/hover emissive feedback
+  const statusColor = STATUS_COLORS[part.status];
+  const emissive = isSelected ? statusColor : '#000000';
   const emissiveIntensity = isSelected ? 0.4 : 0;
   
   // Calculate opacity based on selection and filter state
@@ -216,8 +225,8 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
     [highPolyClone, midPolyClone, lowPolyClone].forEach((clone) => {
       clone.traverse((child: any) => {
         if (child.isMesh && child.material) {
-          // PRESERVE original Rhino materials - only modify feedback properties
-          // child.material.color.set(color); // REMOVED: destroys Rhino per-face materials
+          // Apply stone material color from MATERIAL_COLORS (Rhino layer metadata)
+          child.material.color.set(stoneColor);
           child.material.emissive.set(emissive);
           child.material.emissiveIntensity = emissiveIntensity;
           child.material.opacity = opacity;
@@ -242,7 +251,7 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
         }
       });
     });
-  }, [emissive, emissiveIntensity, opacity, highPolyClone, midPolyClone, lowPolyClone]);
+  }, [stoneColor, emissive, emissiveIntensity, opacity, highPolyClone, midPolyClone, lowPolyClone]);
 
   // Backward compatibility: Single-level rendering when enableLod=false
   if (!enableLod) {

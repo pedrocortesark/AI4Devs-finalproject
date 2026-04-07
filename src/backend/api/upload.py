@@ -2,7 +2,8 @@ import uuid
 from fastapi import APIRouter, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from schemas import UploadRequest, UploadResponse, ConfirmUploadRequest, ConfirmUploadResponse
+from celery.result import AsyncResult
+from schemas import UploadRequest, UploadResponse, ConfirmUploadRequest, ConfirmUploadResponse, IngestionStatusResponse
 from infra.supabase_client import get_supabase_client
 from infra.celery_client import get_celery_client
 from services import UploadService
@@ -94,4 +95,45 @@ async def confirm_upload(request: ConfirmUploadRequest) -> ConfirmUploadResponse
         message="Upload confirmed and validation enqueued",
         event_id=event_id,
         task_id=task_id,
+    )
+
+
+@router.get("/ingestion-status/{task_id}", response_model=IngestionStatusResponse)
+async def get_ingestion_status(task_id: str) -> IngestionStatusResponse:
+    """
+    Poll the status of a register_3dm_blocks Celery task.
+
+    Args:
+        task_id: Celery task ID returned by /confirm
+
+    Returns:
+        IngestionStatusResponse with ready flag and block counts when done
+    """
+    celery = get_celery_client()
+    result = AsyncResult(task_id, app=celery)
+    ready = result.ready()
+
+    registered: int | None = None
+    skipped: int | None = None
+    block_ids: list[str] | None = None
+    error: str | None = None
+
+    if ready:
+        if result.successful():
+            data = result.result or {}
+            registered = data.get("registered")
+            skipped = data.get("skipped")
+            block_ids = data.get("block_ids")
+        else:
+            raw_error = str(result.result) if result.result else "Task failed"
+            # Trim traceback — keep only first line
+            error = raw_error.split("\n")[0]
+
+    return IngestionStatusResponse(
+        task_id=task_id,
+        ready=ready,
+        registered=registered,
+        skipped=skipped,
+        block_ids=block_ids,
+        error=error,
     )

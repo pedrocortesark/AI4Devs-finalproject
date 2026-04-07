@@ -42,8 +42,8 @@ interface PartsState {
   /** Error message if fetch fails */
   error: string | null;
   
-  /** Fetch parts from API */
-  fetchParts: () => Promise<void>;
+  /** Fetch parts from API. Pass silent=true to skip the loading indicator (background polls). */
+  fetchParts: (silent?: boolean) => Promise<void>;
   
   /** Update filters (partial merge) */
   setFilters: (filters: Partial<PartsFilters>) => void;
@@ -94,8 +94,8 @@ export const usePartsStore = create<PartsState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchParts: async () => {
-    set({ isLoading: true, error: null });
+  fetchParts: async (silent = false) => {
+    if (!silent) set({ isLoading: true, error: null });
 
     try {
       const parts = await listParts(get().filters);
@@ -106,13 +106,13 @@ export const usePartsStore = create<PartsState>((set, get) => ({
         current.length === parts.length &&
         current.every((p, i) => p.id === parts[i].id && p.status === parts[i].status && p.low_poly_url === parts[i].low_poly_url);
       if (unchanged) {
-        set({ isLoading: false });
+        if (!silent) set({ isLoading: false });
       } else {
         set({ parts, isLoading: false });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch parts';
-      set({ error: errorMessage, isLoading: false });
+      if (!silent) set({ error: errorMessage, isLoading: false });
     }
   },
 

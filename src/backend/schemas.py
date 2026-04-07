@@ -647,3 +647,38 @@ class ElementNavigationResponse(BaseModel):
         }
         }
     )
+
+
+# ===== US-020: Preview and Ingestion Status Schemas =====
+
+class BlockPreview(BaseModel):
+    """Preview info for a single InstanceDefinition in a .3dm file."""
+    name: str
+    is_instance_object: bool
+    has_metadata: bool
+    codi: Optional[str] = None
+    material: Optional[str] = None
+    iso_valid: bool
+    iso_issues: List[str]
+    user_strings: Dict[str, str]
+    already_exists: bool
+
+
+class FilePreviewResponse(BaseModel):
+    """Response for POST /api/upload/preview."""
+    filename: str
+    total_blocks: int
+    valid_blocks: int       # is_instance_object AND iso_valid AND has_metadata AND NOT already_exists
+    invalid_blocks: int     # not valid AND not duplicate
+    duplicate_blocks: int   # already_exists=True
+    blocks: List[BlockPreview]
+
+
+class IngestionStatusResponse(BaseModel):
+    """Response for GET /api/upload/ingestion-status/{task_id}."""
+    task_id: str
+    ready: bool
+    registered: Optional[int] = None
+    skipped: Optional[int] = None
+    block_ids: Optional[List[str]] = None
+    error: Optional[str] = None

@@ -19,7 +19,7 @@ import {
 import { usePartsStore } from '@/stores/parts.store';
 import { DESELECTION_KEYS } from '@/constants/selection.constants';
 import { PartsScene } from './PartsScene';
-import { DebugHelpers } from './DebugHelpers'; // RE-ENABLED for diagnosis
+import { DebugHelpers } from './DebugHelpers';
 
 const Canvas3D: React.FC<Canvas3DProps> = ({ 
   showStats = false, 
@@ -28,8 +28,9 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
   const clearSelection = usePartsStore((state: any) => state.clearSelection);
   const selectedId = usePartsStore((state: any) => state.selectedId);
   const parts = usePartsStore((state: any) => state.parts); // reactive: re-renders when parts load
+  const filters = usePartsStore((state: any) => state.filters); // reactive: re-renders when filters change
   const getFilteredParts = usePartsStore((state: any) => state.getFilteredParts);
-  const filteredParts = useMemo(() => getFilteredParts(), [parts, getFilteredParts]);
+  const filteredParts = useMemo(() => getFilteredParts(), [parts, filters, getFilteredParts]);
 
   // Merge default config with custom config
   const cameraPosition = cameraConfig?.position || CAMERA_CONFIG.POSITION;
@@ -153,7 +154,7 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           <PartsScene parts={filteredParts} selectedId={selectedId} />
         </Suspense>
 
-        {/* Debug Helpers — TEMPORARILY RE-ENABLED for camera diagnosis */}
+        {/* Debug Helpers — disabled, kept for local development use only */}
         <DebugHelpers parts={filteredParts} enabled={false} />
 
         {/* Stats Panel (dev only) */}

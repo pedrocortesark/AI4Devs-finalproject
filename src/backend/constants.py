@@ -155,3 +155,8 @@ MATERIAL_COLORS = {
 # Derived constants
 VALID_MATERIALS = list(MATERIAL_COLORS.keys())  # 62 materials
 DEFAULT_MATERIAL = "Montjuïc"  # Most common material in Sagrada Família
+
+# ===== US-020: ISO-19650 Validation Pattern =====
+# Duplicated from agent.constants for backend-only imports (Railway separation)
+# See src/agent/constants.ISO_19650_LAYER_NAME_PATTERN for canonical definition
+ISO_19650_LAYER_NAME_PATTERN = r"^[A-Z]{2,3}-[A-Z0-9]{3,4}-[A-Z]{1,2}-\d{3}$"

@@ -15,7 +15,7 @@
  * @module useLOD
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -34,6 +34,10 @@ const LOD_DISTANCES = [5, 20, 50];
 export function useLOD(elementPosition: [number, number, number]): number {
   const { camera } = useThree();
   const [lodLevel, setLodLevel] = useState(1); // Default to mid-poly
+  // useRef avoids stale closure: without it, the captured lodLevel in useFrame
+  // would be stale until the next render, causing setLodLevel to fire every frame
+  // (60fps) instead of once per transition.
+  const lodLevelRef = useRef(1);
 
   useFrame(() => {
     // Calculate distance from camera to element
@@ -50,8 +54,9 @@ export function useLOD(elementPosition: [number, number, number]): number {
       newLevel = 2; // low-poly
     }
 
-    // Update state only if level changed (avoid unnecessary re-renders)
-    if (newLevel !== lodLevel) {
+    // Use ref (not stale closure) to compare — update state only on actual transitions
+    if (newLevel !== lodLevelRef.current) {
+      lodLevelRef.current = newLevel;
       setLodLevel(newLevel);
     }
   });
