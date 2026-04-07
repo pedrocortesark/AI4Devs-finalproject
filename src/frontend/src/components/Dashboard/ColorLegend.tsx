@@ -76,8 +76,8 @@ function parseMtlColors(mtlText: string): LegendItem[] {
       const r = Math.round(parseFloat(tokens[1]) * 255);
       const g = Math.round(parseFloat(tokens[2]) * 255);
       const b = Math.round(parseFloat(tokens[3]) * 255);
-      // "layer_6" → "Capa 6"
-      const label = currentMat.replace(/^layer_/, 'Capa ');
+      // mat name is the Rhino layer name (spaces encoded as _)
+      const label = currentMat.replace(/_/g, ' ');
       items.push({ name: label, color: `rgb(${r},${g},${b})` });
       currentMat = '';
     }

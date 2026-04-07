@@ -849,15 +849,32 @@ def _extract_layer_colors(rhino_file: rhino3dm.File3dm) -> dict[int, tuple[int, 
         return layer_colors
     for i, layer in enumerate(rhino_file.Layers):
         try:
-            # rhino3dm Color is ARGB tuple: (A, R, G, B)
+            # rhino3dm Color is RGBA tuple: (R, G, B, A)
             c = layer.Color
-            if isinstance(c, (list, tuple)) and len(c) >= 4:
-                layer_colors[i] = (int(c[1]), int(c[2]), int(c[3]))
+            if isinstance(c, (list, tuple)) and len(c) >= 3:
+                layer_colors[i] = (int(c[0]), int(c[1]), int(c[2]))
             else:
                 layer_colors[i] = (200, 200, 200)  # Default gray
         except Exception:
             layer_colors[i] = (200, 200, 200)
     return layer_colors
+
+
+def _extract_layer_names(rhino_file: rhino3dm.File3dm) -> dict[int, str]:
+    """Extract the Rhino layer name for each layer index.
+
+    Returns:
+        Dict mapping layer_index (int) → layer name string (leaf name, spaces→_).
+    """
+    names: dict[int, str] = {}
+    if not hasattr(rhino_file, 'Layers') or rhino_file.Layers is None:
+        return names
+    for i, layer in enumerate(rhino_file.Layers):
+        try:
+            names[i] = layer.Name.replace(' ', '_') if layer.Name else f"layer_{i}"
+        except Exception:
+            names[i] = f"layer_{i}"
+    return names
 
 
 def _validate_layer_colors(
@@ -952,11 +969,14 @@ def _generate_obj_mtl_with_layers(
     mesh_pairs: list[tuple[int, object]],
     layer_colors: dict[int, tuple[int, int, int]],
     block_id: str,
+    layer_names: dict[int, str] | None = None,
 ) -> tuple[str, str]:
     """Serialise per-layer OBJ + MTL content strings.
 
-    Creates an OBJ file with `usemtl layer_N` groups and a companion MTL file
-    that assigns the Rhino layer color (`Kd R G B`) to each material.
+    Creates an OBJ file with `usemtl <layer_name>` groups and a companion MTL
+    file that assigns the Rhino layer color (`Kd R G B`) to each material.
+    Material names use the actual Rhino layer name (spaces → _) when
+    layer_names is provided, falling back to `layer_N` otherwise.
 
     The OBJ keeps all vertices in world-space (Rhino Z-up absolute coords).
     The frontend applies Z→Y rotation just as it does for the monolithic OBJ.
@@ -966,6 +986,7 @@ def _generate_obj_mtl_with_layers(
                     _build_layer_face_groups.
         layer_colors: Dict of layer_index → (R, G, B) 0-255 tuples.
         block_id: UUID for MTL material name disambiguation.
+        layer_names: Optional dict of layer_index → sanitised layer name string.
 
     Returns:
         Tuple of (obj_content_str, mtl_content_str)
@@ -979,7 +1000,7 @@ def _generate_obj_mtl_with_layers(
     global_vertex_offset = 0
 
     for layer_idx, geom in mesh_pairs:
-        mat_name = f"layer_{layer_idx}"
+        mat_name = (layer_names or {}).get(layer_idx) or f"layer_{layer_idx}"
 
         # Register material in MTL (once per unique layer)
         if layer_idx not in seen_layers:
@@ -1224,8 +1245,9 @@ def _generate_lod_objs(
                     rhino_file, matched_idef, idef_object_ids
                 )
                 if mesh_pairs:
+                    layer_names = _extract_layer_names(rhino_file)
                     obj_content, mtl_content = _generate_obj_mtl_with_layers(
-                        mesh_pairs, layer_colors, block_id
+                        mesh_pairs, layer_colors, block_id, layer_names
                     )
                     # Upload the per-layer OBJ as the high-poly (overrides monolithic)
                     supabase = get_supabase_client()
