@@ -19,6 +19,7 @@ import EmptyState from './EmptyState';
 import LoadingOverlay from './LoadingOverlay';
 import { DetailsPanel } from '@/components/details/DetailsPanel';
 import { FilterBar } from './FilterBar';
+import ColorLegend from './ColorLegend';
 import { usePartsStore } from '@/stores/parts.store';
 
 const Dashboard3D: React.FC<Dashboard3DProps> = ({
@@ -176,6 +177,9 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
             ))}
           </div>
         )}
+
+        {/* Color legend — contextual meaning for the active color mode */}
+        {!isEmpty && <ColorLegend />}
 
         {/* Persistent filter + selection hint bar */}
         <FilterBar
