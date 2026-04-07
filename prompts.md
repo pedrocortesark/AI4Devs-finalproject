@@ -16906,3 +16906,16 @@ Revisión completa y actualización de toda la documentación del proyecto antes
 Se actualizó la documentación para reflejar que las pruebas E2E planeadas para Thu 19/03 se completaron anticipadamente hoy Wed 18/03. Cambios: (1) README.md expandido con sección "🚀 MVP en Producción" detallando las 5 User Stories completadas con métricas técnicas (tests, performance, stack), (2) memory-bank/activeContext.md actualizado marcando E2E validation como completada (✅), (3) memory-bank/progress.md con registro de E2E en Sprint 8 Day 3, (4) prompts.md con entrada #239. Validación confirmada: 5 archivos .3dm subidos a sf-pm.vercel.app, Dashboard 3D + Visor 3D funcionales en producción. Timeline Sprint 8 ajustado: Thu 19/03 ahora enfocado en demo video recording.
 ---
 
+
+## [240] - Fix: Continuo Refresco del Dashboard 3D
+**Fecha:** 2026-03-19 10:00
+
+**Prompt Original:**
+> ¿Por qué hay un continuo refresco del dashboard?
+
+**Resumen de la Respuesta/Acción:**
+Se identificaron y corrigieron tres bugs de rendimiento:
+1. `useLOD.ts`: closure obsoleto en `useFrame` → `setLodLevel()` se disparaba cada frame (60fps) en lugar de una vez por transición. Fix: usar `useRef` para rastrear el nivel actual.
+2. `Dashboard3D.tsx`: `usePartsStore()` sin selector → el componente se re-renderizaba con cualquier cambio de estado (clicks, filtros, etc.). Fix: selectores individuales.
+3. `Canvas3D.tsx`: `filteredParts` useMemo con deps `[parts, getFilteredParts]` → los cambios de filtros nunca recomputaban la escena. Fix: añadir `filters` a las dependencias. Bonus: limpieza del comentario engañoso "RE-ENABLED for diagnosis" en la importación de DebugHelpers.
+---

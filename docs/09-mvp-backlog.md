@@ -1507,3 +1507,61 @@ Para que una historia de este backlog entre en el Sprint 0, debe cumplir:
 4.  **Estimación:** Story Points asignados.
 
 **Status Final:** BACKLOG REFINADO Y APROBADO (2026-02-04). LISTO PARA CODING.
+
+---
+
+### US-020: Ingesta Inteligente de Archivos Rhino — Preview, Progreso y Reset
+
+**User Story:** Como **Arquitecto**, quiero ver un análisis previo del archivo .3dm antes de subirlo,
+ver en tiempo real el progreso de ingesta de cada bloque y poder resetear la base de datos en
+entornos de desarrollo, para garantizar que todos los bloques se procesan correctamente y sin duplicados.
+
+**Criterios de Aceptación:**
+
+- **Scenario 1 (Preview pre-upload — Happy Path):**
+  - Given el usuario selecciona un archivo `.3dm` en la zona de drop.
+  - When el frontend llama `POST /api/upload/preview`.
+  - Then aparece una tabla con todos los InstanceDefinitions encontrados.
+  - And cada fila indica si el bloque es InstanceObject, si tiene metadata (Codi + Material) y si el Codi cumple ISO-19650.
+  - And se indica con badge gris si el bloque ya existe en la BD.
+  - And el botón "Subir" solo se habilita si hay al menos 1 bloque válido y no duplicado.
+
+- **Scenario 2 (Preview — bloque inválido):**
+  - Given un .3dm con un InstanceDefinition sin UserStrings de Material.
+  - When se muestra la tabla de preview.
+  - Then ese bloque aparece en amarillo con indicación "Sin metadata".
+  - And el botón "Subir" sigue activo si hay otros bloques válidos.
+
+- **Scenario 3 (Ingesta en tiempo real):**
+  - Given el usuario confirma el upload de un .3dm con N bloques.
+  - When el backend encola `register_3dm_blocks` y los jobs se ejecutan.
+  - Then el frontend muestra un listado con el estado de cada bloque en tiempo real vía Supabase Realtime.
+  - And cada bloque muestra su estado: uploaded / processing / validated / error_processing.
+  - And si un bloque falla, se muestra el motivo del error.
+
+- **Scenario 4 (Deduplicación):**
+  - Given el usuario sube el mismo .3dm por segunda vez.
+  - When `register_3dm_blocks` procesa el archivo.
+  - Then los bloques ya existentes aparecen con badge gris "Ya existía" (no se duplican en BD).
+  - And solo se registran y procesan los bloques nuevos.
+
+- **Scenario 5 (Reset para desarrollo):**
+  - Given el entorno es distinto de producción (`ENVIRONMENT != "production"`).
+  - When el usuario hace click en "Limpiar BD (dev)".
+  - Then se elimina todo el contenido de la tabla `blocks` y los archivos de Storage.
+  - And la lista de bloques queda vacía, lista para una nueva prueba.
+  - And en producción el botón no aparece y el endpoint devuelve 403.
+
+**Desglose de Tickets Técnicos:**
+
+| ID Ticket | Título | SP | DoD |
+|-----------|--------|----|-----|
+| `T-2001-BACK` | Endpoint POST /api/upload/preview | 3 | Parseo rhino3dm en memoria, schema FilePreviewResponse, limpieza /tmp con try/finally, no escribe en DB ni Storage |
+| `T-2002-BACK` | Endpoint GET /api/upload/ingestion-status/{task_id} | 1 | Consulta AsyncResult Celery, retorna IngestionStatusResponse |
+| `T-2003-BACK` | Endpoint DELETE /api/admin/reset-blocks | 2 | Guard ENVIRONMENT != production, borra tabla blocks + Storage buckets, retorna contadores |
+| `T-2004-FRONT` | Componente FilePreviewPanel | 3 | Tabla de bloques con badges, llamada a /preview, botón Subir condicional |
+| `T-2005-FRONT` | Componente BlockIngestionStatus | 3 | Suscripción Supabase Realtime, listado con estados en tiempo real, motivo de error visible |
+| `T-2006-FRONT` | Rediseño UploadPage (3 fases) | 2 | Fase 0 drop zone / Fase 1 preview / Fase 2 ingesta + botón dev reset |
+
+**Valoración:** 14 Story Points
+**Dependencias:** US-001 (upload flow), US-002 (validate_file task), US-015 (Element model / iso_code)

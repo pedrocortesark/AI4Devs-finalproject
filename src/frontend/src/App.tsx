@@ -8,10 +8,16 @@
  */
 
 import { useEffect, useState } from 'react';
-import FileUploader from './components/FileUploader';
 import Dashboard3D from './components/Dashboard/Dashboard3D';
+import { UploadZone } from './components/UploadZone';
+import { FilePreviewPanel } from './components/FilePreviewPanel';
+import { BlockIngestionStatus } from './components/BlockIngestionStatus';
 import { usePartsStore } from './stores/parts.store';
-import type { UploadError, UploadProgress } from './types/upload';
+import { previewFile } from './services/preview.service';
+import { resetBlocks } from './services/admin.service';
+import { getPresignedUrl, uploadToStorage, confirmUpload } from './services/upload.service';
+import type { FilePreviewResponse } from './types/preview';
+import type { UploadProgress } from './types/upload';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const DS = {
@@ -28,30 +34,108 @@ const DS = {
   green: '#34C759',
 } as const;
 
-// ── Upload Page ──────────────────────────────────────────────────────────────
+// ── Upload Page — 3-phase state machine ─────────────────────────────────────
+//
+//  Phase 0 (idle):      UploadZone (file drop)
+//  Phase 1 (preview):   FilePreviewPanel (analysis table + Subir/Cancelar)
+//  Phase 2 (ingesting): progress bar → BlockIngestionStatus (real-time)
+
+type UploadPhase = 0 | 1 | 2;
 
 function UploadPage() {
   const { fetchParts } = usePartsStore();
-  const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [phase, setPhase] = useState<UploadPhase>(0);
+
+  // Phase 1
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewData, setPreviewData] = useState<FilePreviewResponse | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Phase 2
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [fileKey, setFileKey] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
-  const handleUploadComplete = (fileId: string) => {
-    setUploadedFileId(fileId);
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function resetToPhase0() {
+    setPhase(0);
+    setSelectedFile(null);
+    setPreviewData(null);
+    setPreviewLoading(false);
+    setPreviewError(null);
     setUploadProgress(0);
+    setFileKey(null);
     setUploadError(null);
-    fetchParts();
-  };
+    setIsConfirming(false);
+  }
 
-  const handleUploadError = (error: UploadError) => {
-    console.error('Upload error:', error);
-    setUploadError(error.message);
-    setUploadProgress(0);
-  };
+  // ── Phase 0 → 1: file selected ────────────────────────────────────────────
 
-  const handleProgress = (progress: UploadProgress) => {
-    setUploadProgress(progress.percentage);
-  };
+  async function handleFilesAccepted(files: File[]) {
+    const file = files[0];
+    if (!file) return;
+    setSelectedFile(file);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPhase(1);
+    try {
+      const data = await previewFile(file);
+      setPreviewData(data);
+    } catch (e: any) {
+      setPreviewError(e.message ?? 'Error al analizar el archivo');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  // ── Phase 1 → 2: user confirms upload ────────────────────────────────────
+
+  async function handleConfirm() {
+    if (!selectedFile || !previewData) return;
+    setIsConfirming(true);
+    setUploadError(null);
+    try {
+      const { upload_url, file_id, file_key } = await getPresignedUrl(
+        selectedFile.name,
+        selectedFile.size
+      );
+      setPhase(2);
+
+      await uploadToStorage(upload_url, selectedFile, (p: UploadProgress) => {
+        setUploadProgress(p.percentage);
+      });
+
+      await confirmUpload(file_id, file_key);
+      setFileKey(file_key);
+      fetchParts();
+    } catch (e: any) {
+      setUploadError(e.message ?? 'Error al subir el archivo');
+      setIsConfirming(false);
+    }
+  }
+
+  // ── Dev: reset all blocks ─────────────────────────────────────────────────
+
+  async function handleReset() {
+    if (isResetting) return;
+    setIsResetting(true);
+    try {
+      await resetBlocks();
+      resetToPhase0();
+    } catch (e: any) {
+      alert(`Error al limpiar BD: ${e.message}`);
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div style={{
@@ -115,7 +199,9 @@ function UploadPage() {
             letterSpacing: '-0.02em',
             color: DS.textPrimary,
           }}>
-            Importar archivo .3dm
+            {phase === 0 && 'Importar archivo .3dm'}
+            {phase === 1 && 'Análisis previo'}
+            {phase === 2 && 'Ingesta en progreso'}
           </h1>
           <p style={{
             margin: 0,
@@ -123,149 +209,154 @@ function UploadPage() {
             color: DS.textSecondary,
             lineHeight: 1.6,
           }}>
-            Sube tu modelo de Rhino para procesar las piezas y visualizarlas en el dashboard 3D.
+            {phase === 0 && 'Sube tu modelo de Rhino para procesar las piezas y visualizarlas en el dashboard 3D.'}
+            {phase === 1 && (previewData
+              ? `${previewData.filename} — ${previewData.total_blocks} bloques encontrados`
+              : 'Analizando archivo…'
+            )}
+            {phase === 2 && 'Los bloques se están registrando y validando en tiempo real.'}
           </p>
         </div>
 
-        {/* Upload card */}
+        {/* Card — width expands on phase 1/2 to show table */}
         <div style={{
           width: '100%',
-          maxWidth: '560px',
+          maxWidth: phase === 0 ? '560px' : '760px',
           backgroundColor: DS.bgCard,
           borderRadius: '16px',
           border: `1px solid ${DS.borderMid}`,
           padding: '32px',
           boxShadow: '0 8px 48px rgba(0, 0, 0, 0.5)',
+          transition: 'max-width 0.3s ease',
         }}>
-          <FileUploader
-            onUploadComplete={handleUploadComplete}
-            onUploadError={handleUploadError}
-            onProgress={handleProgress}
-          />
 
-          {/* Progress bar */}
-          {uploadProgress > 0 && uploadProgress < 100 && (
-            <div style={{ marginTop: '20px' }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '8px',
-              }}>
-                <span style={{ fontSize: '13px', color: DS.textSecondary }}>Subiendo…</span>
-                <span style={{
-                  fontSize: '13px',
-                  color: DS.textSecondary,
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {uploadProgress.toFixed(0)}%
-                </span>
-              </div>
-              <div style={{
-                width: '100%',
-                height: '4px',
-                backgroundColor: DS.bgSurface,
-                borderRadius: '2px',
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  width: `${uploadProgress}%`,
-                  height: '100%',
-                  backgroundColor: DS.blue,
-                  borderRadius: '2px',
-                  transition: 'width 0.3s ease',
-                }} />
-              </div>
-            </div>
+          {/* ── Phase 0: drop zone ── */}
+          {phase === 0 && (
+            <UploadZone
+              onFilesAccepted={handleFilesAccepted}
+              onFilesRejected={(rejections) => {
+                const msg = rejections[0]?.errors[0]?.message ?? 'Archivo rechazado';
+                setPreviewError(msg);
+              }}
+            />
           )}
 
-          {/* Error state */}
-          {uploadError && (
+          {/* ── Phase 1: preview ── */}
+          {phase === 1 && (
+            <>
+              {previewLoading && (
+                <p style={{ color: DS.textSecondary, fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>
+                  Analizando archivo…
+                </p>
+              )}
+              {previewError && (
+                <div style={{
+                  padding: '14px 16px',
+                  backgroundColor: 'rgba(255, 59, 48, 0.08)',
+                  border: '1px solid rgba(255, 59, 48, 0.3)',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  color: '#FF6B60',
+                  marginBottom: '16px',
+                }}>
+                  {previewError}
+                </div>
+              )}
+              {previewData && !previewLoading && (
+                <FilePreviewPanel
+                  preview={previewData}
+                  onConfirm={handleConfirm}
+                  onCancel={resetToPhase0}
+                  isUploading={isConfirming}
+                />
+              )}
+            </>
+          )}
+
+          {/* ── Phase 2: upload progress + ingestion status ── */}
+          {phase === 2 && (
+            <>
+              {/* Progress bar while uploading to storage */}
+              {uploadProgress < 100 && !fileKey && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginBottom: '8px',
+                  }}>
+                    <span style={{ fontSize: '13px', color: DS.textSecondary }}>Subiendo a Storage…</span>
+                    <span style={{
+                      fontSize: '13px',
+                      color: DS.textSecondary,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      {uploadProgress.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '4px',
+                    backgroundColor: DS.bgSurface,
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${uploadProgress}%`,
+                      height: '100%',
+                      backgroundColor: DS.blue,
+                      borderRadius: '2px',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Upload error */}
+              {uploadError && (
+                <div style={{
+                  padding: '14px 16px',
+                  backgroundColor: 'rgba(255, 59, 48, 0.08)',
+                  border: '1px solid rgba(255, 59, 48, 0.3)',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  color: '#FF6B60',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                  marginBottom: '16px',
+                }}>
+                  <span style={{ flexShrink: 0 }}>✕</span>
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              {/* Real-time ingestion status (shown after confirm completes) */}
+              {fileKey && (
+                <BlockIngestionStatus
+                  fileKey={fileKey}
+                  onNewUpload={resetToPhase0}
+                />
+              )}
+            </>
+          )}
+
+          {/* ── Error from phase 0 (file rejection) ── */}
+          {phase === 0 && previewError && (
             <div style={{
-              marginTop: '20px',
+              marginTop: '16px',
               padding: '14px 16px',
               backgroundColor: 'rgba(255, 59, 48, 0.08)',
               border: '1px solid rgba(255, 59, 48, 0.3)',
               borderRadius: '10px',
               fontSize: '14px',
               color: '#FF6B60',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '10px',
             }}>
-              <span style={{ flexShrink: 0 }}>✕</span>
-              <span>{uploadError}</span>
-            </div>
-          )}
-
-          {/* Success state */}
-          {uploadedFileId && (
-            <div style={{
-              marginTop: '20px',
-              padding: '20px',
-              backgroundColor: 'rgba(52, 199, 89, 0.07)',
-              border: '1px solid rgba(52, 199, 89, 0.22)',
-              borderRadius: '12px',
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '14px',
-              }}>
-                <span style={{ fontSize: '18px', color: DS.green }}>✓</span>
-                <span style={{ fontSize: '15px', fontWeight: 600, color: DS.green }}>
-                  Archivo subido correctamente
-                </span>
-              </div>
-              <p style={{
-                margin: '0 0 16px',
-                fontSize: '11px',
-                color: DS.textTertiary,
-                fontFamily: 'monospace',
-                wordBreak: 'break-all',
-              }}>
-                {uploadedFileId}
-              </p>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <a
-                  href="/"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '8px 18px',
-                    backgroundColor: DS.blue,
-                    color: 'white',
-                    borderRadius: '8px',
-                    textDecoration: 'none',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                  }}
-                >
-                  Ver en Dashboard
-                </a>
-                <button
-                  onClick={() => { setUploadedFileId(null); setUploadError(null); }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '8px 18px',
-                    backgroundColor: 'transparent',
-                    border: `1px solid ${DS.borderMid}`,
-                    color: DS.textSecondary,
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    fontFamily: DS.font,
-                  }}
-                >
-                  Subir otro archivo
-                </button>
-              </div>
+              {previewError}
             </div>
           )}
         </div>
 
+        {/* ── Footer text ── */}
         <p style={{
           marginTop: '24px',
           fontSize: '12px',
@@ -276,6 +367,29 @@ function UploadPage() {
         }}>
           El archivo será procesado automáticamente. Las piezas aparecerán en el dashboard una vez completado el análisis geométrico.
         </p>
+
+        {/* ── Dev-only: Limpiar BD button ── */}
+        {import.meta.env.VITE_ENV !== 'production' && (
+          <button
+            onClick={handleReset}
+            disabled={isResetting}
+            style={{
+              marginTop: '16px',
+              padding: '6px 14px',
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255, 59, 48, 0.3)',
+              color: 'rgba(255, 59, 48, 0.6)',
+              borderRadius: '6px',
+              cursor: isResetting ? 'not-allowed' : 'pointer',
+              fontSize: '11px',
+              fontWeight: 500,
+              opacity: isResetting ? 0.5 : 1,
+              fontFamily: DS.font,
+            }}
+          >
+            {isResetting ? 'Limpiando…' : 'Limpiar BD (dev)'}
+          </button>
+        )}
       </main>
     </div>
   );
@@ -288,8 +402,9 @@ function DashboardPage() {
 
   useEffect(() => {
     fetchParts();
-    // Poll every 30s so newly processed parts appear without manual refresh
-    const interval = setInterval(fetchParts, 30_000);
+    // Poll every 30s so newly processed parts appear without manual refresh.
+    // silent=true skips the loading indicator so the 3D view doesn't flash.
+    const interval = setInterval(() => fetchParts(true), 30_000);
     return () => clearInterval(interval);
   }, [fetchParts]);
 

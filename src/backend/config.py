@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # App Settings
     PROJECT_NAME: str = "SF-PM"
     DEBUG: bool = False
+    ENVIRONMENT: str = "development"
 
     model_config = SettingsConfigDict(
         env_file=".env",

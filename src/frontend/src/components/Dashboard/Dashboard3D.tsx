@@ -26,7 +26,10 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
   showStats = false,
   emptyMessage,
 }) => {
-  const { parts, isLoading, error, selectedId } = usePartsStore();
+  const parts = usePartsStore((state) => state.parts);
+  const isLoading = usePartsStore((state) => state.isLoading);
+  const error = usePartsStore((state) => state.error);
+  const selectedId = usePartsStore((state) => state.selectedId);
 
   // CAD-style panel control: separate from selection state
   // Click on part → selects visually, Press 'D' → toggles details panel
@@ -130,8 +133,8 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
           </div>
         )}
 
-        {/* Loading Overlay */}
-        {isLoading && <LoadingOverlay message={MESSAGES.LOADING} />}
+        {/* Loading Overlay — only shown on initial load, not on background polls */}
+        {isLoading && parts.length === 0 && <LoadingOverlay message={MESSAGES.LOADING} />}
         
         {/* Persistent filter + selection hint bar */}
         <FilterBar
