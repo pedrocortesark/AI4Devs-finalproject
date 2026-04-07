@@ -46,6 +46,9 @@ htmlcov/
 # Docker
 *.log
 
+# Claude
+.claude/
+
 # Node.js (for frontend)
 node_modules/
 npm-debug.log*
