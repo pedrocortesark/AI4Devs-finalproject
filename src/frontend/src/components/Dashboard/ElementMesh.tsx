@@ -258,8 +258,15 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
       }
     };
 
+    // Mid and low always use stone color (material mode AND textura mode)
+    [midPolyClone, lowPolyClone].forEach((clone) => {
+      clone.traverse((child: any) => {
+        if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
+      });
+    });
+
     if (colorMode === 'layer' && mtlUrl) {
-      // Fetch and parse the MTL file to extract per-layer colors
+      // Textura mode: fetch MTL and apply per-layer Rhino colors to high-poly only
       fetch(mtlUrl)
         .then((res) => res.text())
         .then((mtlText) => {
@@ -277,28 +284,12 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
               colorMap[currentMat] = `rgb(${r},${g},${b})`;
             }
           }
-
-          // Representative color for LOD levels that lack per-face groups (mid/low poly).
-          // Uses the first color decoded from the MTL so the switcher is always visible.
-          const representativeColor = Object.values(colorMap)[0] ?? stoneColor;
-
-          // Mid and low poly: no usemtl groups → single uniform representative layer color
-          [midPolyClone, lowPolyClone].forEach((clone) => {
-            clone.traverse((child: any) => {
-              if (child.isMesh && child.material) applyVisualProps(child, representativeColor);
-            });
-          });
-
-          // High-poly: apply per-material-group colors from the MTL.
-          // OBJLoader creates separate Mesh children for each usemtl/g block;
-          // child.material can be a single material or an array — handle both.
+          // High-poly: per-material-group colors from MTL (layer_N → Kd color)
           highPolyClone.traverse((child: any) => {
             if (child.isMesh && child.material) {
               if (Array.isArray(child.material)) {
-                // Multi-material mesh: look up each sub-material by name
                 child.material.forEach((mat: any) => {
-                  const matName: string = mat.name ?? '';
-                  applyToMaterial(mat, colorMap[matName] ?? representativeColor);
+                  applyToMaterial(mat, colorMap[mat.name ?? ''] ?? stoneColor);
                 });
                 child.castShadow = true;
                 child.receiveShadow = true;
@@ -306,26 +297,21 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
                   child.geometry.computeVertexNormals();
                 }
               } else {
-                const matName: string = child.material.name ?? '';
-                applyVisualProps(child, colorMap[matName] ?? representativeColor);
+                applyVisualProps(child, colorMap[child.material.name ?? ''] ?? stoneColor);
               }
             }
           });
         })
         .catch(() => {
-          // Fallback on fetch error: stone color for all LOD levels
-          [highPolyClone, midPolyClone, lowPolyClone].forEach((clone) => {
-            clone.traverse((child: any) => {
-              if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
-            });
+          // Fetch error fallback: stone color on high-poly too
+          highPolyClone.traverse((child: any) => {
+            if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
           });
         });
     } else {
-      // 'material' mode or no mtl_url: uniform stone color for all LOD levels
-      [highPolyClone, midPolyClone, lowPolyClone].forEach((clone) => {
-        clone.traverse((child: any) => {
-          if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
-        });
+      // Material mode: stone color on high-poly (mid/low already set above)
+      highPolyClone.traverse((child: any) => {
+        if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
       });
     }
   }, [colorMode, mtlUrl, stoneColor, emissive, emissiveIntensity, opacity, highPolyClone, midPolyClone, lowPolyClone]);
