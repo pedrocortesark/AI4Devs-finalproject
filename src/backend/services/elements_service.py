@@ -106,6 +106,7 @@ class ElementsService:
         high_poly_url = self._apply_cdn_transformation(row.get("high_poly_url"))
         mid_poly_url = self._apply_cdn_transformation(row.get("mid_poly_url"))
         low_poly_url = self._apply_cdn_transformation(row.get("low_poly_url"))
+        mtl_url = row.get("mtl_url") or None
 
         # Extract SF_ARC_Agrupacio1 from rhino_metadata JSONB
         rhino_metadata = row.get("rhino_metadata") or {}
@@ -120,6 +121,7 @@ class ElementsService:
             high_poly_url=high_poly_url,  # CDN-transformed or None
             mid_poly_url=mid_poly_url,    # CDN-transformed or None
             low_poly_url=low_poly_url,    # CDN-transformed or None
+            mtl_url=mtl_url,
             bbox=bbox,
             agrupacio=agrupacio,
         )

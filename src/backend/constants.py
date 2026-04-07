@@ -43,13 +43,13 @@ BLOCK_TIPOLOGIA_PENDING = "pending"
 BLOCK_ISO_CODE_PREFIX = "PENDING"
 
 # ===== Parts Listing Query Fields =====
-PARTS_LIST_SELECT_FIELDS = "id, iso_code, status, tipologia, low_poly_url, bbox"
+PARTS_LIST_SELECT_FIELDS = "id, iso_code, status, tipologia, low_poly_url, high_poly_url, mid_poly_url, mtl_url, bbox, rhino_metadata"
 QUERY_FIELD_IS_ARCHIVED = "is_archived"
 QUERY_FIELD_CREATED_AT = "created_at"
 QUERY_ORDER_DESC = True
 
 # ===== Element API Query Fields (T-1504-BACK + US-015 LOD) =====
-ELEMENTS_LIST_SELECT_FIELDS = "id, iso_code, status, material_type, high_poly_url, mid_poly_url, low_poly_url, bbox, rhino_metadata"
+ELEMENTS_LIST_SELECT_FIELDS = "id, iso_code, status, material_type, high_poly_url, mid_poly_url, low_poly_url, mtl_url, bbox, rhino_metadata"
 ELEMENT_DETAIL_SELECT_FIELDS = ("id, iso_code, status, material_type, created_at, updated_at, "
                                  "high_poly_url, mid_poly_url, low_poly_url, bbox, validation_report, rhino_metadata")
 

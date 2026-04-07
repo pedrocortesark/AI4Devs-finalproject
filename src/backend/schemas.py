@@ -265,6 +265,7 @@ class PartCanvasItem(BaseModel):
     high_poly_url: Optional[str] = Field(None, description="High-detail GLB URL (~7k tris, LOD 0-5m)")
     mid_poly_url: Optional[str] = Field(None, description="Mid-detail GLB URL (~2k tris, LOD 5-20m)")
     low_poly_url: Optional[str] = Field(None, description="Low-detail GLB URL (~500 tris, LOD 20-50m)")
+    mtl_url: Optional[str] = Field(None, description="Companion MTL URL for per-face Rhino layer colors (high-poly only)")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
 
     model_config = ConfigDict(
@@ -470,6 +471,10 @@ class Element(BaseModel):
     low_poly_url: Optional[str] = Field(
         None,
         description="CDN URL to low-detail GLB (~500 tris, LOD Level 2: 20-50m viewing distance)"
+    )
+    mtl_url: Optional[str] = Field(
+        None,
+        description="Companion MTL URL for per-face Rhino layer colors (high-poly only)"
     )
     bbox: Optional[BoundingBox] = Field(
         None,

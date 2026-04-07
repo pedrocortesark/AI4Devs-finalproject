@@ -30,6 +30,8 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
   const isLoading = usePartsStore((state) => state.isLoading);
   const error = usePartsStore((state) => state.error);
   const selectedId = usePartsStore((state) => state.selectedId);
+  const colorMode = usePartsStore((state) => state.colorMode);
+  const setColorMode = usePartsStore((state) => state.setColorMode);
 
   // CAD-style panel control: separate from selection state
   // Click on part → selects visually, Press 'D' → toggles details panel
@@ -136,6 +138,45 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
         {/* Loading Overlay — only shown on initial load, not on background polls */}
         {isLoading && parts.length === 0 && <LoadingOverlay message={MESSAGES.LOADING} />}
         
+        {/* Color mode toggle — top-right pill */}
+        {!isEmpty && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              display: 'flex',
+              background: 'rgba(0,0,0,0.65)',
+              borderRadius: '20px',
+              padding: '3px',
+              gap: '2px',
+              zIndex: 50,
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            {(['material', 'layer'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setColorMode(mode)}
+                title={mode === 'material' ? 'Color por tipo de piedra (tipología)' : 'Color por layer de Rhino'}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  transition: 'background 0.15s, color 0.15s',
+                  background: colorMode === mode ? '#ffffff' : 'transparent',
+                  color: colorMode === mode ? '#111' : 'rgba(255,255,255,0.7)',
+                }}
+              >
+                {mode === 'material' ? 'Material' : 'Textura'}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Persistent filter + selection hint bar */}
         <FilterBar
           selectedId={selectedId}

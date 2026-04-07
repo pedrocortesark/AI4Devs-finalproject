@@ -117,8 +117,10 @@ class PartsService:
             status=row["status"],
             tipologia=row["tipologia"],
             low_poly_url=row.get("low_poly_url"),
+            high_poly_url=row.get("high_poly_url"),
+            mid_poly_url=row.get("mid_poly_url"),
+            mtl_url=row.get("mtl_url"),
             bbox=bbox,
-            workshop_id=row.get("workshop_id")
         )
 
     def _build_filters_applied(

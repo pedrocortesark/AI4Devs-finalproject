@@ -84,6 +84,8 @@ LOD_PREFIXES = {
     'mid': 'mid-poly/',
     'low': 'low-poly/',
 }
+# MTL companion files (per-face Rhino layer colors, generated for high-poly only)
+MATERIALS_PREFIX = 'materials/'
 # Legacy (deprecated - use LOD_PREFIXES['low'])
 LOW_POLY_PREFIX = LOD_PREFIXES['low']
 

@@ -41,6 +41,13 @@ interface PartsState {
   
   /** Error message if fetch fails */
   error: string | null;
+
+  /**
+   * Color rendering mode for 3D canvas.
+   * 'material' — uniform stone color per element (from MATERIAL_COLORS[tipologia])
+   * 'layer'    — per-face Rhino layer colors via MTL companion file (mtl_url)
+   */
+  colorMode: 'material' | 'layer';
   
   /** Fetch parts from API. Pass silent=true to skip the loading indicator (background polls). */
   fetchParts: (silent?: boolean) => Promise<void>;
@@ -59,6 +66,9 @@ interface PartsState {
   
   /** Clear selection */
   clearSelection: () => void;
+
+  /** Switch color rendering mode */
+  setColorMode: (mode: 'material' | 'layer') => void;
 }
 
 /**
@@ -93,6 +103,7 @@ export const usePartsStore = create<PartsState>((set, get) => ({
   selectedId: null,
   isLoading: false,
   error: null,
+  colorMode: 'material',
 
   fetchParts: async (silent = false) => {
     if (!silent) set({ isLoading: true, error: null });
@@ -178,5 +189,9 @@ export const usePartsStore = create<PartsState>((set, get) => ({
 
   clearSelection: () => {
     set({ selectedId: null });
+  },
+
+  setColorMode: (mode) => {
+    set({ colorMode: mode });
   },
 }));

@@ -16919,3 +16919,23 @@ Se identificaron y corrigieron tres bugs de rendimiento:
 2. `Dashboard3D.tsx`: `usePartsStore()` sin selector → el componente se re-renderizaba con cualquier cambio de estado (clicks, filtros, etc.). Fix: selectores individuales.
 3. `Canvas3D.tsx`: `filteredParts` useMemo con deps `[parts, getFilteredParts]` → los cambios de filtros nunca recomputaban la escena. Fix: añadir `filters` a las dependencias. Bonus: limpieza del comentario engañoso "RE-ENABLED for diagnosis" en la importación de DebugHelpers.
 ---
+
+## [241] - Feature: Per-face Rhino Layer Colors + Color Mode Switch en Dashboard
+**Fecha:** 2026-04-07 11:00
+**Prompt Original:**
+> La idea es que todos las caras deben tener una textura asignada, y por lo tanto un color que mostrar en three.js
+> Debería ser un check de la ingesta el tener esta informacion.
+> Lo que podemos hacer en el dashboard es un switch para mostrar las piezas renderizadas con el color por material, o color por textura. Esto me parece una gran idea
+
+**Resumen de la Respuesta/Acción:**
+Plan para implementar pipeline OBJ+MTL con colores de layer Rhino por cara, validación en ingesta, y switch en Dashboard entre "Color por Material" y "Color por Layer Rhino".
+---
+
+## 231 - FIX: Modo Textura no muestra colores de layer Rhino
+**Fecha:** 2026-04-07 15:30
+**Prompt Original:**
+> el switcher no funciona. Quiero que aparezca en el nombre 'Textura'. El problema es que no muestra el color de la textura de rhino
+
+**Resumen de la Respuesta/Acción:**
+Diagnóstico completo del problema: (1) El botón decía "Layer Rhino" → renombrado a "Textura". (2) Los colores MTL no aparecían por LOD + array materials: en modo layer, solo el high-poly (0-5m) recibía colores MTL, pero el usuario ve mid-poly (5-20m) a distancia normal. Fix: aplicar color representativo (primer color del MTL) a mid/low poly en modo layer, y robustecer applyVisualProps para manejar tanto material único como array de materiales (multi-material mesh de OBJLoader).
+---

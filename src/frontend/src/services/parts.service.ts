@@ -58,6 +58,7 @@ export async function listParts(
     high_poly_url: element.high_poly_url || null,  // US-015: High-detail LOD (~7k tris)
     mid_poly_url: element.mid_poly_url || null,    // US-015: Mid-detail LOD (~2k tris)
     low_poly_url: element.low_poly_url,             // US-015: Low-detail LOD (~500 tris)
+    mtl_url: element.mtl_url || null,              // Per-face Rhino layer colors
     bbox: element.bbox,
     workshop_id: null, // Elements don't have workshop_id
     workshop_name: null, // Elements don't have workshop_name
