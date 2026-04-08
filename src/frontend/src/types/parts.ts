@@ -39,6 +39,7 @@ export interface PartCanvasItem {
   high_poly_url?: string | null;   // US-015: High-poly URL (~7k tris) for LOD Level 0 (0-5m)
   mid_poly_url?: string | null;    // US-015: Mid-poly URL (~2k tris) for LOD Level 1 (5-20m)
   low_poly_url: string | null;     // US-015: Low-poly URL (~500 tris) for LOD Level 2 (20-50m), required fallback
+  mtl_url?: string | null;         // Companion MTL for per-face Rhino layer colors (high-poly only)
   bbox: BoundingBox | null;        // 3D bounding box, or null if not extracted yet (used for LOD Level 3 >50m)
   workshop_id: string | null;      // UUID string or null if unassigned
   workshop_name?: string | null;   // Workshop display name (joined from workshops table) or null if unassigned

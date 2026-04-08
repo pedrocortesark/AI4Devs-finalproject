@@ -123,6 +123,7 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   const { selectPart, selectedId } = store;
   const getFilteredParts = store.getFilteredParts || (() => [part]); // Default: no filtering
   const filters = store.filters || { status: [], tipologia: [], workshop_id: null }; // Default: empty filters
+  const colorMode = usePartsStore((state) => state.colorMode);
   
   const isSelected = selectedId === part.id;
   const filteredParts = getFilteredParts();
@@ -162,6 +163,11 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   const highPolyUrl = part.high_poly_url
     ? sanitizeUrl(part.high_poly_url)
     : midPolyUrl; // Fallback: use mid_poly (or its fallback) if high missing
+
+  // MTL for per-face Rhino layer colors (only for high-poly, only when colorMode='layer')
+  const mtlUrl = (colorMode === 'layer' && part.mtl_url)
+    ? sanitizeUrl(part.mtl_url)
+    : null;
 
   // useLoader suspends during loading (handled by parent <Suspense> boundary)
   // IMPORTANT: These hooks always return valid scenes or suspend - no need for null checks
@@ -219,39 +225,96 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   );
 
   // Apply material properties to all LOD clones (high, mid, low)
-  // Traverse clones and update existing materials from OBJ geometry
-  // PRESERVE Rhino materials: only modify emissive/opacity, NOT base color
+  // Two modes:
+  //   'material' — uniform stone color from MATERIAL_COLORS[tipologia] (default, always works)
+  //   'layer'    — per-material-group colors from Rhino layer MTL file (high-poly only)
+  //                mid/low always use stoneColor as fallback (decimation destroys face groups)
   useEffect(() => {
-    [highPolyClone, midPolyClone, lowPolyClone].forEach((clone) => {
+    // Helper: apply visual props to a single Three.js material object
+    const applyToMaterial = (mat: any, baseColor: string) => {
+      mat.color.set(baseColor);
+      mat.emissive.set(emissive);
+      mat.emissiveIntensity = emissiveIntensity;
+      mat.opacity = opacity;
+      mat.transparent = opacity < 1.0;
+      mat.flatShading = false;
+      mat.side = 2; // DoubleSide
+      mat.needsUpdate = true;
+    };
+
+    // Helper: apply shared visual properties to a mesh — handles both single
+    // material and multi-material arrays (OBJLoader with multiple usemtl groups
+    // may produce either depending on OBJ structure).
+    const applyVisualProps = (child: any, baseColor: string) => {
+      if (Array.isArray(child.material)) {
+        child.material.forEach((mat: any) => applyToMaterial(mat, baseColor));
+      } else {
+        applyToMaterial(child.material, baseColor);
+      }
+      child.castShadow = true;
+      child.receiveShadow = true;
+      if (child.geometry && !child.geometry.attributes.normal) {
+        child.geometry.computeVertexNormals();
+      }
+    };
+
+    // Mid and low always use stone color (material mode AND textura mode)
+    [midPolyClone, lowPolyClone].forEach((clone) => {
       clone.traverse((child: any) => {
-        if (child.isMesh && child.material) {
-          // Apply stone material color from MATERIAL_COLORS (Rhino layer metadata)
-          child.material.color.set(stoneColor);
-          child.material.emissive.set(emissive);
-          child.material.emissiveIntensity = emissiveIntensity;
-          child.material.opacity = opacity;
-          child.material.transparent = opacity < 1.0;
-          
-          // Material properties for better visualization
-          child.material.flatShading = false; // Smooth shading
-          child.material.side = 2; // DoubleSide
-          child.material.metalness = 0.3;
-          child.material.roughness = 0.6;
-          child.material.wireframe = false;
-          
-          child.castShadow = true;
-          child.receiveShadow = true;
-          
-          child.material.needsUpdate = true;
-          
-          // Ensure geometry has smooth normals
-          if (child.geometry && !child.geometry.attributes.normal) {
-            child.geometry.computeVertexNormals();
-          }
-        }
+        if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
       });
     });
-  }, [stoneColor, emissive, emissiveIntensity, opacity, highPolyClone, midPolyClone, lowPolyClone]);
+
+    if (colorMode === 'layer' && mtlUrl) {
+      // Textura mode: fetch MTL and apply per-layer Rhino colors to high-poly only
+      fetch(mtlUrl)
+        .then((res) => res.text())
+        .then((mtlText) => {
+          // Parse MTL: extract newmtl → Kd color mapping
+          const colorMap: Record<string, string> = {};
+          let currentMat = '';
+          for (const line of mtlText.split('\n')) {
+            const tokens = line.trim().split(/\s+/);
+            if (tokens[0] === 'newmtl' && tokens[1]) {
+              currentMat = tokens[1];
+            } else if (tokens[0] === 'Kd' && currentMat && tokens.length >= 4) {
+              const r = Math.round(parseFloat(tokens[1]) * 255);
+              const g = Math.round(parseFloat(tokens[2]) * 255);
+              const b = Math.round(parseFloat(tokens[3]) * 255);
+              colorMap[currentMat] = `rgb(${r},${g},${b})`;
+            }
+          }
+          // High-poly: per-material-group colors from MTL (layer_N → Kd color)
+          highPolyClone.traverse((child: any) => {
+            if (child.isMesh && child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach((mat: any) => {
+                  applyToMaterial(mat, colorMap[mat.name ?? ''] ?? stoneColor);
+                });
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (child.geometry && !child.geometry.attributes.normal) {
+                  child.geometry.computeVertexNormals();
+                }
+              } else {
+                applyVisualProps(child, colorMap[child.material.name ?? ''] ?? stoneColor);
+              }
+            }
+          });
+        })
+        .catch(() => {
+          // Fetch error fallback: stone color on high-poly too
+          highPolyClone.traverse((child: any) => {
+            if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
+          });
+        });
+    } else {
+      // Material mode: stone color on high-poly (mid/low already set above)
+      highPolyClone.traverse((child: any) => {
+        if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
+      });
+    }
+  }, [colorMode, mtlUrl, stoneColor, emissive, emissiveIntensity, opacity, highPolyClone, midPolyClone, lowPolyClone]);
 
   // Backward compatibility: Single-level rendering when enableLod=false
   if (!enableLod) {
@@ -362,7 +425,7 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
           {part.bbox ? (
             <BBoxProxy
               bbox={part.bbox!}
-              color={color}
+              color={stoneColor}
               opacity={opacity}
               wireframe={true}
             />
