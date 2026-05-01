@@ -124,6 +124,7 @@ class ElementsService:
             mtl_url=mtl_url,
             bbox=bbox,
             agrupacio=agrupacio,
+            rhino_metadata=rhino_metadata if isinstance(rhino_metadata, dict) else None,
         )
 
     def _build_filters_applied(self, status: Optional[str], material_type: Optional[str]) -> Dict[str, str]:

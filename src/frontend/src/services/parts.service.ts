@@ -62,6 +62,7 @@ export async function listParts(
     bbox: element.bbox,
     workshop_id: null, // Elements don't have workshop_id
     workshop_name: null, // Elements don't have workshop_name
+    rhino_metadata: element.rhino_metadata ?? null, // Raw Rhino metadata (contains Material key)
   }));
 
   return parts;

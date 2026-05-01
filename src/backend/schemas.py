@@ -484,6 +484,10 @@ class Element(BaseModel):
         None,
         description="Architectural grouping from Rhino metadata (SF_ARC_Agrupacio1 attribute)"
     )
+    rhino_metadata: Optional[dict] = Field(
+        None,
+        description="Raw Rhino 3DM metadata (JSONB) containing userstrings like Material, Codi, etc."
+    )
 
     @field_validator('material_type')
     @classmethod

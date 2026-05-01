@@ -100,9 +100,15 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
 function TabGeneral({ part }: { part: NonNullable<ReturnType<typeof usePartDetail>['partData']> }) {
   const statusStyle = STATUS_BADGE_STYLES[part.status] ?? DEFAULT_STATUS_STYLE;
 
+  // Read material from rhino_metadata.Material first, fallback to material_type
+  const materialName: string | null =
+    (part.rhino_metadata && typeof part.rhino_metadata === 'object' && 'Material' in part.rhino_metadata
+      ? String(part.rhino_metadata.Material)
+      : part.material_type) || null;
+
   const materialColorHex: string | null =
-    part.material_type && part.material_type in MATERIAL_COLORS
-      ? getMaterialColorHex(part.material_type as keyof typeof MATERIAL_COLORS)
+    materialName && materialName in MATERIAL_COLORS
+      ? getMaterialColorHex(materialName as keyof typeof MATERIAL_COLORS)
       : null;
 
   return (
@@ -127,16 +133,16 @@ function TabGeneral({ part }: { part: NonNullable<ReturnType<typeof usePartDetai
         {/* Material */}
         <div className={styles.fieldRow}>
           <span className={styles.fieldLabel}>Material</span>
-          {part.material_type ? (
+          {materialName ? (
             <div className={styles.materialRow}>
               {materialColorHex && (
                 <span
                   className={styles.materialDot}
                   style={{ background: materialColorHex }}
-                  title={part.material_type}
+                  title={materialName}
                 />
               )}
-              <span className={styles.fieldValue}>{part.material_type}</span>
+              <span className={styles.fieldValue}>{materialName}</span>
             </div>
           ) : (
             <span className={styles.fieldValueMuted}>No especificado</span>

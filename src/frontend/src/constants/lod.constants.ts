@@ -18,17 +18,18 @@
  * LOD level distances in metres (scene units).
  * 
  * US-015: Updated to 4 levels (high/mid/low + bbox) based on architectural CAD best practices
+ * Updated 2026-05-01: Increased distances for better material visibility at distance
  *
  * Arrays are passed to drei <Detailed distances={LOD_DISTANCES}>:
- * - Level 0: 0 to 5m     → high-poly (5000-8000 tris, detailed inspection)
- * - Level 1: 5 to 20m    → mid-poly (1500-2000 tris, normal working distance)
- * - Level 2: 20 to 50m   → low-poly (400-600 tris, overview)
- * - Level 3: 50m+        → BBox proxy (12 tris, distant view)
+ * - Level 0: 0 to 15m    → high-poly (5000-8000 tris, detailed inspection with material)
+ * - Level 1: 15 to 40m   → mid-poly (1500-2000 tris, normal working distance)
+ * - Level 2: 40 to 100m  → low-poly (400-600 tris, overview)
+ * - Level 3: 100m+       → BBox proxy (12 tris, distant view)
  *
  * @constant
  * @readonly
  */
-export const LOD_DISTANCES = [0, 5, 20, 50] as const;
+export const LOD_DISTANCES = [0, 15, 40, 100] as const;
 
 /**
  * LOD level identifiers
@@ -38,16 +39,16 @@ export const LOD_DISTANCES = [0, 5, 20, 50] as const;
  * @readonly
  */
 export const LOD_LEVELS = {
-  /** Level 0: High-poly geometry (<5 m) - 5000-8000 triangles */
+  /** Level 0: High-poly geometry (<15 m) - 5000-8000 triangles */
   HIGH_POLY: 0,
 
-  /** Level 1: Mid-poly geometry (5-20 m) - 1500-2000 triangles */
+  /** Level 1: Mid-poly geometry (15-40 m) - 1500-2000 triangles */
   MID_POLY: 1,
 
-  /** Level 2: Low-poly geometry (20-50 m) - 400-600 triangles */
+  /** Level 2: Low-poly geometry (40-100 m) - 400-600 triangles */
   LOW_POLY: 2,
 
-  /** Level 3: BBox wireframe proxy (>50 m) - 12 triangles */
+  /** Level 3: BBox wireframe proxy (>100 m) - 12 triangles */
   BBOX_PROXY: 3,
 } as const;
 
@@ -72,12 +73,12 @@ export const LOD_CONFIG = {
     BBOX: 12,
   },
 
-  /** Distance thresholds in metres */
+  /** Distance thresholds in metres (updated 2026-05-01) */
   DISTANCE_THRESHOLDS: {
-    MID_POLY_MAX: 20,    // Level 0 active from 0 to 20 m
-    LOW_POLY_MIN: 20,    // Level 1 active from 20 m to 50 m
-    LOW_POLY_MAX: 50,
-    BBOX_MIN: 50,        // Level 2 active from 50 m onwards
+    MID_POLY_MAX: 40,    // Level 0 active from 0 to 40 m
+    LOW_POLY_MIN: 40,    // Level 1 active from 40 m to 100 m
+    LOW_POLY_MAX: 100,
+    BBOX_MIN: 100,       // Level 2 active from 100 m onwards
   },
 } as const;
 

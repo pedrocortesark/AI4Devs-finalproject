@@ -58,8 +58,10 @@ function UploadPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileKey, setFileKey] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadErrorDetails, setUploadErrorDetails] = useState<{ code?: string; message: string } | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [uploadAttempts, setUploadAttempts] = useState(0);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -72,7 +74,9 @@ function UploadPage() {
     setUploadProgress(0);
     setFileKey(null);
     setUploadError(null);
+    setUploadErrorDetails(null);
     setIsConfirming(false);
+    setUploadAttempts(0);
   }
 
   // ── Phase 0 → 1: file selected ────────────────────────────────────────────
@@ -100,6 +104,9 @@ function UploadPage() {
     if (!selectedFile || !previewData) return;
     setIsConfirming(true);
     setUploadError(null);
+    setUploadErrorDetails(null);
+    setUploadAttempts(prev => prev + 1);
+    
     try {
       const { upload_url, file_id, file_key } = await getPresignedUrl(
         selectedFile.name,
@@ -115,8 +122,16 @@ function UploadPage() {
       setFileKey(file_key);
       fetchParts();
     } catch (e: any) {
-      setUploadError(e.message ?? 'Error al subir el archivo');
+      const errorMessage = e.message ?? 'Error al subir el archivo';
+      const errorCode = e.response?.status ? `HTTP ${e.response.status}` : e.code;
+      
+      setUploadError(errorMessage);
+      setUploadErrorDetails({
+        code: errorCode,
+        message: e.response?.data?.detail || errorMessage
+      });
       setIsConfirming(false);
+      setPhase(1); // Return to preview phase to allow retry
     }
   }
 
@@ -260,6 +275,96 @@ function UploadPage() {
                   marginBottom: '16px',
                 }}>
                   {previewError}
+                </div>
+              )}
+              {/* Upload error with retry button */}
+              {uploadError && (
+                <div style={{
+                  padding: '16px',
+                  backgroundColor: 'rgba(255, 59, 48, 0.08)',
+                  border: '1px solid rgba(255, 59, 48, 0.3)',
+                  borderRadius: '10px',
+                  marginBottom: '16px',
+                }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'flex-start', 
+                    gap: '10px',
+                    marginBottom: '12px'
+                  }}>
+                    <span style={{ flexShrink: 0, fontSize: '16px' }}>⚠</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ 
+                        margin: '0 0 6px', 
+                        fontSize: '14px', 
+                        fontWeight: 600, 
+                        color: '#FF6B60' 
+                      }}>
+                        Error al subir el archivo (Intento {uploadAttempts})
+                      </p>
+                      <p style={{ 
+                        margin: '0 0 6px', 
+                        fontSize: '13px', 
+                        color: '#FF6B60',
+                        opacity: 0.9 
+                      }}>
+                        {uploadError}
+                      </p>
+                      {uploadErrorDetails && (
+                        <p style={{ 
+                          margin: 0, 
+                          fontSize: '12px', 
+                          color: 'rgba(255, 107, 96, 0.7)',
+                          fontFamily: 'monospace'
+                        }}>
+                          {uploadErrorDetails.code && `[${uploadErrorDetails.code}] `}
+                          {uploadErrorDetails.message !== uploadError && uploadErrorDetails.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={isConfirming || uploadAttempts >= 3}
+                    style={{
+                      width: '100%',
+                      padding: '8px 16px',
+                      backgroundColor: uploadAttempts >= 3 ? DS.bgSurface : DS.blue,
+                      color: DS.textPrimary,
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: uploadAttempts >= 3 ? 'not-allowed' : 'pointer',
+                      opacity: isConfirming ? 0.5 : 1,
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {isConfirming 
+                      ? 'Reintentando...' 
+                      : uploadAttempts >= 3 
+                        ? 'Máximo de reintentos alcanzado' 
+                        : `Reintentar subida (${uploadAttempts}/3)`}
+                  </button>
+                  {uploadAttempts >= 3 && (
+                    <button
+                      onClick={resetToPhase0}
+                      style={{
+                        width: '100%',
+                        padding: '8px 16px',
+                        backgroundColor: 'transparent',
+                        color: DS.textSecondary,
+                        border: `1px solid ${DS.borderMid}`,
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        marginTop: '8px',
+                      }}
+                    >
+                      Cancelar e intentar con otro archivo
+                    </button>
+                  )}
                 </div>
               )}
               {previewData && !previewLoading && (

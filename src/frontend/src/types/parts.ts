@@ -43,6 +43,7 @@ export interface PartCanvasItem {
   bbox: BoundingBox | null;        // 3D bounding box, or null if not extracted yet (used for LOD Level 3 >50m)
   workshop_id: string | null;      // UUID string or null if unassigned
   workshop_name?: string | null;   // Workshop display name (joined from workshops table) or null if unassigned
+  rhino_metadata?: Record<string, unknown> | null;  // Raw Rhino metadata for material extraction
 }
 
 export interface PartsListResponse {

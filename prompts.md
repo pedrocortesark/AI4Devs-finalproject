@@ -16939,3 +16939,17 @@ Plan para implementar pipeline OBJ+MTL con colores de layer Rhino por cara, vali
 **Resumen de la Respuesta/Acción:**
 Diagnóstico completo del problema: (1) El botón decía "Layer Rhino" → renombrado a "Textura". (2) Los colores MTL no aparecían por LOD + array materials: en modo layer, solo el high-poly (0-5m) recibía colores MTL, pero el usuario ve mid-poly (5-20m) a distancia normal. Fix: aplicar color representativo (primer color del MTL) a mid/low poly en modo layer, y robustecer applyVisualProps para manejar tanto material único como array de materiales (multi-material mesh de OBJLoader).
 ---
+
+## 232 - Corrección de 4 problemas críticos en la UI de visualización y upload
+**Fecha:** 2026-05-01 00:00
+
+**Prompt Original:**
+> Veo algun problema en la aplicacion... Listo aqui...
+> 1. Quiero modificar la distancia a la que el three material cambia automaticamente a de material a textura, está demasiado cerca.
+> 2. El material de las piezas se indica que siempre es Montjuic, pero no es cierto. En los metadatos, veras que hay una key material que tiene esta informacion
+> 3. Las leyendas, tanto de material como de texturas, no son consistentes... Hay algunas que no aparecen
+> 4. Cuando hay un fallo en el upload de una pieza, debería tener un criterio de reintentos para poder subir únicamente esa piedra. O al menos saber por qué falló
+
+**Resumen de la Respuesta/Acción:**
+Investigar código del frontend (Three.js LOD, metadata rendering, legend generation, upload error handling) y crear plan de corrección para los 4 problemas identificados.
+---

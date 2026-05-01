@@ -21,6 +21,14 @@ trimesh==4.11.3       # Mesh decimation library (simplify_quadric_decimation) - 
 rtree==1.1.0          # Spatial index for trimesh (required dependency)
 open3d==0.18.0        # Required backend for trimesh decimation algorithm
 
+# LangGraph Agent (US-018)
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+openai>=1.0
+tenacity>=8.2.3
+jinja2>=3.1.0
+
 # Testing (for integration tests in agent container)
 pytest==7.4.4
 pytest-asyncio==0.23.4

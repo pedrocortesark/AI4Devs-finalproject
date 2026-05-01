@@ -55,9 +55,9 @@ export const ElementSchema = z.object({
   iso_code: z.string(),
   status: ElementStatusSchema,
   material_type: MaterialTypeSchema,
-  high_poly_url: z.string().url().nullable().optional(),  // US-015: High-detail GLB (~7k tris, 0-5m)
-  mid_poly_url: z.string().url().nullable().optional(),   // US-015: Mid-detail GLB (~2k tris, 5-20m)
-  low_poly_url: z.string().url().nullable(),              // US-015: Low-detail GLB (~500 tris, 20-50m)
+  high_poly_url: z.string().url().nullable().optional(),  // US-015: High-detail GLB (~7k tris, 0-15m)
+  mid_poly_url: z.string().url().nullable().optional(),   // US-015: Mid-detail GLB (~2k tris, 15-40m)
+  low_poly_url: z.string().url().nullable(),              // US-015: Low-detail GLB (~500 tris, 40-100m)
   bbox: BoundingBoxSchema.nullable(),
 });
 

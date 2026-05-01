@@ -14,9 +14,9 @@
  * 
  * Renders elements at their real building coordinates from Rhino (absolute positioning).
  * LOD system: 
- *   - Level 0 (0-5m): high-poly ~7k tris, maximum detail for close inspection
- *   - Level 1 (5-20m): mid-poly ~2k tris, normal working distance
- *   - Level 2 (20-50m): low-poly ~500 tris, overview mode
+ *   - Level 0 (0-15m): high-poly ~7k tris, maximum detail for close inspection
+ *   - Level 1 (15-40m): mid-poly ~2k tris, normal working distance
+ *   - Level 2 (40-100m): low-poly ~500 tris, overview mode
  *   - Level 3 (>50m): bbox 12 tris, wireframe proxy for distant view
  * 
  * @module ElementMesh
@@ -138,9 +138,9 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   );
   
   // Load OBJ geometries for complete LOD system (US-015: 4 levels)
-  // Level 0 (0-5m): high_poly (~7k tris, max detail)
-  // Level 1 (5-20m): mid_poly (~2k tris, normal working distance)
-  // Level 2 (20-50m): low_poly (~500 tris, overview)
+  // Level 0 (0-15m): high_poly (~7k tris, max detail)
+  // Level 1 (15-40m): mid_poly (~2k tris, normal working distance)
+  // Level 2 (40-100m): low_poly (~500 tris, overview)
   // Level 3 (>50m): bbox (12 tris, wireframe proxy)
   // 
   // Fallback strategy if LOD assets missing:
@@ -190,7 +190,12 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   
   // Calculate LOD level based on camera distance (replaces drei's <Detailed>)
   // position prop is bbox center in Three.js Y-up coordinates (from usePartsSpatialLayout)
-  const lodLevel = useLOD(position);
+  const calculatedLodLevel = useLOD(position);
+  
+  // TEXTURE MODE OVERRIDE: In 'layer' mode (textura), always use high-poly (level 0)
+  // to preserve MTL material groups. Decimated models (mid/low) have fused material
+  // groups that don't match MTL, causing incorrect colors or gray fallback.
+  const lodLevel = colorMode === 'layer' ? 0 : calculatedLodLevel;
 
   // Handle cursor change on hover
   useEffect(() => {
@@ -203,11 +208,16 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
     selectPart(part.id);
   };
 
-  // Stone material color: derived from part.tipologia (material_type from Rhino metadata)
+  // Stone material color: derived from rhino_metadata.Material first, fallback to part.tipologia
   // OBJ files do NOT carry Rhino layer colors — OBJLoader assigns default gray.
   // We apply the stone color explicitly from MATERIAL_COLORS (62 types).
-  const stoneMaterial = (part.tipologia in MATERIAL_COLORS
-    ? part.tipologia
+  const materialName = 
+    (part.rhino_metadata && typeof part.rhino_metadata === 'object' && 'Material' in part.rhino_metadata
+      ? String(part.rhino_metadata.Material)
+      : part.tipologia) || DEFAULT_MATERIAL;
+  
+  const stoneMaterial = (materialName in MATERIAL_COLORS
+    ? materialName
     : DEFAULT_MATERIAL) as keyof typeof MATERIAL_COLORS;
   const stoneColor = getMaterialColorHex(stoneMaterial);
 
@@ -225,11 +235,14 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   );
 
   // Apply material properties to all LOD clones (high, mid, low)
-  // Two modes:
-  //   'material' — uniform stone color from MATERIAL_COLORS[tipologia] (default, always works)
-  //   'layer'    — per-material-group colors from Rhino layer MTL file (high-poly only)
-  //                mid/low always use stoneColor as fallback (decimation destroys face groups)
+  // Two modes (controlled by switcher, NOT by distance):
+  //   'material' — uniform stone color from MATERIAL_COLORS[tipologia] on ALL LOD levels
+  //   'layer'    — per-material-group colors from Rhino layer MTL file on HIGH-POLY ONLY
+  //                (mid/low not used in textura mode due to material group fusion during decimation)
   useEffect(() => {
+    // Neutral gray for textura mode (when MTL material group not found)
+    const NEUTRAL_GRAY = '#A0A0A0';
+    
     // Helper: apply visual props to a single Three.js material object
     const applyToMaterial = (mat: any, baseColor: string) => {
       mat.color.set(baseColor);
@@ -258,15 +271,29 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
       }
     };
 
-    // Mid and low always use stone color (material mode AND textura mode)
-    [midPolyClone, lowPolyClone].forEach((clone) => {
+    // Helper: apply MTL colors to a clone (with neutral gray fallback, NOT stone color)
+    const applyMTLColors = (clone: any, colorMap: Record<string, string>) => {
       clone.traverse((child: any) => {
-        if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
+        if (child.isMesh && child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach((mat: any) => {
+              applyToMaterial(mat, colorMap[mat.name ?? ''] ?? NEUTRAL_GRAY);
+            });
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (child.geometry && !child.geometry.attributes.normal) {
+              child.geometry.computeVertexNormals();
+            }
+          } else {
+            applyVisualProps(child, colorMap[child.material.name ?? ''] ?? NEUTRAL_GRAY);
+          }
+        }
       });
-    });
+    };
 
     if (colorMode === 'layer' && mtlUrl) {
-      // Textura mode: fetch MTL and apply per-layer Rhino colors to high-poly only
+      // Textura mode: fetch MTL and apply per-layer Rhino colors to HIGH-POLY ONLY
+      // (mid/low not used due to LOD override, but apply neutral gray as safety fallback)
       fetch(mtlUrl)
         .then((res) => res.text())
         .then((mtlText) => {
@@ -284,34 +311,28 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
               colorMap[currentMat] = `rgb(${r},${g},${b})`;
             }
           }
-          // High-poly: per-material-group colors from MTL (layer_N → Kd color)
-          highPolyClone.traverse((child: any) => {
-            if (child.isMesh && child.material) {
-              if (Array.isArray(child.material)) {
-                child.material.forEach((mat: any) => {
-                  applyToMaterial(mat, colorMap[mat.name ?? ''] ?? stoneColor);
-                });
-                child.castShadow = true;
-                child.receiveShadow = true;
-                if (child.geometry && !child.geometry.attributes.normal) {
-                  child.geometry.computeVertexNormals();
-                }
-              } else {
-                applyVisualProps(child, colorMap[child.material.name ?? ''] ?? stoneColor);
-              }
-            }
+          // Apply MTL colors to high-poly (primary), neutral gray to mid/low (safety fallback)
+          applyMTLColors(highPolyClone, colorMap);
+          [midPolyClone, lowPolyClone].forEach((clone) => {
+            clone.traverse((child: any) => {
+              if (child.isMesh && child.material) applyVisualProps(child, NEUTRAL_GRAY);
+            });
           });
         })
         .catch(() => {
-          // Fetch error fallback: stone color on high-poly too
-          highPolyClone.traverse((child: any) => {
-            if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
+          // Fetch error fallback: neutral gray on ALL levels (NOT stone color)
+          [highPolyClone, midPolyClone, lowPolyClone].forEach((clone) => {
+            clone.traverse((child: any) => {
+              if (child.isMesh && child.material) applyVisualProps(child, NEUTRAL_GRAY);
+            });
           });
         });
     } else {
-      // Material mode: stone color on high-poly (mid/low already set above)
-      highPolyClone.traverse((child: any) => {
-        if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
+      // Material mode: stone color on ALL LOD levels
+      [highPolyClone, midPolyClone, lowPolyClone].forEach((clone) => {
+        clone.traverse((child: any) => {
+          if (child.isMesh && child.material) applyVisualProps(child, stoneColor);
+        });
       });
     }
   }, [colorMode, mtlUrl, stoneColor, emissive, emissiveIntensity, opacity, highPolyClone, midPolyClone, lowPolyClone]);
@@ -350,9 +371,9 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
   }
 
   // US-015: Complete 4-level LOD System
-  // Level 0 (0-5m): high_poly (~7k tris, max detail for close inspection)
-  // Level 1 (5-20m): mid_poly (~2k tris, normal working distance)
-  // Level 2 (20-50m): low_poly (~500 tris, overview mode)
+  // Level 0 (0-15m): high_poly (~7k tris, max detail for close inspection)
+  // Level 1 (15-40m): mid_poly (~2k tris, normal working distance)
+  // Level 2 (40-100m): low_poly (~500 tris, overview mode)
   // Level 3 (>50m): bbox (12 tris, wireframe proxy for distant view)
   
   return (
@@ -377,7 +398,7 @@ export function ElementMesh({ part, position, enableLod = true }: ElementMeshPro
         </Html>
       )}
 
-      {/* LOD Level 0: High-poly geometry (0-5m) */}
+      {/* LOD Level 0: High-poly geometry (0-15m) */}
       {lodLevel === 0 && (
         <primitive
           name={`part-${part.iso_code}-high`}

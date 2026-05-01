@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { usePartsStore } from '@/stores/parts.store';
-import { getMaterialColorHex, MATERIAL_COLORS, DEFAULT_MATERIAL } from '@/constants/materials';
+import { getMaterialColorHex, MATERIAL_COLORS } from '@/constants/materials';
 
 interface LegendItem {
   name: string;
@@ -79,7 +79,7 @@ function parseMtlColors(mtlText: string): LegendItem[] {
       // mat name is the Rhino layer name (spaces encoded as _)
       const label = currentMat.replace(/_/g, ' ');
       items.push({ name: label, color: `rgb(${r},${g},${b})` });
-      currentMat = '';
+      // Don't reset currentMat here - keep it until next newmtl
     }
   }
 
@@ -92,22 +92,49 @@ const ColorLegend: React.FC = () => {
   const [layerItems, setLayerItems] = useState<LegendItem[]>([]);
 
   // Fetch + parse MTL when entering Textura mode
+  // Aggregate materials from ALL parts' MTL files to show complete legend
   useEffect(() => {
     if (colorMode !== 'layer') {
       setLayerItems([]);
       return;
     }
 
-    const partWithMtl = parts.find((p) => p.mtl_url);
-    if (!partWithMtl?.mtl_url) return;
+    // Collect all unique MTL URLs
+    const mtlUrls = Array.from(
+      new Set(
+        parts
+          .filter((p) => p.mtl_url)
+          .map((p) => p.mtl_url!)
+      )
+    );
+
+    if (mtlUrls.length === 0) return;
 
     let cancelled = false;
-    fetch(partWithMtl.mtl_url)
-      .then((r) => r.text())
-      .then((text) => {
-        if (!cancelled) setLayerItems(parseMtlColors(text));
-      })
-      .catch(() => {});
+    const allItems = new Map<string, LegendItem>(); // name → item
+
+    // Fetch and parse all MTL files in parallel
+    Promise.all(
+      mtlUrls.map((url) =>
+        fetch(url)
+          .then((r) => r.text())
+          .then((text) => parseMtlColors(text))
+          .catch(() => [] as LegendItem[])
+      )
+    ).then((itemsArrays) => {
+      if (cancelled) return;
+      
+      // Merge all items, keeping unique materials by name
+      itemsArrays.forEach((items) => {
+        items.forEach((item) => {
+          if (!allItems.has(item.name)) {
+            allItems.set(item.name, item);
+          }
+        });
+      });
+
+      setLayerItems(Array.from(allItems.values()));
+    });
 
     return () => { cancelled = true; };
   }, [colorMode, parts]);
@@ -119,11 +146,21 @@ const ColorLegend: React.FC = () => {
     title = 'Tipo de piedra';
     const seen = new Set<string>();
     for (const p of parts) {
-      const tip = p.tipologia;
-      if (tip && !seen.has(tip)) {
-        seen.add(tip);
-        const colorKey = (tip in MATERIAL_COLORS ? tip : DEFAULT_MATERIAL) as keyof typeof MATERIAL_COLORS;
-        items.push({ name: tip, color: getMaterialColorHex(colorKey) });
+      // Read material from rhino_metadata.Material first, fallback to tipologia
+      const materialKey = 
+        (p.rhino_metadata && typeof p.rhino_metadata === 'object' && 'Material' in p.rhino_metadata
+          ? String(p.rhino_metadata.Material)
+          : p.tipologia) || null;
+      
+      if (materialKey && !seen.has(materialKey)) {
+        seen.add(materialKey);
+        // Only add to legend if color exists in MATERIAL_COLORS
+        if (materialKey in MATERIAL_COLORS) {
+          items.push({ 
+            name: materialKey, 
+            color: getMaterialColorHex(materialKey as keyof typeof MATERIAL_COLORS) 
+          });
+        }
       }
     }
   } else {
