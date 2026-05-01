@@ -1,83 +1,174 @@
 # Active Context
 
 ## Current Sprint
-**Sprint 8 — PRODUCTION DEPLOYMENT CONSOLIDATION (2026-03-15 → 2026-03-20)**  
-≥**Status:** 🎯 **Day 3/5 — Documentation & E2E Validation ✅ COMPLETED**
+**Sprint 10 — AI ARCHITECTURE PLANNING (2026-05-01 → 2026-05-08)**  
+**Status:** 🎯 **Day 1/7 — Architecture Documentation COMPLETED ✅**
 
 ## Active Ticket
-**✅ Wed 18/03 — Documentation Cleanup + E2E Validation (COMPLETADO)** — Actualización completa de documentación para entrega final TFM: readme-official.md (5 US documentadas), README.md (URLs producción + sección MVP detallada), docs/00-index.md, memory-bank/. **E2E browser validation completada:** 5 archivos .3dm subidos a sf-pm.vercel.app, Dashboard 3D + Visor 3D verificados funcionales en producción.
+**✅ Thu 01/05 — AI Architecture Documentation (COMPLETADO)** — Documentación técnica completa de arquitectura híbrida LangGraph + RAG para presentación a Sagrada Família. Incluye: (1) Spec técnica completa 60 páginas (docs/meetings/sagrada-familia/12-ai-architecture.md), (2) Resumen ejecutivo para reunión (docs/meetings/sagrada-familia/EXECUTIVE-SUMMARY-AI.md), (3) Análisis de ROI y costes, (4) Plan de implementación por fases, (5) Registro en prompts.md (#243).
 
-## Sprint 8 Progress — DEPLOYMENT TIMELINE
+## Sprint 10 Objective
 
-**Objective:** Deploy MVP to production (Railway + Vercel + Supabase) — **5 US live: US-001, US-002, US-005, US-010, US-015 (81/177 SP, 45.8%)**
-
-| Day | Phase | Status | Notes |
-|-----|-------|--------|-------|
-| **Mon 16/03** | ✅ Railway Setup | COMPLETADO | Backend + Agent Worker deployed, Redis connected, health checks green |
-| **Tue 17/03** | ✅ Railway Validation | COMPLETADO | Full pipeline verified: upload → Celery → LOD generation → Storage |
-| **Wed 18/03** | ✅ Vercel + Docs + E2E | COMPLETADO | Frontend deployed sf-pm.vercel.app, CORS OK. Documentation cleanup done. **E2E validation COMPLETED: 5 .3dm files uploaded, Dashboard + Visor 3D verified** |
-| **Thu 19/03** | ⏳ Demo Video | PENDING | Record 5-min demo video (upload flow + Dashboard + Visor 3D) |
-| **Fri 20/03** | ⏳ TFM Prep | PENDING | Screenshots production, final README polish, TFM submission package |
-
-**Production URLs (LIVE):**
-- 🌐 Frontend: https://sf-pm.vercel.app (Vercel)
-- 🔌 Backend: https://sf-pm-backend.railway.app (Railway)
-- 💾 Database: Supabase Cloud PostgreSQL 15
-- 📦 Storage: Supabase Storage (S3-compatible)
-
-**Deployment Acceptance Criteria:**
-- ✅ Backend health checks green (Railway) — `/health` returns 200 OK
-- ✅ Frontend loads production URL (Vercel) — sf-pm.vercel.app accessible
-- ✅ CORS configured correctly — frontend calls backend without errors
-- ✅ Celery workers operational — agent-worker logs show task processing
-- ✅ **Full upload flow works (browser E2E test) — COMPLETADO (5 .3dm files uploaded successfully)**
-- ✅ 419+ tests passing locally (zero regressions)
-- ✅ **Dashboard 3D displays elements correctly — VERIFIED (Wed 18/03)**
-- ✅ **Storage has OBJ files (3 LODs) — VERIFIED (Supabase Storage bucket checked)**
-
-**Documentation Progress (Wed 18/03):**
-- ✅ prompts.md: Entries #238 (Documentation cleanup) + #239 (E2E validation) registered
-- ✅ readme-official.md: 5 US documented, API endpoints updated, structure corrected
-- ✅ README.md: Production URLs added, MVP section expanded with detailed US summaries
-- ✅ docs/00-index.md: US-015 added to table
-- ✅ memory-bank/activeContext.md: Sprint 8 Day 3 status updated (E2E completed)
-- ✅ memory-bank/progress.md: Sprint 8 summary completed
+**Preparar implementación de capa de IA para presentación comercial a Sagrada Família:**
+- 📋 **Documentación completa** — Specs técnicas + resumen ejecutivo (✅ COMPLETADO)
+- 🤝 **Aprobación stakeholders** — Review arquitectura propuesta
+- 🏗️ **Fase 1: LangGraph Agent** — Completar validación activa (US-018)
+- 📚 **Fase 2: RAG System** — Implementar búsqueda semántica (US-020 nueva)
 
 ---
 
-## US-018 LangGraph Agent (21 SP) — ⏸️ PAUSED UNTIL DEPLOYMENT COMPLETE
+## Documentation Progress — AI Architecture (Thu 01/05)
 
-**Prioridad: P0 MUST-HAVE** (core diferenciador TFM — deferred to Sprint 9 after production deployment)
+### Suite Completa de Documentación (5 Documentos)
 
-| Ticket | Title | SP | Status | Notes |
-|--------|-------|---:|--------|-------|
-| **T-1801-AGENT** | StateGraph Setup (8 nodos + ValidationState) | 5 | ⏸️ DEFERRED | Resume after deployment |
-| **T-1802-AGENT** | LLM Classification GPT-4 + Circuit Breaker | 5 | ⏸️ DEFERRED | Requires OpenAI API key setup |
-| **T-1803-AGENT** | Refactor Validators as LangGraph Nodes | 3 | ⏸️ DEFERRED | — |
-| **T-1804-AGENT** | Report Generator Node (Jinja2) | 2 | ⏸️ DEFERRED | — |
-| **T-1805-AGENT** | Audit Trail per Node Transition | 3 | ⏸️ DEFERRED | — |
-| **T-1806-TEST** | E2E Integration Test (6 .3dm files) | 3 | ⏸️ DEFERRED | — |
+1. **docs/meetings/sagrada-familia/12-ai-architecture.md** (✅ COMPLETADO)
+   - 60 páginas de especificación técnica
+   - Arquitectura híbrida: LangGraph (validación) + RAG (Q&A)
+   - Implementación detallada de 8 nodos LangGraph
+   - Schema pgvector para embeddings
+   - Código completo Python/TypeScript
+   - Plan de testing (10 tests unitarios + 5 integración)
+   - Estimación costes: €3,200 desarrollo + €1,500/año operativo
+   - ROI: 16,533% (recuperación en 3 días)
 
-**Reactivation:** Sprint 9 (start 2026-03-23) after MVP deployed to production
+2. **docs/meetings/sagrada-familia/EXECUTIVE-SUMMARY-AI.md** (✅ COMPLETADO)
+   - Resumen ejecutivo 15 páginas para reunión SF
+   - Problema-solución-ROI en formato digestible
+   - Timeline implementación (8 días / 2 sprints)
+   - Métricas de éxito claras
+   - FAQs para stakeholders (8 preguntas técnicas/negocio)
+
+3. **docs/meetings/sagrada-familia/ONE-PAGER-AI.md** (✅ COMPLETADO)
+   - Resumen visual de 1 página (handout para reunión)
+   - Elevator pitch 3 líneas
+   - Tabla impacto económico (€248k ahorro vs €1.5k inversión)
+   - Diagrama arquitectura ASCII art
+   - Casos de uso reales (María, Jordi, Carme)
+   - Próximos pasos decision pathway
+
+4. **docs/meetings/sagrada-familia/MEETING-CHECKLIST-SF.md** (✅ COMPLETADO)
+   - Checklist preparación reunión (12 páginas)
+   - Script presentación 20 minutos
+   - Preguntas anticipadas + respuestas preparadas (8 FAQs)
+   - Checklist pre/durante/post-reunión
+   - Aprobación pathway si GO decision
+   - Definición de éxito reunión
+
+5. **docs/meetings/sagrada-familia/README-AI-DOCS.md** (✅ COMPLETADO)
+   - Guía de navegación de toda la documentación IA
+   - Flujo lectura recomendado por rol (stakeholder/técnico/dev/BIM manager)
+   - Estructura de archivos explicada
+   - Conceptos clave (LangGraph, RAG, pgvector, embeddings)
+   - Comparativa de documentos (audiencia, objetivo, tiempo lectura)
+   - Workflow preparación → reunión → post-reunión → implementación
+
+### Actualización de Sistema de Documentación
+
+6. **prompts.md** (✅ ACTUALIZADO)
+   - Entrada #243: Consulta arquitectura IA + generación 5 docs
+   - Registro completo del prompt de análisis
+
+7. **docs/00-index.md** (✅ ACTUALIZADO)
+   - Nueva sección "Arquitectura de IA (Nuevo — Mayo 2026)" con tabla de 6 documentos
+   - Link a docs/meetings/sagrada-familia/ como punto de entrada
+   - Resumen técnico de capas (Librarian + Archivist)
+   - Métricas clave (ROI, timeline, impacto)
+
+8. **memory-bank/progress.md** (✅ ACTUALIZADO)
+   - Sprint 8 closure entry
+   - Sprint 10 Day 1-2 entries con lista completa de deliverables
+   - Documentation reorganization entry
+   - Next steps pendientes aprobación Sagrada Família
+
+9. **docs/BACKLOG-STATUS.md** (✅ NUEVO — May 1, 2026)
+   - Reporte ejecutivo estado actual del backlog
+   - 5 US completadas (81 SP), 2 US AI pendientes (46 SP), 5 US planned (~50 SP)
+   - Progreso MVP: 45.8% (81/177 SP)
+   - Breakdown por categoría y roadmap propuesto
+   - Definición de completitud MVP por tiers
+   - Enlaces a toda la documentación relacionada
+
+---
+
+## Next Steps (Pending Approval)
+
+**⏳ Awaiting Decision:** Aprobación de arquitectura por Sagrada Família
+
+### Si Aprobado → Sprint 10-11 (2 semanas):
+
+**Sprint 10 (May 1-8):** Fase 1 — LangGraph Agent Completion
+- T-1801-AGENT: Implementar lógica validación en nodes.py (8h)
+- T-1802-AGENT: Integrar rhino3dm en extract_geometry (4h)
+- T-1803-AGENT: GPT-4 classification + fallback (6h)
+- T-1804-AGENT: Celery wrapper (3h)
+- T-1805-AGENT: Tests integración (5h)
+- T-1806-INFRA: Deploy Railway (2h)
+
+**Sprint 11 (May 9-15):** Fase 2 — RAG System
+- T-1901-INFRA: Enable pgvector Supabase (1h)
+- T-1902-INFRA: Tabla block_embeddings (2h)
+- T-1903-AGENT: Script batch embeddings (4h)
+- T-1904-BACK: /api/chat/ask endpoint (6h)
+- T-1905-FRONT: ChatAssistant component (5h)
+- T-1906-AGENT: Trigger incremental (3h)
+- T-1907-TEST: RAG accuracy tests (4h)
+
+**Total:** 53 horas (6.6 días @ 8hr/día)
 
 ---
 
 ## Recently Completed
 
-- **US-015: Element Model Refactoring (Epic)** —  ✅ COMPLETE (2026-03-15 14:30) | **21/21 SP DONE, All tickets completed** | Parts → Elements refactoring across full stack
-  - **Context:** End-to-end refactoring from "Part" to "Element" model with English nomenclature, 62 real materials (Montjuïc/Ulldecona/Floresta), mandatory fields (low_poly_url + bbox), Zod validation, workshops table removed.
-  - **Tickets Completed:**
-    - T-1501-DB: Element model database schema migration (3 SP) ✅
-    - T-1502-INFRA: Storage path conventions (3 SP) ✅
-    - T-1503-AGENT: Material extraction with real dictionary (5 SP) ✅
-    - T-1504-AGENT: Material dictionary enhancement RGB (4 SP) ✅
-    - T-1504-BACK: Element API Integration (4 SP) ✅
-    - T-1505-FRONT: Frontend Element integration Zod (3 SP) ✅
-    - T-1507-TEST: E2E Integration Test (3 SP) ✅
-  - **Deliverables:**
-    - Database: `material_type` TEXT (62 values), `workshop_id/workshop_name` dropped, `bbox` CHECK constraint
-    - Agent: MATERIAL_COLORS dict (62 entries + RGB), `_extract_material_type()` object-level only
-    - Backend: Element schemas (Pydantic), /api/elements endpoints, material validation
+- **Sprint 8: Production Deployment** — ✅ COMPLETE (2026-03-20)
+  - Railway backend deployed (https://sf-pm-backend.railway.app)
+  - Vercel frontend deployed (https://sf-pm.vercel.app)
+  - E2E validation: 5 .3dm files uploaded successfully
+  - Dashboard 3D + Visor 3D functional in production
+
+- **US-015: Element Model Refactoring (Epic)** —  ✅ COMPLETE (2026-03-15)
+  - Parts → Elements nomenclature
+  - 62 real materials (Montjuïc/Ulldecona/Floresta)
+  - Material extraction with RGB colors
+  - Zod validation frontend
+  - 454/473 tests passing (96%)
+
+---
+
+## Production Status (Live Systems)
+
+**Production URLs:**
+- 🌐 Frontend: https://sf-pm.vercel.app (Vercel)
+- 🔌 Backend: https://sf-pm-backend.railway.app (Railway)
+- 💾 Database: Supabase Cloud PostgreSQL 15
+- 📦 Storage: Supabase Storage (S3-compatible)
+
+**Health Checks:**
+- ✅ Backend /health: 200 OK
+- ✅ Frontend: Loads without errors
+- ✅ CORS: Configured correctly
+- ✅ Celery: Agent worker processing tasks
+- ✅ Tests: 419+ passing locally
+
+**MVP Progress:** 5/11 US completadas — **81/177 SP (45.8%)**
+
+---
+
+## US-018 LangGraph Agent (21 SP) — 🚀 READY TO START
+
+**Prioridad: P0 MUST-HAVE** (core diferenciador TFM)
+
+**Status:** Documentación completa → Awaiting GO decision → Implementation ready
+
+| Ticket | Title | SP | Status | Notes |
+|--------|-------|---:|--------|-------|
+| **T-1801-AGENT** | StateGraph Setup (8 nodos + ValidationState) | 5 | 📋 READY | Docs completas en 12-ai-architecture.md |
+| **T-1802-AGENT** | LLM Classification GPT-4 + Circuit Breaker | 5 | 📋 READY | OpenAI API key required |
+| **T-1803-AGENT** | Refactor Validators as LangGraph Nodes | 3 | 📋 READY | — |
+| **T-1804-AGENT** | Report Generator Node (Jinja2) | 2 | 📋 READY | — |
+| **T-1805-AGENT** | Audit Trail per Node Transition | 3 | 📋 READY | — |
+| **T-1806-TEST** | E2E Integration Test (6 .3dm files) | 3 | 📋 READY | — |
+
+**Next Action:** Esperar decisión GO/NO-GO de Sagrada Família (target: May 3-5)
     - Frontend: Zod schemas, element services, Zustand store, 38/38 tests PASS
     - Tests: E2E integration tests backend 11/14, frontend 443/459 PASS (96.5% vs 81.8% baseline +14.7%)
   - **Tests Obsoletos Eliminados:** parts_service.py, part_detail_service.py, navigation_service.py, cdn_config.py (incompatibles con Element model)

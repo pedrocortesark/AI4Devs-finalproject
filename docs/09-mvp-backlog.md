@@ -833,14 +833,16 @@ COMMIT;
 
 | ID Ticket | Título | Story Points | Tech Spec | DoD | Priority |
 |-----------|--------|--------------|-----------|-----|----------|
-| **T-1601-AGENT** | **LangGraph StateGraph Setup** | 5 | **Objetivo:** Crear esqueleto del agente con LangGraph StateGraph (8 nodos + transiciones condicionales). **Implementación:** (1) Instalar `langgraph>=0.0.20`, `langchain-core>=0.1.0`, (2) Definir `ValidationState` TypedDict con 15 campos: `block_id`, `nomenclature_valid`, `nomenclature_errors`, `geometry_metadata` (dict), `geometry_valid`, `semantic_data` (dict con tipologia/material/confidence), `overall_status` (enum: validated/rejected/processing), `classification_method`, `validation_path` (lista nodos ejecutados), `error_messages`, `circuit_breaker_tripped`, `created_at`, `completed_at`, `retry_count`, `low_poly_url`. (3) Crear `StateGraph` con 8 nodos: START (entry point) → ValidateNomenclature (US-002 reutilizado) → ExtractGeometry (rhino3dm) → ValidateGeometry (topología) → ClassifyTipologia (LLM placeholder) → EnrichMetadata (UserStrings) → GenerateReport (Jinja2) → END (validated/rejected). (4) Definir edges condicionales: `nomenclature_valid == True` → ExtractGeometry, `nomenclature_valid == False` → REJECTED (fail-fast), `geometry_valid == False` → REJECTED. (5) Tests unitarios: verificar state transitions (10 escenarios: HP nomenclature OK → geometry, HP full flow → validated, EC nomenclature FAIL → rejected sin LLM, EC geometry FAIL → rejected, ERR invalid state → exception). (6) Documentación: Mermaid `stateDiagram-v2` actualizado en docs/07-agent-design.md con implementación real. **DoD:** StateGraph ejecuta sin errores, transiciones condicionales verificadas con tests (10/10 PASS), documentación Mermaid sincronizada con código, ValidationState TypedDict completo con docstrings. | 🔴 P0 |
-| **T-1602-AGENT** | **LLM Classification Node (GPT-4 Turbo)** | 5 | **Objetivo:** Implementar nodo `classify_tipologia(state: ValidationState) -> ValidationState` con LLM GPT-4 Turbo + Circuit Breaker. **Implementación:** (1) LangChain OpenAI client configurado: `model="gpt-4-turbo"`, `temperature=0.2 (determinismo)`, `response_format={"type": "json_object"}` (JSON Mode forzado). (2) Prompt engineering: `"Classify architectural piece from Sagrada Família based on metadata: {volume: X m³, bbox: {...}, layers: [...]}. Output JSON schema: {tipologia: 'dovela'|'capitel'|'columna'|'clave'|'imposta'|'other', confidence: 0.0-1.0, reasoning: string}. BE CONSERVATIVE: if uncertain, return 'other' with low confidence."`. (3) Timeout 10s con Tenacity retry (3 intentos exponential backoff: 2s, 4s, 8s). (4) Circuit Breaker pattern: si falla 5 veces consecutivas (contador en Redis TTL 300s) → activar fallback a clasificación regex (filename pattern: `SF-C12-D-*` → "dovela", `SF-C12-C-*` → "capitel", default → "other"). (5) Helper function `get_material_color()` basado en clasificación (integración con MATERIAL_COLORS dict existente). (6) Tests: Mock OpenAI responses (15 tests parametrizados): HP válido JSON → clasificación dovela confidence 0.9, EC timeout después de 3 reintentos → fallback regex, ERR invalid JSON response → fallback, ERR 429 rate limit → fallback, CB 5 fallos consecutivos → circuit breaker activated + Redis flag. **DoD:** Nodo clasifica correctamente 5 tipologías (dovela, capitel, columna, clave, imposta), fallback activado tras 5 fallos, circuit breaker persiste en Redis, tests 15/15 PASS, prompts versionados en constants. | 🔴 P0 |
+| **T-1801-AGENT** | **LangGraph StateGraph Setup** | 5 | **Objetivo:** Crear esqueleto del agente con LangGraph StateGraph (8 nodos + transiciones condicionales). **Implementación:** (1) Instalar `langgraph>=0.0.20`, `langchain-core>=0.1.0`, (2) Definir `ValidationState` TypedDict con 15 campos: `block_id`, `nomenclature_valid`, `nomenclature_errors`, `geometry_metadata` (dict), `geometry_valid`, `semantic_data` (dict con tipologia/material/confidence), `overall_status` (enum: validated/rejected/processing), `classification_method`, `validation_path` (lista nodos ejecutados), `error_messages`, `circuit_breaker_tripped`, `created_at`, `completed_at`, `retry_count`, `low_poly_url`. (3) Crear `StateGraph` con 8 nodos: START (entry point) → ValidateNomenclature (US-002 reutilizado) → ExtractGeometry (rhino3dm) → ValidateGeometry (topología) → ClassifyTipologia (LLM placeholder) → EnrichMetadata (UserStrings) → GenerateReport (Jinja2) → END (validated/rejected). (4) Definir edges condicionales: `nomenclature_valid == True` → ExtractGeometry, `nomenclature_valid == False` → REJECTED (fail-fast), `geometry_valid == False` → REJECTED. (5) Tests unitarios: verificar state transitions (10 escenarios: HP nomenclature OK → geometry, HP full flow → validated, EC nomenclature FAIL → rejected sin LLM, EC geometry FAIL → rejected, ERR invalid state → exception). (6) Documentación: Mermaid `stateDiagram-v2` actualizado en docs/07-agent-design.md con implementación real. **DoD:** StateGraph ejecuta sin errores, transiciones condicionales verificadas con tests (10/10 PASS), documentación Mermaid sincronizada con código, ValidationState TypedDict completo con docstrings. | 🔴 P0 |
+| **T-1802-AGENT** | **LLM Classification Node (GPT-4 Turbo)** | 5 | **Objetivo:** Implementar nodo `classify_tipologia(state: ValidationState) -> ValidationState` con LLM GPT-4 Turbo + Circuit Breaker. **Implementación:** (1) LangChain OpenAI client configurado: `model="gpt-4-turbo"`, `temperature=0.2 (determinismo)`, `response_format={"type": "json_object"}` (JSON Mode forzado). (2) Prompt engineering: `"Classify architectural piece from Sagrada Família based on metadata: {volume: X m³, bbox: {...}, layers: [...]}. Output JSON schema: {tipologia: 'dovela'|'capitel'|'columna'|'clave'|'imposta'|'other', confidence: 0.0-1.0, reasoning: string}. BE CONSERVATIVE: if uncertain, return 'other' with low confidence."`. (3) Timeout 10s con Tenacity retry (3 intentos exponential backoff: 2s, 4s, 8s). (4) Circuit Breaker pattern: si falla 5 veces consecutivas (contador en Redis TTL 300s) → activar fallback a clasificación regex (filename pattern: `SF-C12-D-*` → "dovela", `SF-C12-C-*` → "capitel", default → "other"). (5) Helper function `get_material_color()` basado en clasificación (integración con MATERIAL_COLORS dict existente). (6) Tests: Mock OpenAI responses (15 tests parametrizados): HP válido JSON → clasificación dovela confidence 0.9, EC timeout después de 3 reintentos → fallback regex, ERR invalid JSON response → fallback, ERR 429 rate limit → fallback, CB 5 fallos consecutivos → circuit breaker activated + Redis flag. **DoD:** Nodo clasifica correctamente 5 tipologías (dovela, capitel, columna, clave, imposta), fallback activado tras 5 fallos, circuit breaker persiste en Redis, tests 15/15 PASS, prompts versionados en constants. | 🔴 P0 |
 | **T-1803-AGENT** | **Refactor Existing Validators as LangGraph Nodes** | 3 | **Objetivo:** Integrar validadores existentes (US-002) como nodos LangGraph sin cambiar lógica interna. **Implementación:** (1) Refactorizar `NomenclatureValidator` (T-025), `GeometryValidator` (T-026), `UserStringExtractor` (T-027) como funciones puras: `validate_nomenclature(state: ValidationState) -> ValidationState`, `extract_geometry(state)`, `validate_geometry(state)`, `enrich_metadata(state)`. (2) Mantener lógica 100% sin cambios (zero regression commitment). (3) Adapter pattern: wrapper que extrae campos de `state`, llama validator original, actualiza `state` con resultados. (4) Actualizar imports en StateGraph (T-1801). (5) Tests: 27 tests existentes US-002 (nomenclature + geometry) deben pasar 27/27 sin modificación + 5 nuevos tests de integración StateGraph: nomenclature OK → extract_geometry ejecutado, nomenclature FAIL → extract_geometry NO ejecutado (skip nodo), geometry FAIL → enrich_metadata NO ejecutado. **DoD:** 3 nodos integrados en StateGraph, 32/32 tests PASS (27 existentes + 5 nuevos), zero regression validada con baseline US-002 (69/69 backend tests), código adapter documentado con JSDoc. | 🟡 P1 |
-| **T-1604-AGENT** | **Report Generator Node (Jinja2 Templates)** | 2 | **Objetivo:** Generar reportes de validación estructurados con templates Jinja2. **Implementación:** (1) Instalar `Jinja2>=3.1.0`. (2) Template `validation_report.json.j2` en `src/agent/templates/`: estructura JSON con secciones `errors[]`, `metadata{}` (iso_code, material, tipologia), `semantic_data{}` (LLM classification), `geometry_summary` (vertices, triangles, bbox), `timestamp`, `validated_by` (agent version), `validation_path[]` (nodos ejecutados). (3) Nodo `generate_report(state: ValidationState) -> ValidationState`: renderiza template con state fields, guarda en `ValidationState.validation_report` (string JSON), persiste en `blocks.validation_report` JSONB column (ya existe en migration T-020-DB). (4) NULL-safe rendering: campos opcionales (semantic_data si LLM no se ejecutó) con defaults. (5) Integración con ValidationReportModal (T-032-FRONT, ya existe): NO requiere cambios frontend (contrato JSONB ya cumplido). (6) Tests: 8 tests (HP reporte completo con LLM, EC reporte sin LLM → semantic_data = null, EC reporte rejected → errors array poblado, INT JSONB schema compliance con Pydantic ValidationReport model). **DoD:** Reports generados cumplen schema ValidationReport, tests 8/8 PASS, integración con ValidationReportModal verificada (UI muestra reportes sin cambios), templates versionados en Git. | 🟡 P1 |
+| **T-1804-AGENT** | **Report Generator Node (Jinja2 Templates)** | 2 | **Objetivo:** Generar reportes de validación estructurados con templates Jinja2. **Implementación:** (1) Instalar `Jinja2>=3.1.0`. (2) Template `validation_report.json.j2` en `src/agent/templates/`: estructura JSON con secciones `errors[]`, `metadata{}` (iso_code, material, tipologia), `semantic_data{}` (LLM classification), `geometry_summary` (vertices, triangles, bbox), `timestamp`, `validated_by` (agent version), `validation_path[]` (nodos ejecutados). (3) Nodo `generate_report(state: ValidationState) -> ValidationState`: renderiza template con state fields, guarda en `ValidationState.validation_report` (string JSON), persiste en `blocks.validation_report` JSONB column (ya existe en migration T-020-DB). (4) NULL-safe rendering: campos opcionales (semantic_data si LLM no se ejecutó) con defaults. (5) Integración con ValidationReportModal (T-032-FRONT, ya existe): NO requiere cambios frontend (contrato JSONB ya cumplido). (6) Tests: 8 tests (HP reporte completo con LLM, EC reporte sin LLM → semantic_data = null, EC reporte rejected → errors array poblado, INT JSONB schema compliance con Pydantic ValidationReport model). **DoD:** Reports generados cumplen schema ValidationReport, tests 8/8 PASS, integración con ValidationReportModal verificada (UI muestra reportes sin cambios), templates versionados en Git. | 🟡 P1 |
 | **T-1805-AGENT** | **Audit Trail per Node Transition** | 3 | **Objetivo:** Insertar eventos granulares en tabla `events` por cada transición de nodo LangGraph. **Implementación:** (1) Middleware LangGraph `on_node_enter(node_name, state)` y `on_node_exit(node_name, state, result)` hooks. (2) Helper `insert_event(block_id, event_type, node_name, state_snapshot)`: INSERT en tabla `events(id, block_id, event_type, node_name, state_snapshot JSONB, timestamp)` (tabla ya existe T-020-DB). (3) Event types: `node_entered`, `node_completed`, `transition_conditional` (cuándo se evalúa edge condicional), `circuit_breaker_tripped`, `fallback_activated`. (4) State snapshot: serializar ValidationState a JSONB (sin campos pesados: solo `overall_status`, `nomenclature_valid`, `geometry_valid`, `classification_method`). (5) Performance: batch inserts si hay >10 eventos (evitar N+1 queries), índice en `block_id` + `node_name` + `timestamp` (query performance <50ms). (6) Integración con dashboard Grafana (opcional MVP): query SQL que muestra timeline de ejecución del grafo. (7) Tests: 6 tests (HP 8 eventos para flow completo, EC 3 eventos para early rejection, INT query performance <50ms para 100 bloques, INT eventos ordenados cronológicamente). **DoD:** Auditabilidad completa del flujo, tabla `events` con 8-12 registros por bloque procesado (según path: rejected early = menos eventos), dashboard Grafana query documented (no implementado, solo query SQL), tests 6/6 PASS. | 🟢 P2 |
-| **T-1806-TEST** | **E2E LangGraph Integration Test** | 3 | **Objetivo:** Test end-to-end que valida el sistema completo con 6 archivos .3dm reales. **Implementación:** (1) Pytest E2E en `tests/agent/integration/test_langgraph_e2e.py`: subir 6 archivos de test fixtures GLPER.B-PAE0720.0701-0706 (ya disponibles en `tests/fixtures/`). (2) Escenarios: **HP-E2E-01** archivo válido nomenclatura OK + LLM classification → estado `validated` + semantic_data poblado con tipologia "dovela", **EC-E2E-02** archivo nomenclatura inválida → rejected con 3 eventos (no consume LLM), **EC-E2E-03** OpenAI API mock con timeout → fallback regex activado + circuit_breaker_tripped = true, **ERR-E2E-04** archivo geometría degenerada (0 vertices) → rejected con geometry_errors, **INT-E2E-05** validar 6 archivos simultáneamente (concurrencia Celery) → todos procesados correctamente, **PERF-E2E-06** performance target: <60s/archivo sin LLM, <90s/archivo con LLM (tolerable para demo TFM). (3) Mock OpenAI en CI: usar `pytest-vcr` o mock manual (NO consumir tokens reales en pipeline CI/CD). (4) Assertions: estado final correcto en DB (3 validated, 3 rejected según fixtures), eventos auditables en tabla `events` (8-12 por archivo), validation_report JSONB completo, GLB generados en `/processed/`, cero regresiones en 415 tests baseline. (5) Cleanup: eliminar bloques test después de ejecución (fixture scope=function). **DoD:** E2E test 6/6 archivos procesados, performance targets met (<90s con LLM mock), mock OpenAI setup documented en README, zero regression en 415 tests baseline + 32 tests US-016, CI pipeline verde. | 🔴 P0 |
+| **T-1806-INFRA** | **E2E LangGraph Integration Test** | 3 | **Objetivo:** Test end-to-end que valida el sistema completo con 6 archivos .3dm reales. **Implementación:** (1) Pytest E2E en `tests/agent/integration/test_langgraph_e2e.py`: subir 6 archivos de test fixtures GLPER.B-PAE0720.0701-0706 (ya disponibles en `tests/fixtures/`). (2) Escenarios: **HP-E2E-01** archivo válido nomenclatura OK + LLM classification → estado `validated` + semantic_data poblado con tipologia "dovela", **EC-E2E-02** archivo nomenclatura inválida → rejected con 3 eventos (no consume LLM), **EC-E2E-03** OpenAI API mock con timeout → fallback regex activado + circuit_breaker_tripped = true, **ERR-E2E-04** archivo geometría degenerada (0 vertices) → rejected con geometry_errors, **INT-E2E-05** validar 6 archivos simultáneamente (concurrencia Celery) → todos procesados correctamente, **PERF-E2E-06** performance target: <60s/archivo sin LLM, <90s/archivo con LLM (tolerable para demo TFM). (3) Mock OpenAI en CI: usar `pytest-vcr` o mock manual (NO consumir tokens reales en pipeline CI/CD). (4) Assertions: estado final correcto en DB (3 validated, 3 rejected según fixtures), eventos auditables en tabla `events` (8-12 por archivo), validation_report JSONB completo, GLB generados en `/processed/`, cero regresiones en 415 tests baseline. (5) Cleanup: eliminar bloques test después de ejecución (fixture scope=function). **DoD:** E2E test 6/6 archivos procesados, performance targets met (<90s con LLM mock), mock OpenAI setup documented en README, zero regression en 415 tests baseline + 32 tests US-016, CI pipeline verde. | 🔴 P0 |
 
 **Valoración:** 21 Story Points (T-1801: 5 SP + T-1802: 5 SP + T-1803: 3 SP + T-1804: 2 SP + T-1805: 3 SP + T-1806: 3 SP)
+
+**Total Horas:** 28 horas (T-1801: 8h + T-1802: 6h + T-1803: 4h + T-1804: 3h + T-1805: 5h + T-1806: 2h)
 
 **Dependencias:**
 - ✅ **US-002 (DONE):** Validadores existentes (NomenclatureValidator, GeometryValidator, UserStringExtractor) como base para refactor
@@ -891,6 +893,122 @@ ETA: 2026-04-12 (4 semanas desarrollo + 1 semana buffer QA)
 - ✅ **Scenario 3:** Fail-fast nomenclature inválida → REJECTED sin consumir LLM
 
 > 📋 **Planning Note:** Este User Story es **CORE DIFERENCIADOR** del proyecto para TFM académico. Sin US-018, el sistema es CRUD con validaciones básicas (genérico). Con US-018, demuestra aplicación práctica de AI/ML (LangGraph + LLM + Circuit Breaker) en contexto industrial real. **Prioridad P0 MUST-HAVE** para calificación TFM. PoC spike 1 día OBLIGATORIO antes de comprometer sprint completo.
+
+---
+
+### US-019: Sistema RAG "The Archivist" (Q&A Semántica) **[PENDING]** ⏳
+
+**User Story:** Como **BIM Manager**, quiero hacer preguntas en lenguaje natural sobre el inventario (ej: "¿Cuántas dovelas de Montjuïc están en fabricación?") y obtener respuestas precisas con fuentes citadas, para reducir tiempo de búsqueda de 3 horas a 10 segundos y mejorar trazabilidad de información.
+
+**Epic Context:** Este US implementa la **Capa 2 de la arquitectura de IA** (RAG System) descrita en docs/meetings/sagrada-familia/12-ai-architecture.md § 2.x. Complementa US-018 (The Librarian) añadiendo capacidades conversacionales con búsqueda semántica sobre metadata de bloques.
+
+**Motivación Académica (TFM):**
+- **Sin US-019:** Sistema tiene validación inteligente (US-018) pero requiere SQL manual para consultas complejas
+- **Con US-019:** Asistente conversacional que democratiza acceso a datos (no-code queries) con RAG + pgvector
+- **Diferenciador:** Implementación completa RAG pipeline (embeddings + semantic search + LLM synthesis) en producción
+
+**Arquitectura Objetivo:**
+
+| Componente | Tecnología | Propósito |
+|------------|------------|-----------|
+| **Vector Store** | Supabase pgvector extension | Almacenamiento embeddings 1536D (OpenAI text-embedding-3-small) |
+| **Embedding Generation** | OpenAI API batch | Conversión metadata a vectores semánticos |
+| **Similarity Search** | SQL match_blocks() function | Búsqueda por cosine similarity (Top-K = 5) |
+| **LLM Synthesis** | GPT-4 Turbo + LangChain | Generación respuesta con contexto RAG |
+| **UI Component** | React ChatAssistant | Interfaz conversacional con historial |
+
+**Criterios de Aceptación:**
+
+#### **Scenario 1 (Happy Path - Q&A Semántica Exitosa):**
+- **Given** la base de datos tiene 150 bloques con metadata completa (iso_code, material, status, tipologia)
+- **And** la tabla `block_embeddings` tiene embeddings generados para todos los bloques
+- **When** el usuario pregunta en ChatAssistant: "¿Cuántas dovelas de piedra Montjuïc están validadas?"
+- **Then** el sistema ejecuta:
+  1. Embedding de la pregunta → vector [0.012, -0.089, ...]
+  2. Búsqueda semántica → Top 5 bloques relevantes (cosine similarity >0.8)
+  3. GPT-4 recibe contexto: `blocks: [{iso_code: "SF-C12-D-001", material: "Montjuïc", ...}, ...]`
+  4. GPT-4 genera respuesta: "Hay 12 dovelas de piedra Montjuïc validadas: 8 en fase de fabricación (SF-C12-D-001 a SF-C12-D-008) y 4 completadas (SF-C12-D-009 a SF-C12-D-012)."
+- **And** la respuesta cita fuentes: `[1] SF-C12-D-001, [2] SF-C12-D-002, ...`
+- **And** el tiempo de respuesta es <10 segundos
+- **And** la accuracy es >85% (verificado con test set de 50 preguntas)
+
+#### **Scenario 2 (Edge Case - Pregunta Sin Contexto Relevante):**
+- **Given** el usuario pregunta: "¿Cuántas estatuas de bronce tenemos?"
+- **And** NO existen bloques con material "bronce" ni tipologia "estatua"
+- **When** la búsqueda semántica devuelve Top-5 con similarity <0.5 (threshold)
+- **Then** el sistema responde: "Lo siento, no encontré información sobre estatuas de bronce en el inventario actual. ¿Quieres reformular la pregunta?"
+- **And** NO inventa datos (no hallucination policy)
+- **And** sugiere preguntas alternativas basadas en metadata disponible
+
+#### **Scenario 3 (Incremental Updates - Nuevo Bloque Añadido):**
+- **Given** se sube y valida un nuevo bloque `SF-C12-D-150.3dm` (tipologia: dovela, material: Montjuïc)
+- **When** el bloque cambia a estado `validated`
+- **Then** se dispara automáticamente generación de embedding (trigger on UPDATE)
+- **And** el embedding se inserta en `block_embeddings` en <5 segundos
+- **And** el bloque es inmediatamente consultable en ChatAssistant (no requiere batch rebuild)
+
+**Desglose de Tickets Técnicos:**
+
+| ID Ticket | Título | Story Points | Tech Spec | DoD | Priority |
+|-----------|--------|--------------|-----------|-----|----------|
+| **T-1901-INFRA** | **Enable pgvector Extension** | 1 | Enable pgvector en Supabase via Dashboard → Extensions → pgvector (ON). Verificar versión ≥0.5.1. Test SQL: `CREATE EXTENSION IF NOT EXISTS vector`. | Extension habilitada, query test exitosa. | 🔴 P0 |
+| **T-1902-INFRA** | **Create block_embeddings Table** | 2 | Migration SQL: `CREATE TABLE block_embeddings (id UUID PRIMARY KEY, block_id UUID REFERENCES blocks(id) ON DELETE CASCADE, embedding vector(1536), content_snapshot JSONB, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ)`. Índice HNSW: `CREATE INDEX ON block_embeddings USING hnsw (embedding vector_cosine_ops)`. | Tabla creada, índice funcional, FK cascade verificado. | 🔴 P0 |
+| **T-1903-AGENT** | **Batch Embeddings Generation Script** | 4 | Script Python: `generate_embeddings.py`. Lee todos los bloques sin embedding (LEFT JOIN), genera content string: `{iso_code} {material} {tipologia} {status}`, llama OpenAI `text-embedding-3-small` (batch 100 items), inserta en `block_embeddings`. Rate limiting: 3,500 req/min. Progress bar con tqdm. | Script procesa 150 bloques en <5 min, embeddings válidos en DB. | 🟡 P1 |
+| **T-1904-BACK** | **Backend /api/chat/ask Endpoint** | 6 | FastAPI endpoint `POST /api/chat/ask`. Body: `{question: string}`. Lógica: (1) Embedding pregunta con OpenAI, (2) SQL `SELECT * FROM block_embeddings ORDER BY embedding <=> $embedding LIMIT 5`, (3) Fetch blocks metadata, (4) LangChain RetrievalQA chain: `GPT-4 + context`, (5) Response: `{answer: string, sources: [{block_id, iso_code}], confidence: 0.0-1.0}`. Timeout 30s. | Endpoint funcional, tests 8/8 (HP, EC sin contexto, timeout), Pydantic schemas validados. | 🔴 P0 |
+| **T-1905-FRONT** | **ChatAssistant Component** | 5 | Componente React `<ChatAssistant />`. UI: (1) Input box con botón "Enviar", (2) Historial de mensajes (user + assistant), (3) Loading state durante query, (4) Fuentes citadas con links a bloques. Integración con `/api/chat/ask`. Persistencia historial en localStorage (max 20 mensajes). Responsive design. | Component funcional, tests Vitest 6/6, UI/UX aprobado por BIM Manager. | 🟡 P1 |
+| **T-1906-AGENT** | **Incremental Embedding Trigger** | 3 | PostgreSQL trigger: `CREATE TRIGGER update_embedding_on_block_change AFTER UPDATE ON blocks FOR EACH ROW EXECUTE FUNCTION generate_embedding_incremental()`. Function: si `status` cambió O `rhino_metadata` cambió → encolar Celery task `update_block_embedding(block_id)`. Task llama OpenAI → UPDATE `block_embeddings`. | Trigger funcional, tests 4/4 (update status, update metadata, no trigger si sin cambios), latencia <5s. | 🟢 P2 |
+| **T-1907-TEST** | **RAG Accuracy Test Suite** | 4 | Test set: 50 preguntas pre-definidas con respuestas esperadas (golden dataset). Script evaluación: compara respuesta GPT-4 vs esperada con similarity score (BLEU/ROUGE). Target accuracy: >85%. Casos: (1) 20 preguntas count (ej: "¿Cuántas dovelas?"), (2) 15 filtros (ej: "Montjuïc validadas"), (3) 10 complejas (ej: "Diferencia entre columnas y capiteles"), (4) 5 sin contexto → debe decir "no sé". | Test suite ejecuta 50/50 PASS, accuracy >85%, no hallucinations detectadas. | 🔴 P0 |
+
+**Valoración:** 25 Story Points (1+2+4+6+5+3+4)
+
+**Total Horas:** 40 horas (T-1901: 1h + T-1902: 3h + T-1903: 6h + T-1904: 12h + T-1905: 10h + T-1906: 5h + T-1907: 8h)
+
+**Dependencias:**
+- ✅ **US-002 (DONE):** Metadata `rhino_metadata` en tabla `blocks`
+- ✅ **US-015 (DONE):** Modelo `elements` con campos `material`, `tipologia`, `status`
+- 🔴 **US-018 (PENDING):** Clasificación semántica de `tipologia` (LLM en US-018 poblará campo usado por RAG)
+- 🆕 **Requiere:** OpenAI API key (ya configurada en US-018), Supabase pgvector habilitado
+
+**Riesgos & Mitigaciones:**
+
+| Risk | Probability | Impact | Mitigation |
+|------|------------|--------|------------|
+| **pgvector performance degradation** (>10s queries con 10k+ bloques) | 30% | 🟡 Medium | Índice HNSW optimizado (actualiza solo en batch rebuild, no incremental), query con LIMIT 5 (Top-K pequeño), monitoreo latencia <3s threshold, scale vertical Supabase si necesario (CPU upgrade). |
+| **OpenAI embedding costs overrun** | 20% | 🟢 Low | Caching: embeddings persisten (no regenerar innecesariamente), batch updates nightly (no real-time para todos), budgeting: 150 bloques × $0.0001 = $0.015 (negligible), incremental solo en cambios reales (trigger condicional). |
+| **LLM hallucinations** (inventar bloques inexistentes) | 40% | 🔴 High | Prompt engineering: "ONLY use provided context, do NOT invent data", threshold similarity: no contexto si <0.5 → responder "no sé", test suite: 5 casos sin contexto validan no-hallucination policy, human review: 10% sample auditing mensual. |
+| **Accuracy <85% en test set** | 35% | 🟡 Medium | Prompt tuning iterativo (3 ciclos refinamiento con feedback), fine-tuning embeddings: custom model entrenado con metadata SF (post-MVP), golden dataset expansion: 50 → 100 preguntas, user feedback loop: thumbs up/down en ChatAssistant. |
+
+**Timeline Estimado (Desarrollo Full-Time):**
+
+```
+Day 1: T-1901 pgvector + T-1902 tabla (4h)
+Day 2-3: T-1903 batch embeddings (12h)
+Day 4-5: T-1904 backend endpoint (12h)
+Day 6-7: T-1905 ChatAssistant component (10h)
+Day 8: T-1906 incremental trigger (5h)
+Day 9-10: T-1907 test suite + accuracy validation (12h)
+
+ETA: 2026-05-15 (10 días laborables = 2 semanas)
+```
+
+**Definition of Done (MVP US-019):**
+- ✅ pgvector extension habilitada en Supabase
+- ✅ Tabla `block_embeddings` creada con índice HNSW
+- ✅ 150 bloques tienen embeddings generados (batch script ejecutado)
+- ✅ Endpoint `/api/chat/ask` funcional con tests 8/8 PASS
+- ✅ ChatAssistant component integrado en Dashboard
+- ✅ Trigger incremental activado (updates automáticos en <5s)
+- ✅ Test suite accuracy >85% (50 preguntas)
+- ✅ No hallucinations detectadas (5 casos "no sé" validados)
+- ✅ Performance <10s por query (p95)
+- ✅ Documentación: docs/US-019/README.md + ADR-003-RAG-vs-Traditional-Search.md
+
+**Acceptance Criteria Summary:**
+- ✅ **Scenario 1:** Q&A semántica funcional con respuestas citadas en <10s
+- ✅ **Scenario 2:** Responde "no sé" si no hay contexto relevante (no hallucination)
+- ✅ **Scenario 3:** Embeddings incrementales generados automáticamente en <5s
+
+> 📋 **Planning Note:** Este User Story complementa US-018 (The Librarian) con capacidades conversacionales. Juntos forman la **arquitectura híbrida de IA** que transforma SF-PM de sistema CRUD en plataforma inteligente con validación activa + búsqueda semántica. **Prioridad P0 MUST-HAVE** para TFM académico. Requiere aprobación Sagrada Família antes de iniciar implementación.
 
 ---
 
