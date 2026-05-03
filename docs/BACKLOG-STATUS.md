@@ -2,7 +2,7 @@
 
 **Fecha:** 1 de Mayo de 2026  
 **Sprint Actual:** Sprint 10 — AI Architecture Planning  
-**Última Actualización:** Post-documentación Sagrada Família + US-019 insertion
+**Última Actualización:** Post Gap Analysis US-018 — OPCIÓN A aprobada (30.5 SP con mejoras críticas)
 
 ---
 
@@ -12,11 +12,11 @@
 |---------|-------|------------|
 | **Total User Stories Definidas** | 12 US | (DONE: 5, PENDING: 2 AI, PLANNED: 5 features) |
 | **Story Points Completados** | 81 SP | US-001 + US-002 + US-005 + US-010 + US-015 |
-| **Story Points Pendientes AI** | 46 SP | US-018 (21 SP) + US-019 (25 SP) |
-| **Story Points MVP Target** | 177 SP | Total estimado para MVP completo |
-| **Progreso MVP** | 45.8% | (81 SP / 177 SP × 100) |
+| **Story Points Pendientes AI** | 55.5 SP | US-018 (30.5 SP) + US-019 (25 SP) |
+| **Story Points MVP Target** | 186.5 SP | Total estimado para MVP completo |
+| **Progreso MVP** | 43.4% | (81 SP / 186.5 SP × 100) |
 | **Tickets Completados** | 32 tickets | US-001 a US-015 implementados |
-| **Tickets Pendientes AI** | 13 tickets | T-1801 a T-1806 + T-1901 a T-1907 |
+| **Tickets Pendientes AI** | 16 tickets | T-1801 a T-1810 + T-1901 a T-1907 |
 
 ---
 
@@ -71,28 +71,39 @@
 ### ⏳ **PENDIENTES — AI ARCHITECTURE (2 US — 46 SP)**
 
 #### 6. US-018: Agente "The Librarian" con LangGraph **[PENDING]** ⏳
-- **Story Points:** 21 SP
-- **Tickets:** 6 (T-1801-AGENT a T-1806-TEST)
-- **Status:** READY TO START (documentación completa)
-- **Tech Stack:** LangGraph + OpenAI GPT-4 + LangChain + Celery integration
-- **ETA:** 3.5 días (28 horas)
+- **Story Points:** **30.5 SP** ⬆️ (21 SP baseline + 9.5 SP mejoras críticas)
+- **Tickets:** **9** (T-1801-AGENT a T-1810-INFRA)
+  - **Nuevos:** T-1807-FRONT (Progress Indicator), T-1809-INFRA (Observability), T-1810-INFRA (Rate Limiting)
+- **Status:** READY TO START (gap analysis completado, OPCIÓN A aprobada)
+- **Tech Stack:** LangGraph + OpenAI GPT-4 + LangChain + Celery + Grafana + Redis Queue Routing
+- **ETA:** 4.75 días (38 horas) — 5 semanas timeline
 - **Funcionalidad:** 
   - State Machine de 8 nodos para validación pre-ingesta
-  - LLM classification de tipología (dovela, capitel, etc.)
-  - Circuit breaker para degradación graceful
+  - LLM classification de tipología (dovela, capitel, etc.) con confidence threshold 0.7
+  - Circuit breaker GLOBAL para degradación graceful (Redis + in-memory fallback)
   - Fail-fast nomenclature validation
+  - **Frontend visibility:** Progress indicator 8 pasos + badge "AI Classified" + toast CB
+  - **Observability:** Endpoint /api/metrics/langgraph + dashboard Grafana + alerts
+  - **Rate limiting:** Queue routing 5 tasks/min + max concurrent 3 LLM tasks
+  - Prompt injection prevention + API key rotation policy
   - Target: 98% accuracy en 10 segundos
 - **Dependencias:** 
   - ✅ US-002 (Celery worker infrastructure)
   - ✅ US-015 (Elements model con semantic_data JSONB)
   - ✅ OpenAI API key configurada
 - **Riesgos:** 
-  - LLM hallucinations (mitigación: circuit breaker + regex fallback)
-  - API costs overrun (mitigación: caching + rate limiting)
+  - LLM hallucinations (mitigación: circuit breaker + regex fallback + confidence threshold)
+  - API costs overrun (mitigación: caching + rate limiting queue routing)
   - Timeout en archivos grandes (mitigación: 30s timeout + retry)
+  - Rate limit 100 uploads concurrentes (mitigación: queue routing 5 tasks/min + max concurrent 3)
+  - Prompt injection attacks (mitigación: input sanitization + forbidden patterns)
+- **Gap Analysis:** [docs/US-018/PRE-IMPLEMENTATION-ANALYSIS.md](US-018/PRE-IMPLEMENTATION-ANALYSIS.md)
+  - Calificación: 8.5/10 — 13 lagunas detectadas, 27 mejoras propuestas
+  - **OPCIÓN A aprobada:** +9.5 SP mejoras críticas (ROI: +€800 net savings)
+  - Production-ready desde sprint 1 (observability + rate limiting + frontend visibility)
 - **Documentación:** 
   - [docs/meetings/sagrada-familia/12-ai-architecture.md](meetings/sagrada-familia/12-ai-architecture.md) § 1.x
-  - [docs/09-mvp-backlog.md](09-mvp-backlog.md) línea 755-897
+  - [docs/09-mvp-backlog.md](09-mvp-backlog.md) línea 755-898 (actualizado May 1, 2026)
 
 #### 7. US-019: Sistema RAG "The Archivist" **[PENDING]** ⏳
 - **Story Points:** 25 SP
@@ -122,7 +133,7 @@
   - [docs/meetings/sagrada-familia/12-ai-architecture.md](meetings/sagrada-familia/12-ai-architecture.md) § 2.x
   - [docs/09-mvp-backlog.md](09-mvp-backlog.md) línea 899-1013
 
-**Total PENDIENTES AI:** 46 Story Points
+**Total PENDIENTES AI:** 55.5 Story Points (30.5 SP US-018 + 25 SP US-019)
 
 ---
 
@@ -182,15 +193,17 @@
 - ✅ Presentación Sagrada Família preparada
 - ⏳ **Pendiente:** GO/NO-GO decision (target May 3-5)
 
-### **Sprint 11 (May 9-15, 2026) — LangGraph Agent (si aprobado)**
-- US-018 implementación completa (21 SP, 28 horas)
-- Tickets: T-1801-AGENT a T-1806-TEST
-- Entregable: Validación LLM funcional con circuit breaker
+### **Sprint 11 (May 9-30, 2026) — LangGraph Agent (si aprobado)**
+- US-018 implementación completa (**30.5 SP, 38 horas**) — 5 semanas timeline
+- Tickets: **T-1801-AGENT a T-1810-INFRA** (9 tickets: 6 baseline + 3 nuevos)
+- Entregable: Validación LLM funcional con circuit breaker + observability + rate limiting + frontend visibility
+- PoC spike: 1 día checkpoint mandatorio semana 2
 
-### **Sprint 12 (May 16-29, 2026) — RAG System (si aprobado)**
-- US-019 implementación completa (25 SP, 40 horas)
+### **Sprint 12 (Junio 1-12, 2026) — RAG System (si aprobado)**
+- US-019 implementación completa (25 SP, 40 horas) — 10 días timeline
 - Tickets: T-1901-INFRA a T-1907-TEST
 - Entregable: ChatAssistant con Q&A semántica >85% accuracy
+- Dependencia: US-018 debe estar completado (LLM classification poblará tipologia)
 
 ### **Sprint 13+ (Junio 2026) — Features Core MVP**
 - US-007 (Estado) + US-013 (Auth) + US-009 (Evidencia)
@@ -203,20 +216,20 @@
 
 ```
 ┌─────────────────────────────────────────────┐
-│ MVP Progress: 81/177 SP (45.8%)            │
-│ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░ │
+│ MVP Progress: 81/186.5 SP (43.4%)          │
+│ ███████████████░░░░░░░░░░░░░░░░░░░░░░░░░░ │
 └─────────────────────────────────────────────┘
 
-COMPLETADAS (81 SP):     ███████████████████████ 45.8%
-PENDIENTES AI (46 SP):   ████████████░░░░░░░░░░░ 26.0%
-PLANNED (50 SP):         █████████████░░░░░░░░░░ 28.2%
+COMPLETADAS (81 SP):       ████████████████████░░░░ 43.4%
+PENDIENTES AI (55.5 SP):   █████████████░░░░░░░░░░░ 29.8%
+PLANNED (50 SP):           ███████████░░░░░░░░░░░░░ 26.8%
 ```
 
 **Breakdown por categoría:**
 - **Infrastructure & Ingesta:** 18 SP (US-001: 5 + US-002: 13)
 - **3D Visualization:** 50 SP (US-005: 35 + US-010: 15)
 - **Data Model:** 21 SP (US-015: 21)
-- **AI Intelligence:** 46 SP (US-018: 21 + US-019: 25) ⏳
+- **AI Intelligence:** **55.5 SP** (US-018: **30.5** + US-019: 25) ⏳ **[OPCIÓN A aprobada]**
 - **Core Features:** ~67 SP (US-007 + US-013 + US-009 + otros) 🎯
 
 ---
@@ -228,20 +241,21 @@ Este proyecto es un **Trabajo Final de Máster (TFM)** en AI4Devs con objetivo d
 1. ✅ **Ingesta inteligente de CAD** (US-001 + US-002) — COMPLETADO
 2. ✅ **Visualización 3D web** (US-005 + US-010) — COMPLETADO
 3. ✅ **Gestión de inventario** (US-015) — COMPLETADO
-4. ⏳ **Agentes de IA en producción** (US-018 + US-019) — PENDIENTE APROBACIÓN
-   - LangGraph State Machine (validación activa)
-   - RAG System (búsqueda semántica)
-   - Total: 46 SP adicionales para arquitectura de IA enterprise-ready
+4. ⏳ **Agentes de IA en producción** (US-018 + US-019) — PENDIENTE APROBACIÓN SAGRADA FAMÍLIA
+   - LangGraph State Machine (validación activa) — **30.5 SP con mejoras críticas**
+   - RAG System (búsqueda semántica) — 25 SP
+   - Total: **55.5 SP** adicionales para arquitectura de IA enterprise-ready (production-ready desde día 1)
 
 **Diferenciador TFM:**
-- **Sin US-018/019:** Sistema CRUD con validaciones básicas (competente pero genérico)
-- **Con US-018/019:** Plataforma inteligente con IA productiva (top 10% proyectos TFM)
+- **Sin US-018/019:** Sistema CRUD con validaciones básicas (competente pero genérico, calificación 7-8/10)
+- **Con US-018/019 (OPCIÓN A):** Plataforma inteligente con IA productiva + observability + production-ready (top 10% proyectos TFM, calificación esperada 9.5/10)
 
 **ROI para cliente (Sagrada Família):**
 - **Inversión:** €3,200 desarrollo + €1,500/año operacional
 - **Ahorros:** €248,000/año (prevención rework + reducción búsquedas)
 - **Retorno:** 16,533% ROI — Recuperación en <3 días
-- **Timeline:** 8 días laborables (2 sprints) si aprobado May 3-5
+- **Timeline:** 13 días laborables (5 semanas US-018 + 10 días US-019) si aprobado May 3-5
+- **ROI Gap Analysis:** +€800 net savings por inversión OPCIÓN A (evita 3 semanas debugging)
 
 ---
 
@@ -265,7 +279,7 @@ Este proyecto es un **Trabajo Final de Máster (TFM)** en AI4Devs con objetivo d
 - [ ] US-017: Visual consistency
 - [ ] US-020: Preview inteligente
 
-**Target MVP Académico:** Tier 1 (100%) + Tier 2 (100%) = 177 SP
+**Target MVP Académico:** Tier 1 (100%) + Tier 2 (100%) = **186.5 SP** (ajustado con US-018 OPCIÓN A)
 
 ---
 

@@ -88,32 +88,83 @@
    - Definición de completitud MVP por tiers
    - Enlaces a toda la documentación relacionada
 
+10. **docs/US-018/PRE-IMPLEMENTATION-ANALYSIS.md** (✅ NUEVO — May 1, 2026)
+   - Gap Analysis exhaustivo de US-018 (LangGraph Agent)
+   - Calificación: 8.5/10 — Muy buena base, mejoras recomendadas
+   - **Lagunas detectadas:** 3 tickets faltantes (T-1807-FRONT Progress Indicator 2 SP, T-1809-INFRA Observability 3 SP, T-1810-INFRA Rate Limiting 2 SP), 3 ambigüedades en specs, 7 edge cases no contemplados
+   - **Mejoras propuestas:** 27 total (9.5 SP críticas, 11 SP importantes, 6 SP experimentales)
+   - **Recomendación:** APROBAR OPCIÓN A con mejoras críticas → 30.5 SP (vs 21 SP original), 5 semanas (vs 4)
+   - **ROI análisis:** +1 semana dev (€400) vs -3 semanas debugging (€1,200) = €800 net savings
+   - **Próximos pasos:** Decision gate con Product Owner, si aprobado → actualizar backlog + ejecutar PoC spike 1 día
+   - Registrado en prompts.md (#245)
+
+11. **docs/09-mvp-backlog.md — US-018 ACTUALIZADO** (✅ COMPLETADO — May 1, 2026)
+   - **Decision:** Usuario aprobó OPCIÓN A ("Si, adelante") → implementar mejoras críticas
+   - **Cambios ejecutados:**
+     - **Añadidos 3 tickets nuevos:**
+       - T-1807-FRONT: LangGraph Progress Indicator (2 SP) — ProgressStepper 8 pasos, badge "AI Classified", toast CB
+       - T-1809-INFRA: Observability & Metrics (3 SP) — Endpoint `/api/metrics/langgraph`, Grafana dashboard, alert rules
+       - T-1810-INFRA: OpenAI Rate Limiting (2 SP) — Queue routing (5 tasks/min), max concurrent 3, retry backoff
+     - **Clarificaciones críticas en tickets existentes:**
+       - T-1801: ClassificationMethod ENUM (previene typos), Storage file existence check
+       - T-1802: Circuit Breaker scope GLOBAL clarificado (key Redis global, 5 fallos ANY block), confidence threshold 0.7, fallback regex default case "other", Redis failure handling (in-memory CB fallback), prompt injection prevention
+     - **Valoración actualizada:** 21 SP → **30.5 SP** (overhead: 2.5 SP clarificaciones + 7 SP nuevos tickets)
+     - **Timeline actualizado:** 4 semanas → **5 semanas** (38 horas total)
+     - **Definition of Done actualizada:** 447 tests → 466 tests, añadidos criterios frontend visibility, observability, rate limiting
+   - **Impacto estratégico:** Sistema production-ready desde sprint 1 (no MVP técnico con deuda), ROI €800 net savings
+   - Referencia cruzada: [docs/US-018/PRE-IMPLEMENTATION-ANALYSIS.md](../docs/US-018/PRE-IMPLEMENTATION-ANALYSIS.md)
+
+12. **docs/BACKLOG-STATUS.md SINCRONIZADO** (✅ COMPLETADO — May 1, 2026)
+   - **Cambios ejecutados:**
+     - Tabla Resumen Ejecutivo: Story Points Pendientes AI 46 → 55.5 SP, MVP Target 177 → 186.5 SP, Progreso 45.8% → 43.4%, Tickets Pendientes AI 13 → 16
+     - Sección US-018: Story Points 21 → 30.5 SP, Tickets 6 → 9, ETA 3.5 días → 4.75 días (5 semanas), funcionalidad expandida con T-1807/T-1809/T-1810, gap analysis referenciado
+     - Roadmap: Sprint 11 actualizado con 30.5 SP (38h, 5 semanas timeline)
+     - Distribución Story Points: Recalculados porcentajes (COMPLETADAS 43.4%, PENDIENTES AI 29.8%, PLANNED 26.8%)
+     - Breakdown por categoría: AI Intelligence 46 → 55.5 SP
+     - Target MVP Académico: 177 → 186.5 SP
+     - Contexto Académico: Diferenciador TFM actualizado (calificación esperada 9.5/10 con OPCIÓN A)
+     - ROI: Timeline ajustado 8 días → 13 días (5 semanas US-018 + 10 días US-019), ROI gap analysis +€800 savings
+   - **Propósito:** Single source of truth ahora refleja decisión OPCIÓN A aprobada por usuario
+   - Última actualización header: "Post Gap Analysis US-018 — OPCIÓN A aprobada (30.5 SP con mejoras críticas)"
+
 ---
 
 ## Next Steps (Pending Approval)
 
 **⏳ Awaiting Decision:** Aprobación de arquitectura por Sagrada Família
 
-### Si Aprobado → Sprint 10-11 (2 semanas):
+**✅ Decision Gate US-018 (COMPLETADO — May 1, 2026):**
+- ✅ PRE-IMPLEMENTATION-ANALYSIS.md revisado y aprobado
+- ✅ Decisión: OPCIÓN A aprobada por usuario → Implementar US-018 con mejoras críticas (30.5 SP)
+- ✅ docs/09-mvp-backlog.md actualizado con T-1807, T-1809, T-1810 + clarificaciones
+- 🔴 **BLOCKER:** Aguardando aprobación final de Sagrada Família (reunión May 3-5)
+- 🔜 **Next Action:** Si GO de Sagrada Família → Ejecutar PoC spike LangGraph 1 día (mandatorio checkpoint semana 2)
 
-**Sprint 10 (May 1-8):** Fase 1 — LangGraph Agent Completion
-- T-1801-AGENT: Implementar lógica validación en nodes.py (8h)
-- T-1802-AGENT: Integrar rhino3dm en extract_geometry (4h)
-- T-1803-AGENT: GPT-4 classification + fallback (6h)
-- T-1804-AGENT: Celery wrapper (3h)
-- T-1805-AGENT: Tests integración (5h)
-- T-1806-INFRA: Deploy Railway (2h)
+### Si Aprobado → Sprint 10-11 (5 semanas — Actualizado con OPCIÓN A):
 
-**Sprint 11 (May 9-15):** Fase 2 — RAG System
-- T-1901-INFRA: Enable pgvector Supabase (1h)
-- T-1902-INFRA: Tabla block_embeddings (2h)
-- T-1903-AGENT: Script batch embeddings (4h)
-- T-1904-BACK: /api/chat/ask endpoint (6h)
-- T-1905-FRONT: ChatAssistant component (5h)
-- T-1906-AGENT: Trigger incremental (3h)
-- T-1907-TEST: RAG accuracy tests (4h)
+**Sprint 10 (May 1-8) - Parte 1: StateGraph + LLM Classification**
+- T-1801-AGENT: StateGraph Setup con ENUM + Storage checks (8h)
+- T-1802-AGENT: LLM Classification + Circuit Breaker GLOBAL + confidence 0.7 + prompt injection (8h)
+- PoC spike: Validar LangGraph funcional con LLM mock (1 día)
 
-**Total:** 53 horas (6.6 días @ 8hr/día)
+**Sprint 10 (May 9-15) - Parte 2: Refactors + Report Generator**
+- T-1803-AGENT: Refactor Validators para reutilización (4h)
+- T-1804-AGENT: Report Generator Jinja2 (3h)
+- T-1807-FRONT: Progress Indicator UI (3h)
+
+**Sprint 11 (May 16-22) - Parte 3: Audit Trail + Observability + Rate Limiting**
+- T-1805-AGENT: Audit Trail granular en tabla events (5h)
+- T-1809-INFRA: Observability & Metrics endpoint + Grafana (5h)
+- T-1810-INFRA: OpenAI Rate Limiting con queue routing (2h)
+
+**Sprint 11 (May 23-30) - Parte 4: E2E Tests + Production Readiness**
+- T-1806-TEST: E2E Integration Test (2h)
+- Zero regression validation (415 baseline + 51 nuevos = 466 tests)
+- Documentation + Production deployment checklist
+
+**Total:** 38 horas (5 semanas @ 8hr/día)
+
+**CAMBIO vs ORIGINAL:** +1 semana desarrollo (5 vs 4 semanas), +7 SP nuevos tickets, +€800 ROI neto
 
 ---
 
