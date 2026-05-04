@@ -8,4 +8,11 @@ ruff==0.3.0
 black==24.2.0
 
 # Agent dependencies (for testing agent code from backend container)
+# T-1801: Added LangGraph dependencies for StateGraph tests
 rhino3dm==8.4.0
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+openai>=1.0
+tenacity>=8.2.3
+jinja2>=3.1.0

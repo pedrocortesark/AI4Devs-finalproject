@@ -1,5 +1,5 @@
 """
-ValidationState — Shared State for the LangGraph Agent (US-018 / T-1601)
+ValidationState — Shared State for the LangGraph Agent (US-018 / T-1801)
 
 WHY THIS FILE EXISTS
 ====================
@@ -10,7 +10,7 @@ LangGraph then merges those changes back into the state automatically.
 
 This file defines:
   1. ValidationStatus   — an enum for the overall validation outcome
-  2. ClassificationMethod — how tipologia was determined (LLM or fallback)
+  2. ClassificationMethod — how tipologia was determined (LLM or fallback)  
   3. ValidationState    — the TypedDict that holds ALL information about
                           one validation run (one .3dm file being processed)
 
@@ -18,14 +18,19 @@ One ValidationState instance is created when the Celery task starts and lives
 until the graph reaches a terminal node (VALIDATED or REJECTED). The final
 state is persisted to Supabase before the task completes.
 
-DESIGN DECISIONS
-================
+DESIGN DECISIONS (T-1801)
+=========================
 - TypedDict instead of Pydantic because LangGraph requires plain Python dicts.
   LangGraph does NOT accept Pydantic models as the state container directly.
-- All fields are Optional so that nodes can be written without knowing what
-  previous nodes set. Each node only fills what it knows.
+- EXACTLY 15 fields as specified in T-1801 tech spec (no more, no less).
+- All fields are Optional (total=False) so nodes can be written without knowing
+  what previous nodes set. Each node only fills what it knows.
 - The `validation_path` list acts as a breadcrumb trail: every node appends
   its own name. This lets us reconstruct the execution path from the final state.
+- ClassificationMethod ENUM prevents typos (gap analysis recommendation).
+
+Author: AI Agent (T-1801-AGENT)
+Created: 2026-05-04
 """
 
 from typing import TypedDict, Optional, List, Dict, Any
@@ -35,23 +40,23 @@ from datetime import datetime
 
 class ValidationStatus(str, Enum):
     """
-    Overall outcome of the validation pipeline.
+    Overall outcome of the validation pipeline (maps to blocks.status PostgreSQL ENUM).
 
     Values:
-        PENDING     — just created, no processing started yet
         PROCESSING  — graph is currently running
         VALIDATED   — all checks passed, element is valid
         REJECTED    — at least one check failed (nomenclature or geometry)
-        ERROR       — unexpected runtime error (not a validation failure)
+        ERROR_PROCESSING — unexpected runtime error (not a validation failure)
 
     Note: we use (str, Enum) so the value serializes to a plain string in JSON.
     This matters when persisting state_snapshot to Supabase JSONB columns.
+    
+    Added in T-1801, refined from PoC Spike to match database schema.
     """
-    PENDING = "pending"
     PROCESSING = "processing"
     VALIDATED = "validated"
     REJECTED = "rejected"
-    ERROR = "error"
+    ERROR_PROCESSING = "error_processing"
 
 
 class ClassificationMethod(str, Enum):
@@ -61,110 +66,110 @@ class ClassificationMethod(str, Enum):
     Values:
         LLM_GPT4        — GPT-4 Turbo answered with high confidence (>=0.7)
         FALLBACK_REGEX  — LLM failed or circuit breaker tripped; regex used
-        NOT_CLASSIFIED  — the classification node was never reached
-                          (e.g., nomenclature failed before LLM could run)
+        MANUAL_OVERRIDE — Manual classification by user (future feature)
 
     Having this field in the state (and in the final report) is important
     for transparency: users can see whether the AI or the regex classified
     their piece, and how confident the system was.
+    
+    ENUM added in T-1801 per gap analysis recommendation (prevents typos).
     """
     LLM_GPT4 = "llm_gpt4"
     FALLBACK_REGEX = "fallback_regex"
-    NOT_CLASSIFIED = "not_classified"
+    MANUAL_OVERRIDE = "manual_override"
 
 
 class ValidationState(TypedDict, total=False):
     """
-    Shared state for the entire LangGraph validation pipeline.
+    Shared state for the entire LangGraph validation pipeline (T-1801).
 
     All nodes read from this dict and return a partial update.
     LangGraph merges the returned dict into the running state automatically.
+
+    CRITICAL: This TypedDict has EXACTLY 15 fields as specified in T-1801 tech spec.
+    Do NOT add or remove fields without updating the spec first.
 
     Fields are grouped by the node that primarily writes to them:
 
     ── Set at task start (before graph runs) ──────────────────────────────
     block_id        : str           UUID of the blocks row in Supabase
-    file_key        : str           Storage path of the .3dm file
-    filename        : str           Original filename (used for regex fallback)
     created_at      : str           ISO-8601 timestamp when the run started
+    retry_count     : int           Celery task retry counter (0 on first attempt)
 
-    ── Written by ValidateNomenclature ────────────────────────────────────
+    ── Written by ValidateNomenclature (US-002 reused) ────────────────────
     nomenclature_valid  : bool      True if all layer names pass ISO-19650
-    nomenclature_errors : List[dict] Each dict: {layer, message, category}
+    nomenclature_errors : List[str] Human-readable error messages
 
-    ── Written by ExtractGeometry ─────────────────────────────────────────
-    rhino_layers    : List[dict]    Layers found in the .3dm file
-    geometry_objects: int           Number of geometry objects in the file
-    geometry_metadata: dict         volume, bbox {min, max}, triangle_count, etc.
-
-    ── Written by ValidateGeometry ────────────────────────────────────────
-    geometry_valid  : bool          True if geometry passes all checks
-    geometry_errors : List[dict]    Each dict: {object_id, message, category}
+    ── Written by ExtractGeometry + ValidateGeometry ──────────────────────
+    geometry_metadata: Dict[str, Any]  
+        Structure: {
+            "volume": float,           # m³
+            "bbox": {                   # Bounding box
+                "min": [x, y, z],
+                "max": [x, y, z],
+                "dimensions": [w, h, d]
+            },
+            "vertices_count": int,
+            "faces_count": int,
+            "layers": List[str],
+            "has_mesh": bool,
+            "file_exists_in_storage": bool  # Added per T-1801 requirement
+        }
+    
+    geometry_valid  : bool          True if geometry passes validation
 
     ── Written by ClassifyTipologia (LLM or fallback) ─────────────────────
-    tipologia       : str           e.g. "dovela", "capitel", "columna", ...
-    classification_confidence: float 0.0–1.0 (lower for fallback)
-    classification_method    : str   ClassificationMethod value
-    classification_reasoning : str   LLM's explanation (empty for fallback)
-    circuit_breaker_tripped  : bool  True if OpenAI failed 5+ times
-
-    ── Written by EnrichMetadata ──────────────────────────────────────────
-    user_strings    : dict          Raw user strings from the .3dm file
-    material_type   : str           Extracted material (e.g. "Montjuïc")
-    iso_code        : str           e.g. "SF-C12-D-001" from UserString "Codi"
-
-    ── Written by GenerateReport ──────────────────────────────────────────
-    validation_report: dict         Structured report persisted to Supabase
+    semantic_data: Dict[str, Any]
+        Structure: {
+            "tipologia": str,           # "dovela"|"capitel"|"columna"|"clave"|"imposta"|"other"
+            "material": str,            # Inferred from tipologia (e.g., "Montjuïc Stone")
+            "confidence": float,        # 0.0-1.0 (LLM confidence or 0.3 for regex fallback)
+            "reasoning": str,           # LLM reasoning (empty for regex)
+            "classified_at": str        # ISO-8601 timestamp
+        }
+    
+    classification_method : ClassificationMethod  # ENUM: LLM_GPT4|FALLBACK_REGEX|MANUAL_OVERRIDE
+    circuit_breaker_tripped : bool              # True if Circuit Breaker activated
 
     ── Written by any node (overall bookkeeping) ──────────────────────────
-    overall_status  : str           ValidationStatus value
-    error_messages  : List[str]     Runtime errors (not validation failures)
-    validation_path : List[str]     Node names in execution order (breadcrumbs)
-    completed_at    : str           ISO-8601 timestamp when all nodes finished
+    overall_status  : ValidationStatus    # ENUM: PROCESSING|VALIDATED|REJECTED|ERROR_PROCESSING
+    error_messages  : List[str]           # Runtime errors (not validation failures)
+    validation_path : List[str]           # Node names in execution order (breadcrumbs)
+    completed_at    : str                 # ISO-8601 timestamp when all nodes finished
+
+    ── Written by END node (after geometry processing) ────────────────────
+    low_poly_url    : str                 # URL to low-poly LOD asset in Supabase Storage
     """
 
-    # ── Task identity ──────────────────────────────────────────────────────
+    # ── Core identifiers (1-3 of 15) ───────────────────────────────────────
     block_id: str
-    file_key: str
-    filename: str
     created_at: str
+    retry_count: int
 
-    # ── Nomenclature node ──────────────────────────────────────────────────
+    # ── Nomenclature validation (4-5 of 15) ────────────────────────────────
     nomenclature_valid: bool
-    nomenclature_errors: List[Dict[str, Any]]
+    nomenclature_errors: List[str]
 
-    # ── Geometry extraction node ───────────────────────────────────────────
-    rhino_layers: List[Dict[str, Any]]
-    geometry_objects: int
+    # ── Geometry extraction and validation (6-7 of 15) ─────────────────────
     geometry_metadata: Dict[str, Any]
-
-    # ── Geometry validation node ───────────────────────────────────────────
     geometry_valid: bool
-    geometry_errors: List[Dict[str, Any]]
 
-    # ── Tipologia classification node (LLM or fallback) ────────────────────
-    tipologia: str
-    classification_confidence: float
-    classification_method: str
-    classification_reasoning: str
+    # ── Semantic classification (8-10 of 15) ───────────────────────────────
+    semantic_data: Dict[str, Any]
+    classification_method: ClassificationMethod
     circuit_breaker_tripped: bool
 
-    # ── Metadata enrichment node ───────────────────────────────────────────
-    user_strings: Dict[str, Any]
-    material_type: str
-    iso_code: str
-
-    # ── Report generation node ─────────────────────────────────────────────
-    validation_report: Dict[str, Any]
-
-    # ── Global bookkeeping (any node can write these) ──────────────────────
-    overall_status: str
+    # ── Global bookkeeping (11-14 of 15) ───────────────────────────────────
+    overall_status: ValidationStatus
     error_messages: List[str]
     validation_path: List[str]
     completed_at: str
 
+    # ── Output assets (15 of 15) ───────────────────────────────────────────
+    low_poly_url: str
 
-def make_initial_state(block_id: str, file_key: str, filename: str) -> ValidationState:
+
+def make_initial_state(block_id: str, retry_count: int = 0) -> ValidationState:
     """
     Factory function: creates a fresh ValidationState before the graph starts.
 
@@ -179,56 +184,48 @@ def make_initial_state(block_id: str, file_key: str, filename: str) -> Validatio
 
     Args:
         block_id : UUID string of the blocks row in Supabase
-        file_key : Storage path of the .3dm file (e.g. "uploads/abc.3dm")
-        filename : Human-readable filename (used by regex fallback classifier)
+        retry_count : Celery task retry counter (default 0 for first attempt)
 
     Returns:
-        A ValidationState dict with all required fields initialised.
+        A ValidationState dict with all 15 required fields initialised.
 
     Example:
-        >>> state = make_initial_state("uuid-123", "uploads/SF-C12-D-001.3dm", "SF-C12-D-001.3dm")
+        >>> state = make_initial_state("uuid-123", retry_count=0)
         >>> state["overall_status"]
-        'pending'
+        ValidationStatus.PROCESSING
         >>> state["validation_path"]
         []
+        >>> len(state.keys())
+        15
+    
+    Added in T-1801, updated from PoC Spike to match exact spec (15 fields).
     """
     return ValidationState(
+        # Core identifiers (1-3 of 15)
         block_id=block_id,
-        file_key=file_key,
-        filename=filename,
         created_at=datetime.utcnow().isoformat(),
+        retry_count=retry_count,
 
-        # Nomenclature — will be set by ValidateNomenclature node
+        # Nomenclature validation (4-5 of 15) — set by ValidateNomenclature node
         nomenclature_valid=False,
         nomenclature_errors=[],
 
-        # Geometry extraction — will be set by ExtractGeometry node
-        rhino_layers=[],
-        geometry_objects=0,
+        # Geometry (6-7 of 15) — set by ExtractGeometry + ValidateGeometry nodes
         geometry_metadata={},
-
-        # Geometry validation — will be set by ValidateGeometry node
         geometry_valid=False,
-        geometry_errors=[],
 
-        # Classification — will be set by ClassifyTipologia node
-        tipologia="",
-        classification_confidence=0.0,
-        classification_method=ClassificationMethod.NOT_CLASSIFIED.value,
-        classification_reasoning="",
+        # Semantic classification (8-10 of 15) — set by ClassifyTipologia node
+        semantic_data={},
+        classification_method=ClassificationMethod.FALLBACK_REGEX,  # Default to fallback
         circuit_breaker_tripped=False,
 
-        # Metadata enrichment — will be set by EnrichMetadata node
-        user_strings={},
-        material_type="",
-        iso_code="",
-
-        # Report — will be set by GenerateReport node
-        validation_report={},
-
-        # Global bookkeeping
-        overall_status=ValidationStatus.PENDING.value,
+        # Global bookkeeping (11-14 of 15) — updated by any node
+        overall_status=ValidationStatus.PROCESSING,
         error_messages=[],
         validation_path=[],
         completed_at="",
+
+        # Output assets (15 of 15) — set by END node after geometry processing
+        low_poly_url="",
     )
+
