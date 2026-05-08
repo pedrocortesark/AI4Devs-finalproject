@@ -1151,3 +1151,198 @@ This analysis transforms US-018 from "technically correct" to "production-ready"
 - Confidence threshold: Prevents ~30% low-quality classifications from reaching production (validated with EC-06 test)
 
 **Prompts:** #250 (T-1802 plan), #251 (T-1802 completion)
+
+---
+
+### Sprint 10 — Day 8-9 (Thu 08/05) — T-1803: Refactor Validators as LangGraph Nodes (✅ COMPLETED)
+
+**Ticket:** US-018/T-1803  
+**Story Points:** 3 SP  
+**Estimado:** 3 días (24 horas)  
+**Real:** 2.5 días (20 horas)  
+**Status:** ✅ COMPLETED (74/74 tests PASS, zero regression)
+
+**Objetivo:** Integrar validadores existentes US-002 (NomenclatureValidator, GeometryValidator, UserStringExtractor) en StateGraph sin modificar código de validators (zero regression commitment). Usar Adapter Pattern para wrapper nodes.
+
+**Implementación (Day 1 - 8h):**
+
+1. **4 Adapters Created** (~450 LOC en src/agent/graph/nodes.py):
+   - **node_extract_geometry** (~180 LOC):
+     - Downloads .3dm from Supabase Storage (STORAGE_BUCKET_RAW_UPLOADS)
+     - Parses with RhinoParserService.parse_file() (US-002, unchanged)
+     - Extracts layers, bbox, volume, vertices_count, user_strings
+     - Stores rhino_model in state (reused by ValidateGeometry)
+     - Returns geometry_metadata dict
+   
+   - **node_validate_nomenclature** (~70 LOC):
+     - Extracts layers from geometry_metadata.layers
+     - Calls NomenclatureValidator.validate_nomenclature() (US-002, unchanged)
+     - Returns nomenclature_valid bool + nomenclature_errors list
+     - Adapter Pattern: Extract state → call validator → update state
+   
+   - **node_validate_geometry** (~70 LOC):
+     - Extracts rhino_model from geometry_metadata (from ExtractGeometry node)
+     - Calls GeometryValidator.validate_geometry() (US-002, unchanged)
+     - Returns geometry_valid bool
+   
+   - **node_enrich_metadata** (~80 LOC):
+     - Extracts user_strings from geometry_metadata (from RhinoParserService)
+     - Parses Material from UserStringCollection
+     - Supports dict user_strings (RhinoParserService returns model.model_dump())
+     - Merges material into semantic_data (preserves LLM classification from ClassifyTipologia)
+
+2. **Graph Reordering** (~50 LOC en src/agent/graph/graph.py):
+   - **Old flow:** ValidateNomenclature → ExtractGeometry → ValidateGeometry
+   - **New flow:** ExtractGeometry → ValidateNomenclature → ValidateGeometry (FIRST node changed)
+   - **Rationale:** ValidateNomenclature needs layers from .3dm file (circular dependency resolved)
+   - **Added 3rd conditional edge:** should_continue_after_extract_geometry (fail-fast if file download/parse fails)
+   - **Total conditional edges:** 3 (ExtractGeometry fail → MarkRejected, ValidateNomenclature fail → MarkRejected, ValidateGeometry fail → MarkRejected)
+
+**Commits Day 1:**
+- `91c843e` - docs(agent): T-1803 Planning registered in prompts.md (#252)
+- `15c412a` - feat(agent): T-1803 Day 1 - Adapter Pattern for 4 StateGraph Nodes (~400 LOC)
+
+**Testing + Bug Fixes (Day 2 - 8h):**
+
+3. **5 Integration Tests Created** (~500 LOC en tests/agent/unit/test_stategraph_validators.py):
+   - **INT-01:** Nomenclature valid → ExtractGeometry executed ✅
+   - **INT-02:** Nomenclature fail → downstream nodes skipped (fail-fast) ✅
+   - **INT-03:** Geometry valid → EnrichMetadata executed ✅
+   - **INT-04:** Geometry fail → EnrichMetadata skipped (fail-fast) ✅
+   - **INT-05:** Full happy path with real validators ✅
+   - **Mocking strategy:** Supabase Storage + rhino3dm.File3dm.Read() mocked, **real validators preserved** (US-002 validators NOT mocked)
+   - **Result: 5/5 PASS**
+
+4. **Zero Regression Verification** (US-002 validators, 26 tests):
+   - test_nomenclature_validator.py: 9/9 PASS ✅
+   - test_geometry_validator.py: 9/9 PASS ✅
+   - test_user_string_extractor.py: 8/8 PASS ✅
+   - **Total: 26/26 PASS** (validators 100% unchanged, zero regression confirmed)
+
+5. **T-1801 Regression Prevention** (~70 LOC en tests/agent/unit/test_stategraph.py):
+   - **Added autouse fixture:** mock_supabase_and_rhino3dm (patches Supabase Storage + rhino3dm.File3dm.Read)
+   - **Updated test_happy_path_full_flow_reaches_validated:** Expected path changed (ExtractGeometry now FIRST node)
+   - **Result: 11/11 PASS** (T-1801 StateGraph tests preserved)
+
+**Commit Day 2:**
+- `79efe93` - test(agent): T-1803 Day 2 - Integration Tests + Adapter Fixes (~570 LOC tests)
+
+**Bugs Fixed (3 total):**
+1. **INT-02 Test Expectation:** Graph reordering made ExtractGeometry first node (always in path) → updated test to verify fail-fast AFTER nomenclature validation (downstream nodes skipped)
+2. **INT-03/INT-05 Material Extraction:** EnrichMetadata didn't support dict user_strings from RhinoParserService.parse_file() (returns model.model_dump()) → added isinstance(user_strings, dict) support with fallback to object access
+3. **T-1801 Regression:** Graph reordering broke existing tests expecting old flow → added mock_supabase_and_rhino3dm autouse fixture
+
+**Documentation (Day 3 - 4h):**
+
+6. **docs/US-018/T-1803-REFACTOR-TechnicalSpec.md** (~600 LOC):
+   - Adapter Pattern diagram (ASCII art)
+   - Graph flow redesign explanation (ExtractGeometry first rationale)
+   - 4 adapters implementation details
+   - Testing strategy (5 integration + 26 zero regression + 11 T-1801)
+   - Metrics table (estimated vs real LOC, test coverage, duration)
+   - Lessons learned (8 insights: graph entry point, mock fixtures, state reuse, cascading effects)
+
+7. **memory-bank/systemPatterns.md** (~150 LOC):
+   - New section: "Adapter Pattern for LangGraph Validators (T-1803)"
+   - Pattern structure diagram (StateGraph → Adapters → US-002 Validators)
+   - Implementation example (node_validate_nomenclature)
+   - Benefits: Zero regression, reusability, testability, maintainability, future-proofing
+   - When to use / when NOT to use
+   - Related files + lessons learned + metrics
+
+8. **prompts.md** (#252 completion):
+   - Metrics table (estimated vs real: +213% LOC due to graph reordering + dict support + fixtures)
+   - Test results final (74/74 PASS: 5 integration + 26 US-002 + 11 T-1801 + 32 T-1802)
+   - Bug fixes discovered
+   - Architecture changes (graph entry point, 3rd conditional edge, state reuse)
+   - DoD verification (all ✅)
+   - Lessons learned (5 insights)
+
+**Commit Day 3 (PENDING):**
+- docs(agent): T-1803 Day 3 - TechnicalSpec + systemPatterns Guide (~900 LOC docs)
+
+**Definition of Done Verificado:**
+- ✅ 4 nodos integrados con Adapter Pattern (ValidateNomenclature, ExtractGeometry, ValidateGeometry, EnrichMetadata)
+- ✅ 74/74 tests PASS (5 integration + 26 US-002 + 11 T-1801 + 32 T-1802)
+- ✅ Zero regression VERIFIED (26/26 US-002 tests unchanged)
+- ✅ Adapter Pattern documented con diagrams ASCII (TechnicalSpec + systemPatterns)
+- ✅ Graph reordering documented (ExtractGeometry first node rationale)
+- ✅ 3 commits (planning + Day 1 + Day 2, Day 3 pending docs commit)
+
+**Quality Metrics:**
+- **Tests:** 74/74 PASS (100% T-1803 scope coverage)
+  - 5/5 integration (test_stategraph_validators.py) ✅
+  - 26/26 US-002 zero regression (9 nomenclature + 9 geometry + 8 user_string_extractor) ✅
+  - 11/11 T-1801 StateGraph ✅
+  - 32/32 T-1802 LLM + Circuit Breaker ✅
+- **Total Agent Tests:** 80/94 PASS (14 pre-existing failures unrelated: geometry_centering, decimation, glb_output_validation require fast_simplification module)
+- **Zero Regression:** 26/26 US-002 validators unchanged (NomenclatureValidator, GeometryValidator, UserStringExtractor 100% preserved)
+- **LOC Implementation:** ~450 (4 adapters + graph reordering)
+- **LOC Tests:** ~570 (5 integration + T-1801 regression fixtures)
+- **LOC Documentation:** ~900 (TechnicalSpec + systemPatterns + prompts.md)
+- **Total LOC:** ~1,920 (vs ~900 estimated = +213% due to graph reordering complexity)
+
+**Architecture Changes:**
+1. **Graph Entry Point:** Moved from ValidateNomenclature to ExtractGeometry
+   - Rationale: ValidateNomenclature needs layers from .3dm file (circular dependency)
+   - Impact: All tests expecting old flow needed updates (T-1801 regression fixtures added)
+2. **3rd Conditional Edge:** Added should_continue_after_extract_geometry
+   - Fail-fast: If file download/parse fails → MarkRejected (skip all validation)
+   - Total conditional edges: 3 (ExtractGeometry, ValidateNomenclature, ValidateGeometry)
+3. **State Reuse:** Store rhino_model in geometry_metadata
+   - Performance optimization: Avoid re-parsing .3dm file in ValidateGeometry node
+   - Memory tradeoff: rhino3dm.File3dm object persists in state (acceptable for single-block processing)
+
+**Lessons Learned:**
+1. **Graph Entry Point Matters:** Circular dependency (ValidateNomenclature needs layers but ExtractGeometry runs after) required reordering → always analyze data dependencies BEFORE implementing nodes
+2. **Mock Fixtures Must Match Real APIs:** UserStringCollection mock initially dict-only, but RhinoParserService returns Pydantic model.model_dump() → added isinstance() support
+3. **Graph Reordering Has Cascading Effects:** Changing node order broke T-1801 tests expecting old flow → use autouse fixtures to isolate graph structure from tests
+4. **State Reuse for Performance:** Storing rhino_model in state avoids re-parsing (used by ValidateGeometry + future nodes) → consider state as cache for expensive operations
+5. **Adapter Pattern Delivers Zero Regression:** 26/26 US-002 tests PASS with ZERO code changes → pattern successfully isolates validators from StateGraph evolution
+
+**Technical Implementation Details:**
+
+**Adapter Pattern Structure:**
+```
+StateGraph Node (LangGraph context)
+    ↓
+Extract state fields → List[LayerInfo] / rhino3dm.File3dm
+    ↓
+Call original validator (US-002, UNCHANGED)
+    ↓
+Update state with results → Dict[str, Any]
+```
+
+**Benefits:**
+- **Zero Regression:** Validators remain 100% unchanged (26 US-002 tests still PASS)
+- **Reusability:** Validators usable independently (CLI tools, standalone scripts, future graphs)
+- **Testability:** Clear separation → Validators isolated (unit tests US-002), Adapters integrated (StateGraph tests T-1803)
+- **Maintainability:** Changes to validators don't break StateGraph (loose coupling)
+- **Future-Proofing:** Adding new validators → create adapter wrapper (no graph changes)
+
+**Files Created/Modified:**
+- `src/agent/graph/nodes.py` (updated): 4 adapters refactored (~450 LOC)
+- `src/agent/graph/graph.py` (updated): Graph reordering + 3rd conditional edge (~50 LOC)
+- `tests/agent/unit/test_stategraph_validators.py` (NEW): 5 integration tests (~500 LOC)
+- `tests/agent/unit/test_stategraph.py` (updated): Supabase/rhino3dm mocks (~70 LOC added)
+- `docs/US-018/T-1803-REFACTOR-TechnicalSpec.md` (NEW): Full architecture (~600 LOC)
+- `memory-bank/systemPatterns.md` (updated): Adapter Pattern section (~150 LOC)
+- `prompts.md` (updated): #252 completion entry (~200 LOC)
+- `memory-bank/progress.md` (updated): This entry
+
+**Timeline Impact:**
+- Estimado original: 3 días (24 horas)
+- Real: 2.5 días (20 horas)
+- **Ahead of schedule:** 4h buffer gained (Day 2 debugging efficient, Day 3 documentation faster than estimated)
+- **US-018 tracking:** 3 tickets completed (T-1801 2.5 días, T-1802 2 días, T-1803 2.5 días) = 7 días / 30.5 SP total = 23% done
+- **Buffer remaining:** 1 día from T-1801 efficiency (2.7x) + 1 día from T-1802 (on time) + 0.5 día from T-1803 (4h buffer) = 2.5 días total buffer
+
+**Next Steps:**
+- **NEXT TICKET:** T-1804 GenerateReport (2 días, 2 SP)
+  - Implement PDF report generation with validation results
+  - Use reportlab for PDF creation
+  - Include nomenclature errors, geometry errors, LLM classification
+  - Store report in Supabase Storage
+  - Tests coverage 100%
+
+**Prompts:** #252 (T-1803 plan + completion)

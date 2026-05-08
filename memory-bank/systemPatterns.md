@@ -1104,3 +1104,103 @@ const lodLevel = useLOD(position);
 - `src/frontend/src/components/Dashboard/PartsScene.tsx` (removed useGLTF references)
 
 ---
+
+## Agent Architecture Patterns
+
+### Adapter Pattern for LangGraph Validators (T-1803)
+
+**Context:** LangGraph StateGraph nodes must return partial state updates (dicts), but existing validators (US-002) return domain-specific objects. T-1803 required integrating production validators into StateGraph **without modifying validator code** (zero regression requirement).
+
+**Pattern:** Adapter (Wrapper) Pattern
+
+**Structure:**
+```
+┌─────────────────────────────────────────────────┐
+│          LangGraph StateGraph                   │
+│                                                 │
+│  ┌────────────┐   ┌────────────┐              │
+│  │ Validate   │──▶│ Validate   │              │
+│  │Nomenclature│   │ Geometry   │              │
+│  │ (Adapter)  │   │ (Adapter)  │              │
+│  └─────┬──────┘   └─────┬──────┘              │
+│        │ calls          │ calls                │
+│        ▼                ▼                      │
+│  ┌─────────────────────────────────┐          │
+│  │    US-002 Validators (UNCHANGED) │          │
+│  │                                 │          │
+│  │  NomenclatureValidator          │          │
+│  │  GeometryValidator              │          │
+│  │  UserStringExtractor            │          │
+│  │                                 │          │
+│  │  26 tests PASS (zero regression)│          │
+│  └─────────────────────────────────┘          │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**Implementation Pattern:**
+```python
+# Adapter Wrapper (src/agent/graph/nodes.py)
+def node_validate_nomenclature(state: ValidationState) -> Dict[str, Any]:
+    """
+    T-1803 ADAPTER: Calls NomenclatureValidator (US-002) via wrapper.
+    
+    Pattern:
+    1. Extract state fields → List[LayerInfo]
+    2. Call original validator → List[ValidationErrorItem]
+    3. Update state with results → Dict[str, Any]
+    """
+    from src.agent.services.nomenclature_validator import NomenclatureValidator
+    
+    # 1. Extract from state
+    geometry_metadata = state.get("geometry_metadata", {})
+    layers = geometry_metadata.get("layers", [])
+    
+    # 2. Call original validator (UNCHANGED US-002 code)
+    validator = NomenclatureValidator()
+    errors = validator.validate_nomenclature(layers)
+    
+    # 3. Update state
+    return {
+        "nomenclature_valid": len(errors) == 0,
+        "nomenclature_errors": errors,
+        "validation_path": _append_to_path(state, "ValidateNomenclature"),
+    }
+```
+
+**Benefits:**
+1. **Zero Regression:** Validators remain 100% unchanged (26 US-002 tests still PASS)
+2. **Reusability:** Validators usable independently (CLI tools, standalone scripts, future graphs)
+3. **Testability:** Clear separation → Validators isolated (unit tests), Adapters integrated (StateGraph tests)
+4. **Maintainability:** Changes to validators don't break StateGraph (loose coupling)
+5. **Future-Proofing:** Adding new validators → create adapter wrapper (no graph changes)
+
+**When to Use:**
+- Integrating existing services into LangGraph StateGraph
+- Need zero regression guarantee (service code cannot change)
+- Service returns domain objects, but StateGraph needs dict updates
+- Service used in multiple contexts (not just StateGraph)
+
+**When NOT to Use:**
+- Service only used within StateGraph (direct implementation preferred)
+- Service already returns dicts (no adaptation needed)
+- Tight coupling acceptable (service designed for StateGraph)
+
+**Related Files:**
+- `src/agent/graph/nodes.py` - 4 adapter implementations (ValidateNomenclature, ExtractGeometry, ValidateGeometry, EnrichMetadata)
+- `src/agent/services/nomenclature_validator.py` - US-002 validator (UNCHANGED)
+- `src/agent/services/geometry_validator.py` - US-002 validator (UNCHANGED)
+- `docs/US-018/T-1803-REFACTOR-TechnicalSpec.md` - Full architecture documentation
+
+**Lessons Learned:**
+1. **Mock Fixtures Must Match Real APIs:** UserStringCollection mock initially didn't support dict access (caused test failures)
+2. **Graph Reordering Has Cascading Effects:** Changing node order broke existing tests (fixed with autouse fixtures)
+3. **State Reuse for Performance:** Store `rhino_model` in state to avoid re-parsing (used by multiple nodes)
+
+**Metrics (T-1803):**
+- Implementation: ~900 LOC (4 adapters + graph reordering + 5 integration tests)
+- Test Coverage: **74/74 tests PASS** (5 integration + 26 US-002 + 11 T-1801 + 32 T-1802)
+- Zero Regression: ✅ VERIFIED (26 US-002 tests unchanged)
+- Duration: 2.5 días (Day 1: Adapters, Day 2: Testing, Day 3: Documentation)
+
+---
