@@ -705,7 +705,7 @@ def node_enrich_metadata(state: ValidationState) -> Dict[str, Any]:
     block_id = state.get("block_id", "unknown")
     logger.info("node.enter", node=node_name, block_id=block_id)
 
-    # T-1803 ADAPTER: Extract user_strings from geometry_metadata
+    #T-1803 ADAPTER: Extract user_strings from geometry_metadata
     geometry_metadata = state.get("geometry_metadata", {})
     user_strings = geometry_metadata.get("user_strings")
     
@@ -716,30 +716,58 @@ def node_enrich_metadata(state: ValidationState) -> Dict[str, Any]:
     material = "Unknown"
     
     if user_strings:
-        # Try document-level user strings first
-        if hasattr(user_strings, 'document') and user_strings.document:
-            material = user_strings.document.get("Material", material)
-            logger.debug(
-                "enrich_metadata.material_from_document",
-                node=node_name,
-                block_id=block_id,
-                material=material,
-            )
-        
-        # Fallback to first object's user strings if document-level not found
-        if material == "Unknown" and hasattr(user_strings, 'objects') and user_strings.objects:
-            # Get first object's user strings
-            for obj_id, obj_strings in user_strings.objects.items():
-                if "Material" in obj_strings:
-                    material = obj_strings["Material"]
-                    logger.debug(
-                        "enrich_metadata.material_from_object",
-                        node=node_name,
-                        block_id=block_id,
-                        object_id=obj_id,
-                        material=material,
-                    )
-                    break
+        # user_strings can be dict (from RhinoParserService) or UserStringCollection object
+        # Check if it's a dict with 'document' key or an object with document attribute
+        if isinstance(user_strings, dict):
+            # Dict format: {document: {}, layers: {}, objects: {}}
+            document_strings = user_strings.get("document", {})
+            if "Material" in document_strings:
+                material = document_strings["Material"]
+                logger.debug(
+                    "enrich_metadata.material_from_document_dict",
+                    node=node_name,
+                    block_id=block_id,
+                    material=material,
+                )
+            
+            # Fallback to first object's user strings if document-level not found
+            if material == "Unknown":
+                objects_strings = user_strings.get("objects", {})
+                for obj_id, obj_strings in objects_strings.items():
+                    if "Material" in obj_strings:
+                        material = obj_strings["Material"]
+                        logger.debug(
+                            "enrich_metadata.material_from_object_dict",
+                            node=node_name,
+                            block_id=block_id,
+                            object_id=obj_id,
+                            material=material,
+                        )
+                        break
+        elif hasattr(user_strings, 'document'):
+            # UserStringCollection object format
+            if user_strings.document and "Material" in user_strings.document:
+                material = user_strings.document["Material"]
+                logger.debug(
+                    "enrich_metadata.material_from_document_object",
+                    node=node_name,
+                    block_id=block_id,
+                    material=material,
+                )
+            
+            # Fallback to first object's user strings
+            if material == "Unknown" and hasattr(user_strings, 'objects') and user_strings.objects:
+                for obj_id, obj_strings in user_strings.objects.items():
+                    if "Material" in obj_strings:
+                        material = obj_strings["Material"]
+                        logger.debug(
+                            "enrich_metadata.material_from_object_object",
+                            node=node_name,
+                            block_id=block_id,
+                            object_id=obj_id,
+                            material=material,
+                        )
+                        break
     
     # Merge material into semantic_data (preserve existing LLM classification)
     updated_semantic_data = {

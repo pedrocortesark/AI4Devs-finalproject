@@ -103,26 +103,49 @@ logger = structlog.get_logger()
 # CONDITIONAL EDGE FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def should_continue_after_nomenclature(state: ValidationState) -> Literal["ExtractGeometry", "MarkRejected"]:
+def should_continue_after_extract_geometry(state: ValidationState) -> Literal["ValidateNomenclature", "MarkRejected"]:
+    """
+    Conditional edge after ExtractGeometry node.
+
+    Returns:
+        "ValidateNomenclature" if file_exists_in_storage == True (continue happy path)
+        "MarkRejected" if file download/parse failed (fail-fast)
+    
+    This is the FIRST gatekeeper — if file doesn't exist or parse fails,
+    we skip all downstream validation and reject immediately.
+    """
+    geometry_metadata = state.get("geometry_metadata", {})
+    file_exists = geometry_metadata.get("file_exists_in_storage", False)
+    
+    logger.info(
+        "edge.extract_geometry_decision",
+        file_exists_in_storage=file_exists,
+        next_node="ValidateNomenclature" if file_exists else "MarkRejected",
+    )
+    
+    return "ValidateNomenclature" if file_exists else "MarkRejected"
+
+
+def should_continue_after_nomenclature(state: ValidationState) -> Literal["ValidateGeometry", "MarkRejected"]:
     """
     Conditional edge after ValidateNomenclature node.
 
     Returns:
-        "ExtractGeometry" if nomenclature_valid == True (continue happy path)
+        "ValidateGeometry" if nomenclature_valid == True (continue happy path)
         "MarkRejected" if nomenclature_valid == False (fail-fast)
     
-    This is the FIRST gatekeeper — if nomenclature fails, we skip all downstream
-    processing (geometry extraction, LLM classification) and reject immediately.
+    This is the SECOND gatekeeper — if nomenclature fails, we skip all downstream
+    processing (geometry validation, LLM classification) and reject immediately.
     """
     is_valid = state.get("nomenclature_valid", False)
     
     logger.info(
         "edge.nomenclature_decision",
         nomenclature_valid=is_valid,
-        next_node="ExtractGeometry" if is_valid else "MarkRejected",
+        next_node="ValidateGeometry" if is_valid else "MarkRejected",
     )
     
-    return "ExtractGeometry" if is_valid else "MarkRejected"
+    return "ValidateGeometry" if is_valid else "MarkRejected"
 
 
 def should_continue_after_geometry(state: ValidationState) -> Literal["ClassifyTipologia", "MarkRejected"]:
@@ -133,7 +156,7 @@ def should_continue_after_geometry(state: ValidationState) -> Literal["ClassifyT
         "ClassifyTipologia" if geometry_valid == True (continue to LLM/fallback)
         "MarkRejected" if geometry_valid == False (fail-fast)
     
-    This is the SECOND gatekeeper — if geometry fails, we skip LLM classification
+    This is the THIRD gatekeeper — if geometry fails, we skip LLM classification
     (no point classifying a malformed mesh) and reject immediately.
     """
     is_valid = state.get("geometry_valid", False)
@@ -178,8 +201,8 @@ def create_validation_graph() -> StateGraph:
 
     # ── STEP 2: Add nodes ──────────────────────────────────────────────────
     # Each node is a function that receives ValidationState and returns a dict
-    workflow.add_node("ValidateNomenclature", node_validate_nomenclature)
     workflow.add_node("ExtractGeometry", node_extract_geometry)
+    workflow.add_node("ValidateNomenclature", node_validate_nomenclature)
     workflow.add_node("ValidateGeometry", node_validate_geometry)
     workflow.add_node("ClassifyTipologia", node_classify_tipologia)
     workflow.add_node("EnrichMetadata", node_enrich_metadata)
@@ -188,26 +211,36 @@ def create_validation_graph() -> StateGraph:
     workflow.add_node("MarkRejected", node_mark_rejected)
 
     # ── STEP 3: Set entry point ───────────────────────────────────────────
-    # Every execution starts at ValidateNomenclature (the first gatekeeper)
-    workflow.set_entry_point("ValidateNomenclature")
+    # T-1803: Changed entry point to ExtractGeometry (must download .3dm before validating layers)
+    # Every execution starts at ExtractGeometry (downloads .3dm, extracts layers/geometry)
+    workflow.set_entry_point("ExtractGeometry")
 
     # ── STEP 4: Add conditional edges (fail-fast gatekeepers) ─────────────
-    # Conditional edge #1: After ValidateNomenclature
-    # → If nomenclature_valid == True → ExtractGeometry
+    # Conditional edge #1: After ExtractGeometry
+    # → If file_exists_in_storage == True → ValidateNomenclature
+    # → If file download/parse failed → MarkRejected (fail-fast)
+    workflow.add_conditional_edges(
+        "ExtractGeometry",
+        should_continue_after_extract_geometry,
+        {
+            "ValidateNomenclature": "ValidateNomenclature",
+            "MarkRejected": "MarkRejected",
+        }
+    )
+
+    # Conditional edge #2: After ValidateNomenclature
+    # → If nomenclature_valid == True → ValidateGeometry
     # → If nomenclature_valid == False → MarkRejected (fail-fast)
     workflow.add_conditional_edges(
         "ValidateNomenclature",
         should_continue_after_nomenclature,
         {
-            "ExtractGeometry": "ExtractGeometry",
+            "ValidateGeometry": "ValidateGeometry",
             "MarkRejected": "MarkRejected",
         }
     )
 
-    # Normal edge: ExtractGeometry always → ValidateGeometry
-    workflow.add_edge("ExtractGeometry", "ValidateGeometry")
-
-    # Conditional edge #2: After ValidateGeometry
+    # Conditional edge #3: After ValidateGeometry
     # → If geometry_valid == True → ClassifyTipologia
     # → If geometry_valid == False → MarkRejected (fail-fast)
     workflow.add_conditional_edges(
@@ -244,8 +277,8 @@ def create_validation_graph() -> StateGraph:
     logger.info(
         "graph.compiled",
         nodes=8,
-        edges=8,  # 2 conditional + 6 normal
-        entry_point="ValidateNomenclature",
+        edges=9,  # 3 conditional + 6 normal
+        entry_point="ExtractGeometry",
         terminal_nodes=["MarkValidated", "MarkRejected"],
     )
 

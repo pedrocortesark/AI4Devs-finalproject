@@ -96,6 +96,64 @@ def mock_redis_client():
         yield mock_redis
 
 
+@pytest.fixture(autouse=True)
+def mock_supabase_and_rhino3dm():
+    """
+    Mock Supabase Storage and rhino3dm for all StateGraph tests.
+    
+    T-1803: ExtractGeometry is now the first node (downloads .3dm from Supabase).
+    These mocks ensure tests work without real file downloads or rhino3dm parsing.
+    """
+    # Create mock rhino3dm model with VALID nomenclature + geometry
+    mock_model = MagicMock()
+    
+    # Mock layers (VALID ISO-19650 nomenclature)
+    layer1 = MagicMock()
+    layer1.Name = "SF-C12-D-001"
+    layer1.Visible = True
+    layer1.Color = (255, 128, 0, 255)
+    
+    mock_model.Layers = [layer1]
+    
+    # Mock objects with VALID geometry
+    obj1 = MagicMock()
+    obj1.Attributes.LayerIndex = 0
+    obj1.Geometry = MagicMock()
+    obj1.Geometry.IsValid = True
+    
+    bbox1 = MagicMock()
+    bbox1.IsValid = True
+    bbox1.Min = MagicMock(X=0.0, Y=0.0, Z=0.0)
+    bbox1.Max = MagicMock(X=10.0, Y=10.0, Z=10.0)
+    obj1.Geometry.GetBoundingBox.return_value = bbox1
+    obj1.Geometry.Vertices = [MagicMock() for _ in range(100)]
+    obj1.Geometry.Faces = [MagicMock() for _ in range(50)]
+    obj1.Geometry.__class__.__name__ = 'Brep'
+    
+    mock_model.Objects = [obj1]
+    
+    # Mock user strings
+    mock_strings = MagicMock()
+    mock_strings.Keys = ["Material"]
+    mock_strings.__getitem__ = lambda self, key: "Piedra de Montjuïc" if key == "Material" else ""
+    mock_model.Strings = mock_strings
+    
+    # Mock settings
+    mock_model.Settings.ModelUnitSystem = "Meters"
+    mock_model.Settings.ModelAbsoluteTolerance = 0.001
+    
+    # Patch Supabase Storage download
+    with patch("infra.supabase_client.get_supabase_client") as mock_get_supabase:
+        mock_storage = MagicMock()
+        # Return mock .3dm file content (bytes)
+        mock_storage.download.return_value = b'\x00\x00\x00\x00\x00\x00\x00\x00' + b'\x00' * 1000
+        mock_get_supabase.return_value.storage.from_.return_value = mock_storage
+        
+        # Patch rhino3dm.File3dm.Read to return mock model
+        with patch("rhino3dm.File3dm.Read", return_value=mock_model):
+            yield mock_model
+
+
 class TestStateGraphStructure:
     """Tests for graph compilation and basic structure."""
 
@@ -144,10 +202,10 @@ class TestHappyPathFlow:
         # THEN: Final status should be VALIDATED
         assert final_state["overall_status"] == ValidationStatus.VALIDATED
         
-        # AND: Validation path should include all 8 nodes
+        # AND: Validation path should include all 8 nodes (T-1803: ExtractGeometry now FIRST)
         expected_path = [
+            "ExtractGeometry",  # T-1803: Changed to first node (downloads .3dm)
             "ValidateNomenclature",
-            "ExtractGeometry",
             "ValidateGeometry",
             "ClassifyTipologia",
             "EnrichMetadata",
