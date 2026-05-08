@@ -17810,3 +17810,218 @@ def node_validate_nomenclature(state: ValidationState) -> ValidationState:
 5. **Adapter Pattern Delivers Zero Regression:** 26/26 US-002 tests PASS with ZERO code changes → pattern successfully isolates validators from StateGraph evolution
 
 **Next Ticket:** T-1804 (GenerateReport node - PDF report generation)
+
+---
+
+## [253] - T-1804 GenerateReport Node (Jinja2 Templates)
+**Fecha:** 2026-05-08 14:30
+**Prompt Original:**
+> vamos alla
+> 
+> **Context:** Usuario aprobó continuar con siguiente ticket tras completar T-1803 (74/74 tests PASS, zero regression verificado, 3 commits completed + 1 docs pending). Proceder con T-1804 según roadmap US-018.
+
+**Ticket:** US-018/T-1804-AGENT  
+**Story Points:** 2 SP  
+**Duración Estimada:** 2 días (16 horas)
+
+**Objetivo:**
+Implementar nodo `generate_report(state: ValidationState) -> ValidationState` que genera reportes de validación estructurados usando templates Jinja2. El reporte debe cumplir el schema ValidationReport existente (contrato JSONB en columna `blocks.validation_report`).
+
+**Requisitos Funcionales (del Backlog):**
+
+1. **Template Jinja2** (`src/agent/templates/validation_report.json.j2`):
+   - Estructura JSON con secciones:
+     - `errors[]` - Lista de errores de validación (nomenclature + geometry)
+     - `metadata{}` - Metadatos base: iso_code, material, tipologia
+     - `semantic_data{}` - Clasificación LLM: tipologia, confidence, classification_method
+     - `geometry_summary` - Resumen geométrico: vertices, triangles, bbox
+     - `timestamp` - Fecha/hora generación reporte
+     - `validated_by` - Versión del agente
+     - `validation_path[]` - Lista de nodos ejecutados en StateGraph
+
+2. **Node Implementation** (`src/agent/graph/nodes.py::node_generate_report`):
+   - Renderizar template con campos de ValidationState
+   - Guardar JSON string en `state["validation_report"]`
+   - Persistir en DB: `blocks.validation_report` JSONB column (ya existe desde T-020-DB)
+
+3. **NULL-safe Rendering:**
+   - Campos opcionales con defaults (ej: semantic_data = null si LLM no ejecutado en path rejected)
+   - Errors array vacío si nomenclature_valid=True y geometry_valid=True
+   - Material = "Unknown" si user_strings no contiene Material
+
+4. **Integration with Frontend:**
+   - ValidationReportModal (T-032-FRONT) ya existe
+   - NO requiere cambios frontend (contrato JSONB ya cumplido)
+   - Verificar que UI muestra reportes correctamente (smoke test manual)
+
+5. **Tests** (8 total en `tests/agent/unit/test_report_generator.py`):
+   - **HP-01:** Reporte completo happy path (nomenclature OK + geometry OK + LLM classification) → JSON válido con todos los campos poblados
+   - **HP-02:** Semantic_data presente cuando classification_method = LLM_GPT4
+   - **EC-01:** Reporte sin LLM (path rejected early) → semantic_data = null, errors array poblado
+   - **EC-02:** Reporte rejected por nomenclature → errors contiene nomenclature_errors
+   - **EC-03:** Reporte rejected por geometry → errors contiene geometry errors
+   - **EC-04:** Material = "Unknown" si user_strings no tiene Material
+   - **INT-01:** JSONB schema compliance con Pydantic ValidationReport model (validar con .model_validate())
+   - **INT-02:** Template rendering con caracteres especiales en iso_code (ej: SF-C12-D-001)
+
+**Definition of Done:**
+
+✅ Template `validation_report.json.j2` creado en `src/agent/templates/`  
+✅ Node `node_generate_report` implementado en `src/agent/graph/nodes.py` (~80 LOC)  
+✅ Graph actualizado con edge: EnrichMetadata → GenerateReport → MarkValidated  
+✅ 8/8 tests PASS (`test_report_generator.py`)  
+✅ Zero regression: 74/74 tests previos siguen PASS  
+✅ Integration verificada: ValidationReportModal muestra reportes correctamente (smoke test manual)  
+✅ Templates versionados en Git  
+✅ Documentación: Actualizar T-1804-REPORT-TechnicalSpec.md con template structure + field mappings
+
+**Plan de Trabajo (2 días):**
+
+### Day 1 - Template + Node Implementation (8h)
+
+**Task 1: Setup Jinja2 + Template Base (2h)**
+- Instalar `Jinja2>=3.1.0` en requirements.txt (backend)
+- Crear directorio `src/agent/templates/`
+- Crear template `validation_report.json.j2`:
+  - Estructura base JSON con secciones principales
+  - Variables Jinja2: `{{ block_id }}`, `{{ timestamp }}`, `{{ overall_status }}`
+  - Conditional blocks: `{% if semantic_data %}...{% endif %}`
+  - Filtros custom si necesario (ej: `{{ timestamp | isoformat }}`)
+- Test manual: renderizar template con mock data
+
+**Task 2: Implement node_generate_report (3h)**
+- Función en `src/agent/graph/nodes.py`:
+  ```python
+  def node_generate_report(state: ValidationState) -> Dict[str, Any]:
+      """Genera reporte de validación JSON usando Jinja2 template."""
+      from jinja2 import Environment, FileSystemLoader
+      
+      # Setup Jinja2 environment
+      template_env = Environment(loader=FileSystemLoader("src/agent/templates"))
+      template = template_env.get_template("validation_report.json.j2")
+      
+      # Prepare template context (extract fields from state)
+      context = {
+          "block_id": state.get("block_id"),
+          "timestamp": datetime.utcnow().isoformat(),
+          "overall_status": state.get("overall_status"),
+          "nomenclature_valid": state.get("nomenclature_valid"),
+          "nomenclature_errors": state.get("nomenclature_errors", []),
+          "geometry_valid": state.get("geometry_valid"),
+          "geometry_metadata": state.get("geometry_metadata", {}),
+          "semantic_data": state.get("semantic_data"),  # Can be None
+          "classification_method": state.get("classification_method"),
+          "validation_path": state.get("validation_path", []),
+          "validated_by": "SF-PM-Agent-v0.1.0",  # TODO: Extract from constants
+      }
+      
+      # Render template
+      report_json_str = template.render(context)
+      
+      # Validate JSON is parseable
+      import json
+      report_dict = json.loads(report_json_str)  # Will raise if invalid JSON
+      
+      # Update state
+      return {
+          "validation_report": report_json_str,
+          "validation_path": _append_to_path(state, "GenerateReport"),
+      }
+  ```
+
+**Task 3: Update StateGraph Edges (1h)**
+- Modificar `src/agent/graph/graph.py`:
+  - Cambiar edge: EnrichMetadata → MarkValidated
+  - A: EnrichMetadata → GenerateReport → MarkValidated
+  - Verificar que MarkRejected también ejecuta GenerateReport (reportes de errores)
+
+**Task 4: Persist to Database (2h)**
+- Crear helper function `persist_validation_report(block_id: str, report_json: str)`:
+  - UPDATE blocks SET validation_report = report_json::jsonb WHERE block_id = %s
+  - Usar Supabase client (get_supabase_client())
+  - Error handling: log warning si UPDATE falla, NO romper flujo
+- Llamar desde node_generate_report ANTES de return
+- Test unitario: verificar UPDATE ejecutado correctamente
+
+### Day 2 - Testing + Integration (8h)
+
+**Task 5: Unit Tests (4h)**
+- Crear `tests/agent/unit/test_report_generator.py` (~400 LOC):
+  - Setup fixtures: mock_state_happy_path, mock_state_rejected_nomenclature, mock_state_rejected_geometry
+  - 8 tests según DoD (HP-01, HP-02, EC-01 a EC-04, INT-01, INT-02)
+  - Mock Jinja2 environment (opcional: usar template real para tests más reales)
+  - Assertions: verificar estructura JSON, campos obligatorios presentes, NULL-safe defaults
+- Ejecutar: `docker compose run --rm backend pytest tests/agent/unit/test_report_generator.py -v`
+- **Target: 8/8 PASS**
+
+**Task 6: Regression Tests (2h)**
+- Ejecutar suite completa de tests:
+  - T-1801: `pytest tests/agent/unit/test_stategraph.py -v` (11 tests)
+  - T-1802: `pytest tests/agent/unit/test_llm_classification.py test_circuit_breaker.py -v` (32 tests)
+  - T-1803: `pytest tests/agent/unit/test_stategraph_validators.py -v` (5 tests)
+  - US-002: `pytest tests/unit/test_nomenclature_validator.py test_geometry_validator.py test_user_string_extractor.py -v` (26 tests)
+- **Target: 74/74 PASS (zero regression)**
+
+**Task 7: Integration Smoke Test (1h)**
+- Test manual en frontend:
+  - Subir archivo `GLPER.B-PAE0720.0701.3dm` válido
+  - Esperar validación completa (status = validated)
+  - Abrir ValidationReportModal
+  - Verificar que muestra:
+    - ✅ Nomenclature: Valid
+    - ✅ Geometry: Valid
+    - ✅ Classification: dovela (AI) - confidence 0.85
+    - Material: Piedra de Montjuïc
+    - Timestamp presente
+    - Validation path: 7 nodos
+- Captura screenshot para documentación
+- Subir archivo inválido (nomenclatura wrong):
+  - Verificar ValidationReportModal muestra errors array correctamente
+
+**Task 8: Documentation (1h)**
+- Crear `docs/US-018/T-1804-REPORT-TechnicalSpec.md` (~400 LOC):
+  - Template structure explanation
+  - Field mappings: ValidationState → JSON report
+  - NULL-safe defaults table
+  - Example reports: happy path, rejected nomenclature, rejected geometry
+  - Jinja2 filters used
+  - Integration with ValidationReportModal
+- Actualizar `prompts.md` entry #253 con completion metrics
+- Commit: "docs(agent): T-1804 TechnicalSpec + Completion"
+
+**Commits (3 total):**
+1. `docs(agent): T-1804 Planning registered in prompts.md (#253)`
+2. `feat(agent): T-1804 Day 1 - Jinja2 Template + GenerateReport Node`
+3. `test(agent): T-1804 Day 2 - Tests + Integration Verification`
+
+**Estimación LOC:**
+
+| Component | Estimated LOC |
+|-----------|---------------|
+| Template (validation_report.json.j2) | ~150 |
+| node_generate_report | ~80 |
+| persist_validation_report helper | ~30 |
+| Graph edges update | ~10 |
+| Tests (test_report_generator.py) | ~400 |
+| TechnicalSpec documentation | ~400 |
+| **TOTAL** | **~1,070 LOC** |
+
+**Riesgos & Mitigaciones:**
+
+| Risk | Probability | Mitigation |
+|------|------------|------------|
+| Template JSON inválido (syntax error) | 30% | Validar con json.loads() después de render, tests con caracteres especiales |
+| ValidationReport schema mismatch | 40% | Usar Pydantic .model_validate() en INT-01 test, revisar schema en backend/schemas.py |
+| NULL-safe defaults incorrectos | 25% | Tests EC-01 a EC-04 cubren todos los edge cases |
+| Performance: Jinja2 rendering lento | 10% | Usar FileSystemLoader con cache (default en Jinja2), benchmark en tests |
+
+**Dependencies:**
+- ✅ Jinja2>=3.1.0 (instalar en requirements.txt)
+- ✅ Column `blocks.validation_report` JSONB (ya existe desde T-020-DB)
+- ✅ Pydantic ValidationReport model (ya existe en backend/schemas.py)
+- ✅ ValidationReportModal frontend component (ya existe T-032-FRONT)
+
+**Resumen de la Respuesta/Acción:**
+Implementar nodo GenerateReport con Jinja2 templates para generar reportes JSON estructurados de validación. Template NULL-safe con defaults, persistencia en DB, 8 tests unitarios + regression + integration smoke test. Duración: 2 días (16h), 3 commits, ~1,070 LOC total.
+
+---
