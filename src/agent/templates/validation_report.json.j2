@@ -47,11 +47,11 @@
     {%- endif %}
   ],
   "metadata": {
-    "iso_code": "{{ block_id.split('-')[-1] if '-' in block_id else 'UNKNOWN' }}",
+    "iso_code": "{{ block_id.split('GLPER.B-')[-1] if 'GLPER.B-' in block_id else block_id }}",
     "block_id": "{{ block_id }}",
     "material": "{{ semantic_data.material if semantic_data and 'material' in semantic_data else 'Unknown' }}",
     "tipologia": "{{ semantic_data.tipologia if semantic_data and 'tipologia' in semantic_data else 'unknown' }}",
-    "classification_method": "{{ classification_method if classification_method else 'unknown' }}"
+    "classification_method": {% if classification_method %}"{{ classification_method }}"{% else %}null{% endif %}
   },
   {%- if semantic_data %}
   "semantic_data": {
