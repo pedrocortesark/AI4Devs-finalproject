@@ -105,3 +105,4 @@ data/processed/*
 
 # Added by ggshield
 .cache_ggshield
+*.rhl

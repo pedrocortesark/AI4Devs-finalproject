@@ -51,6 +51,41 @@ GEOMETRY_ERROR_NULL = "Geometry is null or missing"
 GEOMETRY_ERROR_DEGENERATE_BBOX = "Bounding box is degenerate or invalid"
 GEOMETRY_ERROR_ZERO_VOLUME = "Solid geometry has zero or near-zero volume (< {min_volume} cubic units)"
 
+# ===== T-1805-AGENT: LangGraph Audit Trail Events =====
+
+# Event types for LangGraph StateGraph node transitions
+# Used in events table for granular audit trail and Grafana timeline visualization
+class EventType:
+    """
+    Event types for LangGraph StateGraph audit trail.
+    
+    Used in `insert_event()` helper to categorize events in the events table.
+    Enables granular tracking of validation workflow execution for debugging,
+    monitoring, and Grafana timeline dashboards.
+    
+    Usage:
+        insert_event(block_id, EventType.NODE_ENTERED, "ValidateNomenclature", state)
+        insert_event(block_id, EventType.CIRCUIT_BREAKER_TRIPPED, "ClassifyTipologia", state)
+    """
+    NODE_ENTERED = "node_entered"           # Node execution started
+    NODE_COMPLETED = "node_completed"       # Node execution finished successfully
+    TRANSITION_CONDITIONAL = "transition_conditional"  # Conditional edge evaluated
+    CIRCUIT_BREAKER_TRIPPED = "circuit_breaker_tripped"  # LLM circuit breaker activated
+    FALLBACK_ACTIVATED = "fallback_activated"  # Fallback to regex classification
+
+# Event batch insert threshold (performance optimization)
+# If >10 events accumulated, insert as single batch query
+EVENT_BUFFER_THRESHOLD = 10
+
+# State snapshot fields (lightweight, excludes heavy geometry_metadata)
+# Serialized to JSONB in events.state_snapshot column
+STATE_SNAPSHOT_FIELDS = [
+    "overall_status",        # "validated" | "rejected" | "processing"
+    "nomenclature_valid",    # bool
+    "geometry_valid",        # bool
+    "classification_method", # ClassificationMethod ENUM value
+]
+
 # ===== T-0502-AGENT: Geometry Processing =====
 
 # Task Names

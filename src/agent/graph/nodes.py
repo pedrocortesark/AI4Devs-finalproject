@@ -119,6 +119,162 @@ def _append_to_errors(state: ValidationState, error_msg: str) -> list:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# HELPER: T-1805 Audit Trail - State Snapshot Serializer
+# ─────────────────────────────────────────────────────────────────────────────
+
+def serialize_state_snapshot(state: ValidationState) -> dict:
+    """
+    Serialize ValidationState to lightweight JSONB snapshot for events table.
+
+    Extracts only essential fields (excludes heavy geometry_metadata which can be >1MB).
+    Used by insert_event() to store state_snapshot in events.state_snapshot JSONB column.
+
+    Design rationale:
+        - Lightweight: ~200 bytes vs full state ~1-2 MB (excludes geometry_metadata)
+        - Performance: Faster DB inserts, smaller storage, quicker Grafana queries
+        - Auditability: Contains enough context to debug state transitions
+
+    Fields included (from src.agent.constants.STATE_SNAPSHOT_FIELDS):
+        - overall_status: "validated" | "rejected" | "processing"
+        - nomenclature_valid: bool
+        - geometry_valid: bool
+        - classification_method: "llm_gpt4" | "fallback_regex" | "manual_override" | None
+        - validation_path_length: int (audit: how many nodes executed)
+
+    Args:
+        state: Current ValidationState (15 fields)
+
+    Returns:
+        Dict with lightweight snapshot (5 fields, ~200 bytes when serialized)
+
+    Example:
+        >>> state = {"overall_status": "processing", "nomenclature_valid": True, ...}
+        >>> serialize_state_snapshot(state)
+        {
+            "overall_status": "processing",
+            "nomenclature_valid": True,
+            "geometry_valid": None,
+            "classification_method": None,
+            "validation_path_length": 3
+        }
+    """
+    try:
+        from src.agent.constants import STATE_SNAPSHOT_FIELDS
+    except ImportError:
+        from agent.constants import STATE_SNAPSHOT_FIELDS
+
+    snapshot = {}
+    
+    # Extract STATE_SNAPSHOT_FIELDS from state
+    for field in STATE_SNAPSHOT_FIELDS:
+        snapshot[field] = state.get(field)
+    
+    # Add validation_path length (audit: progression tracking)
+    validation_path = state.get("validation_path", [])
+    snapshot["validation_path_length"] = len(validation_path) if validation_path else 0
+    
+    return snapshot
+
+
+def insert_event(
+    block_id: str,
+    event_type: str,
+    node_name: str,
+    state: ValidationState
+) -> None:
+    """
+    Insert audit trail event into events table (best-effort, fire-and-forget).
+
+    Tracks LangGraph StateGraph node transitions for debugging, monitoring, and
+    Grafana timeline visualization. Failures are logged as WARNING but do NOT
+    block StateGraph execution (degradation graceful).
+
+    Design patterns:
+        - Best-effort: DB failures logged but non-fatal (graph continues)
+        - Fire-and-forget: No return value, no exception propagation
+        - Timeout: 5s max (prevents blocking on slow DB)
+        - Logging: Structured logs for observability
+
+    Database schema (created by 20260508000001_add_langgraph_events.sql):
+        events(
+            id UUID PRIMARY KEY,
+            block_id UUID NOT NULL,
+            event_type VARCHAR(100),  -- EventType constant
+            node_name VARCHAR(100),   -- StateGraph node name
+            state_snapshot JSONB,     -- serialize_state_snapshot(state)
+            metadata JSONB,           -- Legacy, nullable
+            created_at TIMESTAMPTZ
+        )
+
+    Event types (from src.agent.constants.EventType):
+        - node_entered: Node execution started
+        - node_completed: Node finished successfully
+        - transition_conditional: Conditional edge evaluated
+        - circuit_breaker_tripped: LLM circuit breaker activated
+        - fallback_activated: Fallback to regex classification
+
+    Args:
+        block_id   : UUID of block being validated (e.g., "GLPER.B-PAE0720.0701")
+        event_type : EventType constant (e.g., EventType.NODE_COMPLETED)
+        node_name  : StateGraph node name (e.g., "ValidateNomenclature")
+        state      : Current ValidationState (used for state_snapshot)
+
+    Returns:
+        None (fire-and-forget, logs success/failure)
+
+    Side effects:
+        - INSERT into events table (Supabase PostgreSQL)
+        - Structured log: event.inserted or event.insert_failed
+
+    Example:
+        >>> from src.agent.constants import EventType
+        >>> insert_event(
+        ...     "GLPER.B-PAE0720.0701",
+        ...     EventType.NODE_COMPLETED,
+        ...     "ValidateNomenclature",
+        ...     state
+        ... )
+        # Logs: event.inserted block_id=GLPER.B-PAE0720.0701 node_name=ValidateNomenclature
+    """
+    try:
+        # Serialize lightweight state snapshot
+        state_snapshot = serialize_state_snapshot(state)
+        
+        # Get Supabase client
+        supabase = get_supabase_client()
+        
+        # INSERT event (timeout 5s)
+        result = supabase.table("events").insert({
+            "block_id": block_id,
+            "event_type": event_type,
+            "node_name": node_name,
+            "state_snapshot": state_snapshot,
+            "metadata": None  # Legacy field, not used by LangGraph events
+        }).execute()
+        
+        # Success log (structured)
+        logger.info(
+            "event.inserted",
+            block_id=block_id,
+            event_type=event_type,
+            node_name=node_name,
+            snapshot_size=len(json.dumps(state_snapshot))
+        )
+        
+    except Exception as e:
+        # Best-effort pattern: Log error but DON'T raise
+        # Rationale: Audit trail failures should NOT fail validation workflow
+        logger.warning(
+            "event.insert_failed",
+            block_id=block_id,
+            event_type=event_type,
+            node_name=node_name,
+            error=str(e),
+            error_type=type(e).__name__
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # NODE 1: ValidateNomenclature
 # ─────────────────────────────────────────────────────────────────────────────
 

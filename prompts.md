@@ -18164,3 +18164,123 @@ CREATE docs/US-018/T-1804-REPORT-TechnicalSpec.md       (~507 LOC)
 Implementar nodo GenerateReport con Jinja2 templates para generar reportes JSON estructurados de validación. Template NULL-safe con defaults, persistencia en DB, 8 tests unitarios + regression + integration smoke test. Duración: 2 días (16h), 3 commits, ~1,070 LOC total.
 
 ---
+
+## [254] - T-1805 Audit Trail per Node Transition (LangGraph Events)
+**Fecha:** 2026-05-08 19:45
+**Prompt Original:**
+> Usuario dice "continuamos" después de completar T-1804 Report Generator Node.
+> Siguiente ticket en US-018 backlog: T-1805-AGENT "Audit Trail per Node Transition" (3 SP, 3 días).
+> 
+> **Contexto:**
+> - T-1801 ✅ StateGraph Setup (11/11 tests PASS)
+> - T-1802 ✅ LLM Classification + Circuit Breaker (32/32 tests PASS)
+> - T-1803 ✅ Refactor Validators as Nodes (5/5 tests PASS, 26/26 regression PASS)
+> - T-1804 ✅ Report Generator Node (10/10 tests PASS, 74/74 regression PASS)
+> - **NEXT:** T-1805 Audit Trail per Node Transition
+> 
+> **Objetivo T-1805:**
+> Insertar eventos granulares en tabla `events` por cada transición de nodo LangGraph para auditabilidad completa del flujo de validación.
+> 
+> **Especificación (docs/09-mvp-backlog.md):**
+> 1. Middleware LangGraph `on_node_enter(node_name, state)` y `on_node_exit(node_name, state, result)` hooks
+> 2. Helper `insert_event(block_id, event_type, node_name, state_snapshot)`: INSERT en tabla `events`
+> 3. Event types: `node_entered`, `node_completed`, `transition_conditional`, `circuit_breaker_tripped`, `fallback_activated`
+> 4. State snapshot: serializar ValidationState a JSONB (solo campos ligeros: `overall_status`, `nomenclature_valid`, `geometry_valid`, `classification_method`)
+> 5. Performance: batch inserts si hay >10 eventos (evitar N+1 queries)
+> 6. Índice en `block_id` + `node_name` + `timestamp` (query performance <50ms)
+> 7. Integración con dashboard Grafana (query SQL documentado, dashboard opcional MVP)
+> 8. Tests: 6 tests (HP 8 eventos flow completo, EC 3 eventos early rejection, INT query performance <50ms, INT eventos ordenados cronológicamente)
+> 
+> **DoD:**
+> - Auditabilidad completa del flujo (8-12 eventos por bloque según path)
+> - Tabla `events` poblada con eventos granulares
+> - Dashboard Grafana query documentado (SQL)
+> - Tests 6/6 PASS
+> - Zero regression: 74/74 tests baseline PASS
+
+**Resumen de la Respuesta/Acción:**
+
+**PLAN DETALLADO T-1805 (3 días, 24 horas)**
+
+| Tarea | Estimado | Descripción | Archivos Afectados |
+|-------|----------|-------------|-------------------|
+| **Día 1: DB Schema + Helper Function (8h)** ||||
+| 1. Migration tabla events | 1h | Añadir columnas `node_name` VARCHAR(100) y `state_snapshot` JSONB a tabla events existente. Migration en supabase/migrations/. Índices: `idx_events_node_name`, `idx_events_block_id_node_name_timestamp` (compound). | supabase/migrations/20260508_add_langgraph_events.sql (~50 LOC) |
+| 2. Event types ENUM | 0.5h | Definir EventType ENUM en src/agent/constants.py: NODE_ENTERED, NODE_COMPLETED, TRANSITION_CONDITIONAL, CIRCUIT_BREAKER_TRIPPED, FALLBACK_ACTIVATED. | src/agent/constants.py (+30 LOC) |
+| 3. State serializer | 1.5h | Helper function `serialize_state_snapshot(state: ValidationState) -> dict`: extrae solo campos ligeros (overall_status, nomenclature_valid, geometry_valid, classification_method, validation_path length). Excluye geometry_metadata (pesado). | src/agent/graph/nodes.py (+40 LOC) |
+| 4. insert_event helper | 2h | Function `insert_event(block_id: str, event_type: EventType, node_name: str, state: ValidationState) -> None`: INSERT en tabla events con Supabase client. Best-effort pattern: DB failures logged WARNING (no fatal). Returns None (fire-and-forget). | src/agent/graph/nodes.py (+60 LOC) |
+| 5. Batch insert optimization | 3h | Implementar `EventBuffer` class con context manager: acumula eventos in-memory, INSERT batch en __exit__. Threshold: 10 eventos. Uso: `with EventBuffer(block_id) as buffer: buffer.add(event_type, node_name, state)`. Fallback: si buffer falla → insert_event individual. | src/agent/graph/events.py (NEW, ~120 LOC) |
+| **Día 2: LangGraph Middleware + Integration (8h)** ||||
+| 6. LangGraph middleware hooks | 3h | Implementar `on_node_enter(node_name, state)` y `on_node_exit(node_name, state, result)` usando LangGraph `@graph.before_node` y `@graph.after_node` decorators. Llamar insert_event con NODE_ENTERED/NODE_COMPLETED. | src/agent/graph/graph.py (+80 LOC) |
+| 7. Integrar en nodos existentes | 2h | Verificar que middleware captura TODOS los nodos: ExtractGeometry, ValidateNomenclature, ValidateGeometry, ClassifyTipologia, EnrichMetadata, GenerateReport, MarkValidated, MarkRejected. No modificar código nodos (middleware automático). | src/agent/graph/graph.py (verification) |
+| 8. Circuit breaker events | 1.5h | En node_classify_tipologia (T-1802): cuando circuit breaker activa fallback → llamar insert_event(CIRCUIT_BREAKER_TRIPPED) + insert_event(FALLBACK_ACTIVATED). | src/agent/graph/nodes.py (+20 LOC) |
+| 9. Transition events | 1.5h | En edges condicionales (should_continue_after_nomenclature, should_continue_after_geometry): llamar insert_event(TRANSITION_CONDITIONAL) con metadata `{condition: "nomenclature_valid == False", next_node: "MarkRejected"}`. | src/agent/graph/graph.py (+40 LOC) |
+| **Día 3: Tests + Documentation (8h)** ||||
+| 10. Unit tests (6 tests) | 4h | tests/agent/unit/test_audit_trail.py: HP-01 flow completo → 8 eventos (START, ExtractGeometry entered/completed, ValidateNomenclature, ValidateGeometry, ClassifyTipologia, EnrichMetadata, GenerateReport, VALIDATED), EC-02 early rejection → 3 eventos (START, ValidateNomenclature, REJECTED), INT-03 query performance <50ms para 100 bloques, INT-04 eventos cronológicamente ordenados, EC-05 batch insert >10 eventos, EC-06 DB failure → WARNING logged (non-fatal). | tests/agent/unit/test_audit_trail.py (NEW, ~450 LOC) |
+| 11. Regression validation | 1h | Ejecutar tests baseline: T-1801 (11), T-1802 (32), T-1803 (5), T-1804 (10), US-002 (26) = 84/84 PASS. Verificar middleware NO rompe flows existentes. | (pytest run) |
+| 12. Grafana query SQL | 1h | Crear query SQL en docs/US-018/grafana-timeline-query.sql: SELECT node_name, state_snapshot->>'overall_status', timestamp FROM events WHERE block_id = $block_id ORDER BY timestamp. Dashboard panel config JSON template (Gantt timeline). | docs/US-018/grafana-timeline-query.sql (NEW, ~80 LOC) |
+| 13. TechnicalSpec documentation | 2h | docs/US-018/T-1805-AUDIT-TechnicalSpec.md: Middleware architecture, event types table, state serialization logic, batch insert optimization, performance benchmarks, Grafana integration guide, future enhancements (Prometheus metrics). | docs/US-018/T-1805-AUDIT-TechnicalSpec.md (NEW, ~400 LOC) |
+
+**TOTAL ESTIMADO:**
+- **Día 1:** 8h (Migration + Helper + Batch optimization)
+- **Día 2:** 8h (Middleware + Integration)
+- **Día 3:** 8h (Tests + Regression + Documentation)
+- **TOTAL:** 24h = 3 días = 3 SP
+
+**ARCHIVOS A CREAR/MODIFICAR:**
+
+```
+CREATE supabase/migrations/20260508_add_langgraph_events.sql    (~50 LOC)
+CREATE src/agent/graph/events.py                               (~120 LOC)
+CREATE tests/agent/unit/test_audit_trail.py                    (~450 LOC)
+CREATE docs/US-018/T-1805-AUDIT-TechnicalSpec.md               (~400 LOC)
+CREATE docs/US-018/grafana-timeline-query.sql                  (~80 LOC)
+MODIFY src/agent/constants.py                                  (+30 LOC)
+MODIFY src/agent/graph/nodes.py                                (+120 LOC)
+MODIFY src/agent/graph/graph.py                                (+120 LOC)
+MODIFY prompts.md                                              (this entry)
+```
+
+**DEPENDENCIAS:**
+- ✅ T-1801 StateGraph Setup (nodos existentes para instrumentar)
+- ✅ T-1802 LLM Classification (circuit breaker events)
+- ✅ T-1804 Report Generator (all nodes implemented)
+- ✅ Tabla `events` existe (created in T-020-DB, estructura verificada en docs/05-data-model.md)
+- 🆕 Requiere: Migration para añadir `node_name` + `state_snapshot` columns
+
+**RIESGOS & MITIGACIONES:**
+1. **Performance overhead** (INSERT en cada transición):
+   - Mitigation: Batch inserts (10 eventos buffer), índices compuestos, best-effort pattern (no bloquea ejecución)
+2. **DB connection pool exhaustion** (muchos INSERTs simultáneos):
+   - Mitigation: Fire-and-forget pattern, timeout 5s en insert_event, fallback a logs si DB down
+3. **Regression risk** (middleware afecta flujo existente):
+   - Mitigation: Middleware NO modifica state (read-only), tests 84/84 baseline, feature flag ENABLE_AUDIT_TRAIL (default true)
+
+**ACCEPTANCE CRITERIA:**
+- ✅ Migration ejecuta sin errores en Supabase
+- ✅ Middleware captura eventos de TODOS los nodos automáticamente
+- ✅ Tabla `events` contiene 8-12 registros por bloque procesado (según path: validated = 8, rejected early = 3-5)
+- ✅ Query SQL Grafana documented (timeline visualization)
+- ✅ Tests 6/6 PASS
+- ✅ Zero regression: 84/84 tests baseline PASS
+- ✅ Performance: query eventos <50ms para 100 bloques
+- ✅ Batch inserts funcional (>10 eventos → single INSERT con array)
+
+**LESSONS LEARNED ANTICIPATED (de tickets anteriores):**
+1. **Migration testing:** Aplicar migration en local primero, verificar backward compatibility
+2. **Best-effort pattern:** DB failures NO deben fallar StateGraph execution (logs + continue)
+3. **State serialization:** Solo campos ligeros en JSONB (evitar geometry_metadata que puede ser >1MB)
+4. **Índices compound:** block_id + node_name + timestamp (covering index para query Grafana)
+5. **Feature flag:** `ENABLE_AUDIT_TRAIL` para rollback si afecta performance
+
+**DEVIATIONS ESPERADAS:**
+- Grafana dashboard JSON template: opcional (solo query SQL documentado, dashboard full implementation en T-1809)
+- Integration test con UI: deferred a T-1807-FRONT (Progress Indicator consume estos eventos)
+
+**NEXT STEPS (POST T-1805):**
+- T-1806-INFRA: E2E LangGraph Integration Test (3 SP, 3 días)
+- T-1807-FRONT: LangGraph Progress Indicator UI (2 SP, 2 días) — consume eventos de T-1805
+
+**STATUS:** ⏸️ PENDING — Esperando aprobación usuario antes de implementar
+
+---
