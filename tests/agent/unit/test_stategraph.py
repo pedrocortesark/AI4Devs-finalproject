@@ -33,6 +33,7 @@ Created: 2026-05-04
 
 import pytest
 from datetime import datetime
+from unittest.mock import patch, MagicMock
 
 try:
     from src.agent.graph.state import make_initial_state, ValidationStatus, ClassificationMethod
@@ -48,6 +49,51 @@ except ImportError:
         node_validate_nomenclature,
         node_mark_rejected,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test Fixtures (T-1802: Mock LLM Client for T-1801 tests)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def mock_llm_client():
+    """
+    Mock LLM client for all StateGraph tests (T-1801).
+    
+    T-1802 updated node_classify_tipologia to use real LLM client,
+    but T-1801 tests don't need real LLM calls (testing graph structure, not classification).
+    """
+    with patch("src.agent.graph.llm_client.get_llm_client") as mock_get_llm:
+        mock_client = MagicMock()
+        mock_client.classify_tipologia.return_value = {
+            "tipologia": "dovela",
+            "confidence": 0.85,
+            "reasoning": "Test classification (mocked)",
+            "classified_at": datetime.utcnow().isoformat() + "Z",
+        }
+        mock_get_llm.return_value = mock_client
+        yield mock_client
+
+
+@pytest.fixture(autouse=True)
+def mock_circuit_breaker():
+    """Mock Circuit Breaker for all StateGraph tests."""
+    with patch("src.agent.graph.circuit_breaker.get_circuit_breaker") as mock_get_cb:
+        mock_cb = MagicMock()
+        mock_cb.is_open.return_value = False  # Circuit always closed in tests
+        mock_cb.record_success.return_value = None
+        mock_cb.record_failure.return_value = None
+        mock_get_cb.return_value = mock_cb
+        yield mock_cb
+
+
+@pytest.fixture(autouse=True)
+def mock_redis_client():
+    """Mock Redis client for all StateGraph tests."""
+    with patch("infra.redis_client.get_redis_client") as mock_get_redis:
+        mock_redis = MagicMock()
+        mock_get_redis.return_value = mock_redis
+        yield mock_redis
 
 
 class TestStateGraphStructure:
@@ -144,8 +190,8 @@ class TestHappyPathFlow:
         assert "tipologia" in final_state["semantic_data"]
         assert "confidence" in final_state["semantic_data"]
         
-        # AND: classification_method should be set
-        assert final_state["classification_method"] == ClassificationMethod.FALLBACK_REGEX
+        # AND: classification_method should be LLM_GPT4 (T-1802: real LLM classification)
+        assert final_state["classification_method"] == ClassificationMethod.LLM_GPT4
 
 
 class TestFailFastBehavior:
