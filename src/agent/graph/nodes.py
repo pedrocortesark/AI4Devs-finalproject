@@ -249,16 +249,22 @@ def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
 
     Only reached if geometry validation passed.
 
-    Current implementation (T-1801 skeleton):
-        Returns placeholder semantic_data with fallback classification.
+    Implementation (T-1802):
+        1. Check Circuit Breaker status → if open, use fallback regex
+        2. Sanitize user strings (prompt injection prevention)
+        3. Call OpenAI GPT-4 Turbo with retry logic
+        4. Validate confidence >= 0.7 threshold
+        5. If LLM fails or low confidence → fallback regex
+        6. Record success/failure in Circuit Breaker
+        7. Return semantic_data with classification_method ENUM
 
-    Full implementation (T-1802):
-        Will call OpenAI GPT-4 Turbo with prompt engineering.
-        Implements Circuit Breaker (5 failures → fallback to regex).
-        Confidence threshold: if LLM confidence < 0.7 → use fallback.
+    Circuit Breaker (GLOBAL scope):
+        - 5 consecutive failures (ANY block) → trip circuit
+        - Persists in Redis (shared across workers)
+        - Auto-recovery after 5-minute TTL
 
     Args:
-        state: Current ValidationState (reads: geometry_metadata, circuit_breaker_tripped)
+        state: Current ValidationState (reads: geometry_metadata, block_id)
 
     Returns:
         Partial state update with:
@@ -267,27 +273,136 @@ def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
           - circuit_breaker_tripped (bool, updated if Circuit Breaker activated)
           - validation_path (list with "ClassifyTipologia" appended)
     """
+    from src.agent.graph.llm_client import get_llm_client, LLMClassificationError
+    from src.agent.graph.circuit_breaker import get_circuit_breaker
+    from src.agent.graph.classification_helpers import (
+        fallback_classify_by_regex,
+        sanitize_user_string,
+        validate_llm_confidence,
+        merge_llm_with_metadata,
+    )
+    from src.agent.constants import CONFIDENCE_THRESHOLD
+    from infra.redis_client import get_redis_client
+    
     node_name = "ClassifyTipologia"
-    logger.info("node.enter", node=node_name, block_id=state.get("block_id"))
+    block_id = state.get("block_id", "unknown")
+    logger.info("node.enter", node=node_name, block_id=block_id)
 
-    # T-1801 SKELETON: Return placeholder classification with fallback method
-    # In production (T-1802): will call GPT-4 or use Circuit Breaker
-    semantic_data = {
-        "tipologia": "other",  # Placeholder: will be "dovela"|"capitel"|"columna"|etc.
-        "material": "Unknown",  # Will be inferred from tipologia
-        "confidence": 0.3,  # Low confidence for fallback
-        "reasoning": "T-1801 skeleton: placeholder classification",
-        "classified_at": datetime.utcnow().isoformat(),
-    }
-
-    classification_method = ClassificationMethod.FALLBACK_REGEX
-    circuit_breaker_tripped = state.get("circuit_breaker_tripped", False)
+    # Initialize Circuit Breaker and LLM client
+    redis_client = get_redis_client()  # May return None if unavailable
+    circuit_breaker = get_circuit_breaker(redis_client)
+    
+    # Extract geometry metadata
+    geometry_metadata = state.get("geometry_metadata", {})
+    volume = geometry_metadata.get("volume", 0.0)
+    bbox = geometry_metadata.get("bbox", {})
+    layers = geometry_metadata.get("layers", [])
+    vertices_count = geometry_metadata.get("vertices_count", 0)
+    
+    # Sanitize iso_code (prevent prompt injection)
+    iso_code = sanitize_user_string(block_id)
+    
+    # Check if Circuit Breaker is OPEN
+    if circuit_breaker.is_open():
+        logger.warning(
+            "circuit_breaker_open_using_fallback",
+            node=node_name,
+            block_id=block_id,
+        )
+        
+        # Use fallback regex classification
+        semantic_data = fallback_classify_by_regex(iso_code)
+        semantic_data = merge_llm_with_metadata(semantic_data, geometry_metadata)
+        classification_method = ClassificationMethod.FALLBACK_REGEX
+        circuit_breaker_tripped = True
+        
+        return {
+            "semantic_data": semantic_data,
+            "classification_method": classification_method,
+            "circuit_breaker_tripped": circuit_breaker_tripped,
+            "validation_path": _append_to_path(state, node_name),
+        }
+    
+    # Attempt LLM classification
+    try:
+        llm_client = get_llm_client()
+        llm_result = llm_client.classify_tipologia(
+            volume=volume,
+            bbox=bbox,
+            layers=layers,
+            vertices_count=vertices_count,
+            iso_code=iso_code,
+        )
+        
+        # Validate confidence threshold
+        confidence = llm_result.get("confidence", 0.0)
+        if not validate_llm_confidence(confidence, CONFIDENCE_THRESHOLD):
+            logger.info(
+                "low_confidence_fallback",
+                node=node_name,
+                block_id=block_id,
+                confidence=confidence,
+                threshold=CONFIDENCE_THRESHOLD,
+            )
+            
+            # Confidence too low → use fallback
+            semantic_data = fallback_classify_by_regex(iso_code)
+            semantic_data = merge_llm_with_metadata(semantic_data, geometry_metadata)
+            classification_method = ClassificationMethod.FALLBACK_REGEX
+            circuit_breaker_tripped = False  # Not a Circuit Breaker event
+            
+            # Still record success in CB (LLM worked, just low confidence)
+            circuit_breaker.record_success()
+        else:
+            # LLM classification successful with high confidence
+            semantic_data = merge_llm_with_metadata(llm_result, geometry_metadata)
+            classification_method = ClassificationMethod.LLM_GPT4
+            circuit_breaker_tripped = False
+            
+            # Record success in Circuit Breaker
+            circuit_breaker.record_success()
+            
+            logger.info(
+                "llm_classification_success",
+                node=node_name,
+                block_id=block_id,
+                tipologia=semantic_data["tipologia"],
+                confidence=confidence,
+            )
+        
+    except LLMClassificationError as e:
+        # LLM failed → record failure and use fallback
+        logger.error(
+            "llm_classification_failed",
+            node=node_name,
+            block_id=block_id,
+            error=str(e),
+        )
+        
+        # Record failure in Circuit Breaker (may trip circuit)
+        circuit_breaker.record_failure()
+        
+        # Use fallback regex classification
+        semantic_data = fallback_classify_by_regex(iso_code)
+        semantic_data = merge_llm_with_metadata(semantic_data, geometry_metadata)
+        classification_method = ClassificationMethod.FALLBACK_REGEX
+        
+        # Check if Circuit Breaker tripped
+        circuit_breaker_tripped = circuit_breaker.is_open()
+        
+        if circuit_breaker_tripped:
+            logger.error(
+                "circuit_breaker_newly_tripped",
+                node=node_name,
+                block_id=block_id,
+            )
 
     logger.info(
         "node.complete",
         node=node_name,
         tipologia=semantic_data["tipologia"],
         method=classification_method.value,
+        circuit_breaker_tripped=circuit_breaker_tripped,
     )
 
     return {

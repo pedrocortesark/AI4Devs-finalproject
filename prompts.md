@@ -17358,3 +17358,92 @@ Implementación completa T-1801 StateGraph Setup (5 SP, 2 días):
 
 **Branch:** `feature/US-018-T-1801-stategraph-setup`
 **Commits pending:** 2 (skeleton implementation + tests)
+
+## [250] - T-1802 LLM Classification + Circuit Breaker GLOBAL
+**Fecha:** 2026-05-04 16:30
+**Prompt Original:**
+> Vamos al siguiente punto
+
+**Contexto:**
+Usuario aprobó avanzar al siguiente ticket tras completar T-1801 StateGraph Setup (11/11 tests PASS). Segunda implementación de US-018 (AI Classification con LangGraph).
+
+**Planificación T-1802 (5 SP, 3 días):**
+
+OBJETIVO: Implementar nodo `node_classify_tipologia` con GPT-4 Turbo + Circuit Breaker GLOBAL + confidence threshold 0.7 + prompt injection prevention.
+
+COMPONENTES A IMPLEMENTAR:
+
+1. **LangChain OpenAI Client** (`src/agent/graph/llm_client.py`):
+   - Model: "gpt-4-turbo"
+   - Temperature: 0.2 (determinismo)
+   - Response format: JSON Mode forzado
+   - Timeout: 10s con retry (Tenacity 3 intentos: 2s, 4s, 8s exponential backoff)
+
+2. **Prompt Engineering** (`src/agent/constants.py`):
+   - CLASSIFICATION_PROMPTS dict versionado
+   - Schema JSON: {tipologia, confidence, reasoning}
+   - Tipos: 'dovela'|'capitel'|'columna'|'clave'|'imposta'|'other'
+   - Directiva: "BE CONSERVATIVE: if uncertain, return 'other'"
+
+3. **Circuit Breaker GLOBAL** (`src/agent/graph/circuit_breaker.py`):
+   - Key Redis: `circuit_breaker:openai:global` (scope GLOBAL, no per-block)
+   - Lógica: 5 fallos consecutivos ANY block (contador global, TTL 300s) → fallback
+   - Redis failure handling: Try/Except RedisConnectionError → in-memory CB fallback
+
+4. **Confidence Threshold** (en node_classify_tipologia):
+   - Si LLM devuelve JSON válido PERO confidence < 0.7 → fallback regex
+   - Configurable: CONFIDENCE_THRESHOLD = 0.7 en constants
+
+5. **Fallback Regex Classification**:
+   - Patterns: `SF-C12-D-*` → "dovela", `SF-C12-C-*` → "capitel"
+   - Default catch-all: "other" (confidence 0.3, never fails)
+
+6. **Prompt Injection Prevention**:
+   - Sanitizar user strings (rhino metadata)
+   - Forbidden patterns: "ignore previous", "you are now", "disregard"
+   - Acción: REDACTED (replace con placeholder)
+
+7. **Helper Functions**:
+   - `get_material_color()` basado en clasificación (integración MATERIAL_COLORS dict)
+
+8. **Tests (18 parametrizados)**:
+   - HP-01: JSON válido → clasificación dovela confidence 0.9
+   - EC-02: Timeout 3 reintentos → fallback regex
+   - ERR-03: Invalid JSON response → fallback
+   - ERR-04: HTTP 429 rate limit → fallback
+   - CB-05: 5 fallos consecutivos → CB activated + Redis flag
+   - EC-06: Low confidence 0.52 → fallback
+   - EC-07: Redis down → in-memory CB
+   - EC-08: Prompt injection → sanitized
+   - ... (10 tests adicionales parametrizados)
+
+ARTIFACTS A CREAR:
+- `src/agent/graph/llm_client.py` (~150 LOC): OpenAI client + retry logic
+- `src/agent/graph/circuit_breaker.py` (~200 LOC): CB GLOBAL + Redis persistence
+- `src/agent/constants.py` (actualizado): CLASSIFICATION_PROMPTS, CONFIDENCE_THRESHOLD, FORBIDDEN_PATTERNS, FALLBACK_PATTERNS
+- `src/agent/graph/nodes.py` (actualizado): node_classify_tipologia con lógica real
+- `tests/agent/unit/test_llm_classification.py` (~400 LOC): 18 tests parametrizados
+- `tests/agent/unit/test_circuit_breaker.py` (~250 LOC): 8 tests CB GLOBAL
+
+DOD (Definition of Done):
+✅ Nodo clasifica 5 tipologías correctamente (dovela, capitel, columna, clave, imposta)
+✅ Fallback activado tras 5 fallos GLOBALES (no per-block)
+✅ Circuit Breaker persiste en Redis con fallback in-memory si Redis down
+✅ Tests 18/18 PASS (LLM classification) + 8/8 PASS (Circuit Breaker) = 26/26
+✅ Prompts versionados en constants
+✅ Confidence threshold 0.7 implemented
+✅ Prompt injection prevention active
+✅ Mock OpenAI en tests (zero tokens consumidos en CI/CD)
+
+RIESGOS IDENTIFICADOS:
+- LLM Cost Overrun: Mitigado con CB + mock tests
+- GPT-4 inestable: Mitigado con fallback regex siempre disponible
+- Redis down: Mitigado con in-memory CB fallback
+
+TIMELINE:
+- Día 1: LangChain client + prompts + helpers (8h)
+- Día 2: Circuit Breaker GLOBAL + Redis integration (8h)
+- Día 3: Tests 26/26 + confidence threshold + injection prevention (8h)
+Total: 24 horas (3 días)
+
+NEXT: Tras aprobación usuario, comenzar implementación.
