@@ -1346,3 +1346,198 @@ Update state with results → Dict[str, Any]
   - Tests coverage 100%
 
 **Prompts:** #252 (T-1803 plan + completion)
+
+---
+
+### Sprint 10 — Day 10-11 (Fri 09/05) — T-1804: Report Generator Node (Jinja2 Templates) (✅ COMPLETED)
+
+**Ticket:** US-018/T-1804-AGENT  
+**Story Points:** 2 SP  
+**Estimado:** 2 días (16 horas)  
+**Real:** 2 días (16 horas)  
+**Status:** ✅ COMPLETED (10/10 tests PASS, 74/74 regression PASS, zero regression)
+
+**Objetivo:** Implementar nodo `node_generate_report` que genera reportes de validación estructurados JSON usando templates Jinja2. El reporte se persiste en `blocks.validation_report` JSONB column y es consumido por frontend `ValidationReportModal`.
+
+**Implementación (Day 1 - 8h):**
+
+1. **Jinja2 Template Creation** (~150 LOC en src/agent/templates/validation_report.json.j2):
+   - **Structure:** JSON con 7 secciones principales
+     - `is_valid` (bool) + `overall_status` (validated/rejected/processing)
+     - `errors[]` - Combina nomenclature_errors + geometry errors en single array
+     - `metadata{}` - iso_code (extraído de block_id), material, tipologia, classification_method
+     - `semantic_data{}` - Clasificación LLM (tipologia, confidence, reasoning) o null si rejected early
+     - `geometry_summary{}` - Resumen geométrico (volume, bbox, vertices_count, faces_count, has_mesh)
+     - `validation_path[]` - Lista de nodos ejecutados (debugging aid)
+     - `timestamp`, `validated_at`, `validated_by`, `circuit_breaker_tripped`, `retry_count`
+   
+   - **NULL-safe Rendering:**
+     - All optional fields wrapped in `{% if %}...{% else %}...{% endif %}`
+     - semantic_data = null if LLM not executed (early rejection path)
+     - Material defaults to "Unknown" if user_strings missing Material key
+     - Errors array empty `[]` if nomenclature_valid=True AND geometry_valid=True
+   
+   - **Boolean Rendering Fix (Day 2):**
+     - WRONG: `{{ (overall_status == "validated") | lower }}` → outputs Python "True" (invalid JSON)
+     - CORRECT: `{% if overall_status == "validated" %}true{% else %}false{% endif %}` → outputs JSON true
+     - Applied to: `is_valid`, `has_mesh`, `circuit_breaker_tripped`
+   
+   - **iso_code Extraction Fix (Day 2):**
+     - WRONG: `{{ block_id.split('-')[-1] }}` → "GLPER.B-PÀE0720.07-03" → "03" (splits on ALL hyphens)
+     - CORRECT: `{{ block_id.split('GLPER.B-')[-1] }}` → "PÀE0720.07-03" (prefix-specific split)
+   
+   - **classification_method NULL Rendering Fix (Day 2):**
+     - WRONG: `"{{ classification_method if classification_method else 'unknown' }}"` → string "unknown"
+     - CORRECT: `{% if classification_method %}"{{ classification_method }}"{% else %}null{% endif %}` → JSON null
+
+2. **node_generate_report Implementation** (~145 LOC en src/agent/graph/nodes.py):
+   - **Jinja2 Environment Setup:**
+     - FileSystemLoader("src/agent/templates")
+     - Template validation: `template.get_template("validation_report.json.j2")`
+     - TemplateNotFound exception handling → returns error_messages updated
+   
+   - **Template Context Preparation (15 fields):**
+     - Extracts all fields from ValidationState (block_id, overall_status, nomenclature_errors, geometry_metadata, semantic_data, etc.)
+     - Uses `.get(field, default)` for NULL-safe extraction
+     - Adds timestamp: `datetime.utcnow().isoformat()`
+     - Adds validated_by: `"SF-PM-Agent-v0.1.0"` (TODO: extract from constants)
+   
+   - **JSON Validation Post-Render:**
+     - `json.loads(report_json_str)` after `template.render(context)`
+     - Catches invalid JSON early (before DB persist)
+     - JSONDecodeError → logs error, returns error_messages updated
+   
+   - **Database Persistence (best-effort pattern):**
+     - Supabase UPDATE: `blocks.validation_report = report_dict::jsonb WHERE block_id = %s`
+     - Success: logs `report.persisted` (block_id, rows_updated)
+     - Failure: logs WARNING (non-fatal), node continues
+     - **Rationale:** Report generation succeeds even if DB fails (data in state, can be reconstructed)
+   
+   - **Helper Function Created:**
+     - `_append_to_errors(state, error_msg) → list` (~20 LOC)
+     - Similar to `_append_to_path`, appends error to state.error_messages
+
+3. **Graph Edges Verification:**
+   - **Flow:** EnrichMetadata → GenerateReport → MarkValidated (already correct from T-1801)
+   - **No changes needed** (edges already correct)
+
+**Commits Day 1:**
+- `e32fb70` - docs(agent): T-1804 Planning registered in prompts.md (#253)
+- `8707bb0` - feat(agent): T-1804 Day 1 - Jinja2 Template + GenerateReport Node + DB Persistence (~295 LOC)
+
+**Testing + Bug Fixes (Day 2 - 8h):**
+
+4. **10 Unit Tests Created** (~580 LOC en tests/agent/unit/test_report_generator.py):
+   - **HP-01:** Happy path complete report (all fields populated) ✅
+   - **HP-02:** Semantic_data present when classification_method = LLM_GPT4 ✅
+   - **EC-01:** Report without LLM (semantic_data=null, early rejection) ✅
+   - **EC-02:** Rejected by nomenclature (errors array populated) ✅
+   - **EC-03:** Rejected by geometry ✅
+   - **EC-04:** Material defaults to "Unknown" if missing ✅
+   - **INT-01:** JSONB schema compliance (structure validation) ✅
+   - **INT-02:** Special characters in iso_code (UTF-8 handling: PÀE0720.07-03) ✅
+   - **ERROR-01:** Template not found handling (error_messages updated, DB NOT called) ✅
+   - **ERROR-02:** Database persistence non-fatal (node succeeds, WARNING logged) ✅
+   
+   - **Mocking strategy:**
+     - Supabase client MOCKED (no real DB calls)
+     - Jinja2 template rendering REAL (validates actual template logic)
+     - Fixtures: 5 state scenarios (happy path, nomenclature fail, geometry fail, material unknown, special chars)
+   
+   - **Result: 10/10 PASS**
+
+5. **Zero Regression Verification:**
+   - **T-1801 StateGraph:** 11/11 PASS ✅
+   - **T-1802 LLM + Circuit Breaker:** 32/32 PASS ✅
+   - **T-1803 Validators as Nodes:** 5/5 PASS ✅
+   - **US-002 Legacy Validators:** 26/26 PASS ✅
+   - **Total: 74/74 PASS** (zero regression verified)
+
+**Commit Day 2:**
+- `2c7a8af` - test(agent): T-1804 Day 2 - Unit Tests + Template Fixes + Regression Validation (~602 LOC)
+
+**Bugs Fixed (3 total, discovered in tests):**
+1. **Boolean Rendering:** `| lower` filter outputs Python "True"/"False" (invalid JSON) → Use explicit `{% if %}true{% else %}false{% endif %}`
+2. **iso_code Extraction:** `split('-')[-1]` splits on all hyphens (fails with "PÀE0720.07-03" → "03") → Use `split('GLPER.B-')[-1]`
+3. **classification_method NULL:** String "unknown" when should be JSON null → Use `{% if %}...{% else %}null{% endif %}`
+
+**Documentation (Day 2 - included in 8h):**
+
+6. **docs/US-018/T-1804-REPORT-TechnicalSpec.md** (~507 LOC):
+   - Template structure + field mappings (ValidationState → JSON report)
+   - NULL-safe rendering patterns documented
+   - Bug fixes explained (3 critical fixes with wrong/correct examples)
+   - Database persistence best-effort pattern rationale
+   - Test strategy matrix (10 tests)
+   - Future enhancements backlog (4 items: template caching, versioning, partial updates, analytics queries)
+   - Performance metrics (template rendering ~5-10ms, report size ~1.2 KB avg)
+
+7. **prompts.md #253 Updated** (~200 LOC completion entry):
+   - Metrics table (estimated vs real LOC, tests, duration)
+   - Implementation highlights (template features, node logic, error handling)
+   - Deviations from plan (integration test skipped, DB persistence inline)
+   - Lecciones aprendidas (5 insights: boolean filters, string splitting, NULL rendering, best-effort pattern, UTF-8)
+   - Files modified/created list
+
+**Lessons Learned (5 insights):**
+
+1. **Jinja2 Boolean Filters:** `| lower` filter outputs Python boolean "True"/"False" (invalid JSON) → Use `{% if %}true{% else %}false{% endif %}` explicitly
+2. **String Splitting Edge Cases:** `split('-')[-1]` fails with intermediate hyphens (ISO codes like "PÀE0720.07-03") → Use prefix-specific split `split('GLPER.B-')[-1]`
+3. **NULL vs String "null":** JSON null requires no quotes `{% if x %}"{{x}}"{% else %}null{% endif %}` (NOT `"null"` string)
+4. **Best-Effort DB Persistence:** DB failures shouldn't fail graph execution → Log WARNING + continue (report data in state, can be reconstructed)
+5. **UTF-8 in Templates:** Jinja2 handles UTF-8 correctly with `json.dumps(ensure_ascii=False)` in tests (accents preserved: "PÀE0720", "Montjuïc")
+
+**Technical Implementation Details:**
+
+**Template Rendering Flow:**
+```
+ValidationState (15 fields)
+    ↓
+Extract context (block_id, overall_status, errors, semantic_data, etc.)
+    ↓
+Jinja2 template.render(context) → JSON string
+    ↓
+json.loads(report_json_str) → Validate parseability
+    ↓
+Supabase UPDATE blocks.validation_report = report_dict::jsonb
+    ↓
+Return validation_path updated (report NOT in state, keeps 15 fields limit)
+```
+
+**Benefits:**
+- **NULL-safe:** Template handles missing semantic_data (early rejection path) gracefully
+- **Maintainable:** Template separate from code (designers can modify JSON structure)
+- **Testable:** Real template rendering in tests (not mocked, validates actual logic)
+- **Extensible:** Adding fields → edit template only (no code changes)
+- **Compatible:** JSON conforms to backend ValidationReport Pydantic schema + frontend ValidationReportModal
+
+**Files Created/Modified:**
+- `src/agent/templates/validation_report.json.j2` (NEW): Template (~150 LOC)
+- `src/agent/graph/nodes.py` (updated): node_generate_report + _append_to_errors (~145 LOC)
+- `tests/agent/unit/test_report_generator.py` (NEW): 10 unit tests (~580 LOC)
+- `docs/US-018/T-1804-REPORT-TechnicalSpec.md` (NEW): Full spec (~507 LOC)
+- `prompts.md` (updated): #253 completion entry (~200 LOC)
+- `memory-bank/progress.md` (updated): This entry
+
+**Timeline Impact:**
+- Estimado original: 2 días (16 horas)
+- Real: 2 días (16 horas)
+- **On time:** Scope correcto, bugs encontrados en tests (no retrasos), integration test skipped offset bug fixing time
+- **US-018 tracking:** 4 tickets completed (T-1801 2.5 días, T-1802 2 días, T-1803 2.5 días, T-1804 2 días) = 9 días / 30.5 SP total = 13.1% done (4/15 tickets, 9 SP/30.5 SP)
+- **Buffer remaining:** 2.5 días total buffer (1 día T-1801 + 1 día T-1802 + 0.5 día T-1803 + 0 día T-1804)
+
+**Deviations from Plan:**
+1. **Task 3 (Graph edges):** Estimated 1h, real 0h → Edges already correct from T-1801 (no changes needed)
+2. **Task 4 (DB persistence):** Estimated 2h separate helper, real 2h inline → Simplified to inline pattern (best-effort, no reusability needed)
+3. **Task 7 (Integration test):** Estimated 1h, SKIPPED → Frontend ValidationReportModal not integrated yet, deferred to US-020
+4. **Tests count:** Estimated 8 tests, real 10 tests → +2 error handling tests (template not found, DB persistence failure)
+
+**Next Steps:**
+- **NEXT TICKET:** T-1805 Low-Poly Generation Node (3 días, 3 SP)
+  - Generate 3 LOD levels (high 100%, medium 50%, low 10%)
+  - Convert Rhino mesh to GLB format (Three.js compatible)
+  - Store in Supabase Storage (processed-geometry bucket)
+  - Tests coverage 100%
+
+**Prompts:** #253 (T-1804 plan + completion)
+

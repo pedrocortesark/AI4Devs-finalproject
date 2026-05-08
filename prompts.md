@@ -18003,6 +18003,145 @@ Implementar nodo `generate_report(state: ValidationState) -> ValidationState` qu
 | persist_validation_report helper | ~30 |
 | Graph edges update | ~10 |
 | Tests (test_report_generator.py) | ~400 |
+| TechnicalSpec (T-1804-REPORT-TechnicalSpec.md) | ~400 |
+| **TOTAL ESTIMATED** | **~1,070 LOC** |
+
+**Resumen de Respuesta/Acción:**
+
+✅ **T-1804 COMPLETADO** (2 días, 3 commits)
+
+**Commits realizados:**
+1. `e32fb70` - Planning: prompts.md #253 entry
+2. `8707bb0` - Day 1: Jinja2 Template + GenerateReport Node + DB Persistence
+3. `2c7a8af` - Day 2: Unit Tests + Template Fixes + Regression Validation
+
+**Métricas Finales:**
+
+| Métrica | Estimado | Real | Delta |
+|---------|----------|------|-------|
+| Story Points | 2 SP | 2 SP | ✅ 0% |
+| Duración | 2 días | 2 días | ✅ 0% |
+| Tests nuevos | 8 | 10 | 🟢 +25% (2 error handling tests adicionales) |
+| Tests PASS rate | 8/8 (100%) | 10/10 (100%) | ✅ 100% |
+| Regression tests | 74 PASS | 74 PASS | ✅ Zero regression |
+| LOC Template | ~150 | 150 | ✅ 0% |
+| LOC node_generate_report | ~80 | 145 | 🔴 +81% (mejor error handling) |
+| LOC Tests | ~400 | 580 | 🟢 +45% (más cobertura) |
+| LOC TechnicalSpec | ~400 | 507 | 🟢 +27% (más detalle) |
+| **TOTAL LOC** | **~1,070** | **~1,382** | **🟢 +29%** |
+
+**Implementación Destacada:**
+
+1. **Template Jinja2** (`validation_report.json.j2`, 150 LOC):
+   - NULL-safe rendering (semantic_data puede ser None)
+   - Errores combinados: nomenclature_errors + geometry errors en single array
+   - Booleans renderizados como JSON true/false (NO Python "True")
+   - iso_code extraction: `split('GLPER.B-')[-1]` (corrige bug con hyphens en ISO code)
+   - classification_method: JSON null cuando None (NO string "unknown")
+
+2. **Node Implementation** (`node_generate_report`, 145 LOC):
+   - Jinja2 Environment setup con FileSystemLoader
+   - Template context preparation (15 fields from ValidationState)
+   - JSON validation post-render (`json.loads()` catches invalid output)
+   - Database persistence: Supabase UPDATE blocks.validation_report
+   - Best-effort pattern: DB failures logged as WARNING, non-fatal
+   - Error handling: TemplateNotFound, JSONDecodeError, DB exceptions
+
+3. **Helper Functions**:
+   - `_append_to_errors(state, error_msg)` → list (nuevo helper, 20 LOC)
+   - Import Supabase client + Jinja2 + json
+
+4. **Tests** (`test_report_generator.py`, 580 LOC, 10 tests):
+   - HP-01: Happy path complete report ✅
+   - HP-02: Semantic_data present when LLM used ✅
+   - EC-01: Report without LLM (semantic_data=null) ✅
+   - EC-02: Rejected by nomenclature (errors populated) ✅
+   - EC-03: Rejected by geometry ✅
+   - EC-04: Material defaults to "Unknown" ✅
+   - INT-01: JSONB schema compliance (structure validation) ✅
+   - INT-02: Special characters in iso_code (UTF-8) ✅
+   - ERROR-01: Template not found handling ✅
+   - ERROR-02: Database persistence non-fatal ✅
+
+5. **Template Bug Fixes (Day 2)**:
+   - FIX: Boolean rendering (`{% if %}true{% else %}false{% endif %}` NOT `| lower`)
+   - FIX: iso_code extraction (`split('GLPER.B-')[-1]` NOT `split('-')[-1]`)
+   - FIX: classification_method null rendering (JSON null NOT string "unknown")
+
+6. **Regression Validation**:
+   - T-1801 StateGraph: 11/11 PASS ✅
+   - T-1802 LLM + Circuit Breaker: 32/32 PASS ✅
+   - T-1803 Validators as Nodes: 5/5 PASS ✅
+   - US-002 Legacy Validators: 26/26 PASS ✅
+   - **TOTAL: 74/74 PASS (zero regression verified)** ✅
+
+7. **Documentation** (`T-1804-REPORT-TechnicalSpec.md`, 507 LOC):
+   - Template structure + field mappings
+   - NULL-safe rendering patterns
+   - Database persistence best-effort pattern
+   - Test strategy (10 tests matrix)
+   - Bug fixes documentation (3 critical fixes)
+   - Future enhancements backlog (4 items)
+
+**Deviaciones del Plan:**
+
+| Item | Plan Original | Cambio Real | Razón |
+|------|---------------|-------------|-------|
+| Task 3 (Graph edges) | 1h modificación | 0h (ya correcto) | Edges ya estaban correctos desde T-1801 |
+| Task 4 (DB persistence) | Helper separado | Inline en node | Simplificación (best-effort pattern) |
+| Task 7 (Integration test) | Manual UI test | SKIPPED | Frontend modal no integrado aún, deferred to US-020 |
+| Tests count | 8 tests | 10 tests | +2 error handling tests (template not found, DB failure) |
+
+**Archivos Modificados/Creados:**
+
+```
+CREATE src/agent/templates/validation_report.json.j2    (~150 LOC)
+MODIFY src/agent/graph/nodes.py                         (+145 LOC)
+CREATE tests/agent/unit/test_report_generator.py        (~580 LOC)
+CREATE docs/US-018/T-1804-REPORT-TechnicalSpec.md       (~507 LOC)
+```
+
+**Lecciones Aprendidas:**
+
+1. **Jinja2 Boolean Filters:** `| lower` filter outputs Python "True"/"False" (invalid JSON). Usar `{% if %}true{% else %}false{% endif %}` explícito.
+2. **String Splitting Edge Cases:** `split('-')[-1]` falla con hyphens intermedios. Usar prefijo específico `split('GLPER.B-')[-1]`.
+3. **NULL vs String "null":** JSON null requiere sintaxis sin comillas `{% if x %}"{{x}}"{% else %}null{% endif %}`.
+4. **Best-Effort DB Persistence:** DB failures shouldn't fail graph execution. Log warnings + continue.
+5. **UTF-8 in Templates:** Jinja2 maneja UTF-8 correctamente si `json.dumps(ensure_ascii=False)` en tests.
+
+**Bloqueadores Encontrados:** NINGUNO
+
+**Decisiones Técnicas:**
+
+1. **DB Persistence en Node (no helper separado):**
+   - Razón: Simplifica código, best-effort pattern más claro inline
+   - Trade-off: Menos reusable, pero no hay otro use case actualmente
+
+2. **Template Validation Post-Render:**
+   - `json.loads(report_json_str)` después de `template.render()`
+   - Razón: Detecta errores de template temprano (antes de DB persist)
+
+3. **Error Handling Non-Fatal:**
+   - DB failures logged como WARNING, no ERROR
+   - Razón: Graph debe continuar, reportes pueden regenerarse
+
+4. **Integration Test Skipped:**
+   - Deferred to US-020 (Full Agent Integration)
+   - Razón: Frontend modal no integrado todavía, premature testing
+
+**Próximos Pasos (Post-Ticket):**
+
+1. ✅ Actualizar Memory Bank:
+   - `memory-bank/activeContext.md`: Mover T-1804 a "Recently Completed"
+   - `memory-bank/progress.md`: Entry en Sprint 10
+
+2. ⏸ US-018 Next Ticket: T-1805 (Low-Poly Generation Node) → Pendiente aprobación usuario
+
+3. ⏸ US-020 Integration: Manual smoke test ValidationReportModal + end-to-end flow
+
+**Status Final:** ✅ **COMPLETADO** (DoD 10/10 cumplido, zero regression, TechnicalSpec entregado)
+
+---
 | TechnicalSpec documentation | ~400 |
 | **TOTAL** | **~1,070 LOC** |
 

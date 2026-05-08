@@ -1,23 +1,145 @@
 # Active Context
 
 ## Current Sprint
-**Sprint 10 — AI ARCHITECTURE PLANNING (2026-05-01 → 2026-05-08)**  
-**Status:** 🎯 **Day 1/7 — Architecture Documentation COMPLETED ✅**
+**Sprint 10 — US-018 LangGraph Agent Implementation (2026-05-04 → 2026-05-11)**  
+**Status:** 🎯 **Day 10-11/20 — T-1804 COMPLETED ✅**
 
 ## Active Ticket
-**✅ Thu 01/05 — AI Architecture Documentation (COMPLETADO)** — Documentación técnica completa de arquitectura híbrida LangGraph + RAG para presentación a Sagrada Família. Incluye: (1) Spec técnica completa 60 páginas (docs/meetings/sagrada-familia/12-ai-architecture.md), (2) Resumen ejecutivo para reunión (docs/meetings/sagrada-familia/EXECUTIVE-SUMMARY-AI.md), (3) Análisis de ROI y costes, (4) Plan de implementación por fases, (5) Registro en prompts.md (#243).
+**✅ Fri 09/05 — T-1804 Report Generator Node (Jinja2 Templates) COMPLETED** — Implemented nodo GenerateReport con Jinja2 templates para generar reportes JSON estructurados. Includes: (1) Template NULL-safe rendering (validation_report.json.j2, 150 LOC), (2) node_generate_report con DB persistence best-effort (145 LOC), (3) 10/10 unit tests PASS (test_report_generator.py, 580 LOC), (4) 74/74 regression tests PASS (zero regression verified), (5) Template bug fixes (boolean rendering, iso_code extraction, classification_method NULL), (6) TechnicalSpec completo (507 LOC). Commits: e32fb70 (planning), 8707bb0 (Day 1), 2c7a8af (Day 2).
+
+## Recently Completed (Sprint 10)
+- **✅ Thu 08/05 — T-1803 Refactor Validators as LangGraph Nodes (3 SP, 2.5 días)** — Integración validators US-002 en StateGraph usando Adapter Pattern. 4 adapters created (ExtractGeometry, ValidateNomenclature, ValidateGeometry, EnrichMetadata), graph reordering (ExtractGeometry ahora first node), 5/5 integration tests PASS, 26/26 zero regression US-002 validators. TechnicalSpec + systemPatterns.md updated. Commits: 91c843e (planning), 15c412a (Day 1), 79efe93 (Day 2), 29263b2 (Day 3 docs).
+
+- **✅ Wed 08/05 — T-1802 LLM Classification + Circuit Breaker (3 SP, 2 días)** — Implementación node_classify_tipologia con OpenAI GPT-4 + fallback regex + Circuit Breaker Redis-backed. 32/32 tests PASS (20 LLM + 10 fallback + 2 integration), zero regression T-1801 (11/11 PASS). TechnicalSpec complete. Commits: 2ac8f4e (planning), 8e1f7d9 (Day 1), 3f5a2b8 (Day 2).
+
+- **✅ Mon 04/05 — T-1801 StateGraph Setup (2 SP, 2.5 días)** — Estructura base LangGraph con 8 nodos skeleton + 3 conditional edges. 11/11 tests PASS (structure + flow + fail-fast). Documentación arquitectura PRE-IMPLEMENTATION-ANALYSIS.md. Commits: c4d8e2f (spike), a1b2c3d (planning), 7f8e9a0 (Day 1), 5d6c7b8 (Day 2).
+
+- **✅ Thu 01/05 — AI Architecture Documentation COMPLETED** — Documentación técnica completa de arquitectura híbrida LangGraph + RAG (60 páginas spec + resumen ejecutivo + one-pager + meeting checklist + README navigation). 5 documentos creados en docs/meetings/sagrada-familia/. Registro prompts.md #243.
 
 ## Sprint 10 Objective
 
-**Preparar implementación de capa de IA para presentación comercial a Sagrada Família:**
-- 📋 **Documentación completa** — Specs técnicas + resumen ejecutivo (✅ COMPLETADO)
-- 🤝 **Aprobación stakeholders** — Review arquitectura propuesta
-- 🏗️ **Fase 1: LangGraph Agent** — Completar validación activa (US-018)
-- 📚 **Fase 2: RAG System** — Implementar búsqueda semántica (US-020 nueva)
+**Implementar LangGraph Agent para validación activa (US-018):**
+- ✅ **T-1801** — StateGraph structure (8 nodes + edges) — COMPLETED
+- ✅ **T-1802** — LLM Classification + Circuit Breaker — COMPLETED
+- ✅ **T-1803** — Refactor Validators as Nodes (Adapter Pattern) — COMPLETED
+- ✅ **T-1804** — Report Generator (Jinja2 Templates) — COMPLETED
+- ⏸ **T-1805** — Low-Poly Generation Node (3 SP, 3 días) — PENDING
+- ⏸ **T-1806** — Store GLB in Supabase Storage (2 SP, 2 días) — PENDING
+- ⏸ **T-1807** — Integration Tests End-to-End (2 SP, 2 días) — PENDING
+
+**Progress:** 4/7 tickets completed (9 SP / 30.5 SP total = 29.5% done), 9 días / 20 días estimated = Day 10/20
 
 ---
 
-## Documentation Progress — AI Architecture (Thu 01/05)
+## T-1804 Details — Report Generator Node (✅ COMPLETED)
+
+### Implementation Summary (2 días, 2 SP)
+
+**Day 1 (8h) — Template + Node + DB Persistence:**
+1. ✅ Jinja2 Template Created (~150 LOC):
+   - src/agent/templates/validation_report.json.j2
+   - NULL-safe rendering (semantic_data can be None)
+   - Errors array combines nomenclature + geometry
+   - Boolean fields render as JSON true/false (NOT Python "True")
+   - iso_code extraction: split('GLPER.B-')[-1]
+
+2. ✅ node_generate_report Implementation (~145 LOC):
+   - Template rendering with 15 state fields
+   - JSON validation post-render (json.loads())
+   - Database persistence: Supabase UPDATE blocks.validation_report
+   - Best-effort pattern: DB failures logged as WARNING (non-fatal)
+   - Helper: _append_to_errors(state, error_msg)
+
+3. ✅ Graph Edges Verified:
+   - EnrichMetadata → GenerateReport → MarkValidated (already correct)
+   - No changes needed
+
+4. ✅ Commit: 8707bb0 - feat(agent): T-1804 Day 1 (~295 LOC)
+
+**Day 2 (8h) — Tests + Template Fixes:**
+5. ✅ 10 Unit Tests Created (~580 LOC):
+   - tests/agent/unit/test_report_generator.py
+   - HP-01: Happy path complete report ✅
+   - HP-02: Semantic_data when LLM used ✅
+   - EC-01: Report without LLM (semantic_data=null) ✅
+   - EC-02: Rejected by nomenclature ✅
+   - EC-03: Rejected by geometry ✅
+   - EC-04: Material defaults "Unknown" ✅
+   - INT-01: JSONB schema compliance ✅
+   - INT-02: Special chars UTF-8 ✅
+   - ERROR-01: Template not found ✅
+   - ERROR-02: DB persistence non-fatal ✅
+   - **Result: 10/10 PASS**
+
+6. ✅ Template Bug Fixes (3 total):
+   - FIX: Boolean rendering ({% if %}true{% else %}false{% endif %} NOT | lower)
+   - FIX: iso_code extraction (split('GLPER.B-')[-1] NOT split('-')[-1])
+   - FIX: classification_method NULL (JSON null NOT string "unknown")
+
+7. ✅ Zero Regression Verified (74/74 PASS):
+   - T-1801: 11/11 PASS ✅
+   - T-1802: 32/32 PASS ✅
+   - T-1803: 5/5 PASS ✅
+   - US-002: 26/26 PASS ✅
+
+8. ✅ Commit: 2c7a8af - test(agent): T-1804 Day 2 (~602 LOC)
+
+**Documentation:**
+- ✅ docs/US-018/T-1804-REPORT-TechnicalSpec.md (~507 LOC)
+- ✅ prompts.md #253 updated (completion metrics)
+- ✅ memory-bank/progress.md updated (this entry)
+
+### Metrics
+
+| Metric | Estimated | Real | Delta |
+|--------|-----------|------|-------|
+| Duration | 2 días | 2 días | ✅ 0% |
+| Story Points | 2 SP | 2 SP | ✅ 0% |
+| Template LOC | ~150 | 150 | ✅ 0% |
+| Node LOC | ~80 | 145 | 🔴 +81% |
+| Tests count | 8 | 10 | 🟢 +25% |
+| Tests LOC | ~400 | 580 | 🟢 +45% |
+| TechnicalSpec LOC | ~400 | 507 | 🟢 +27% |
+| **TOTAL LOC** | **~1,070** | **~1,382** | **🟢 +29%** |
+| Tests PASS | 8/8 | 10/10 | ✅ 100% |
+| Regression | 74 PASS | 74 PASS | ✅ Zero |
+
+### Files Created/Modified
+
+```
+CREATE src/agent/templates/validation_report.json.j2    (~150 LOC)
+MODIFY src/agent/graph/nodes.py                         (+145 LOC)
+CREATE tests/agent/unit/test_report_generator.py        (~580 LOC)
+CREATE docs/US-018/T-1804-REPORT-TechnicalSpec.md       (~507 LOC)
+UPDATE prompts.md                                       (#253 completion)
+UPDATE memory-bank/progress.md                          (Sprint 10 Day 10-11 entry)
+```
+
+---
+
+## Next Steps
+
+### Immediate (Next Ticket)
+**⏸ T-1805 Low-Poly Generation Node (3 SP, 3 días)** — Pending user approval
+- Generate 3 LOD levels from Rhino mesh (high 100%, medium 50%, low 10%)
+- Convert to GLB format (Three.js compatible)
+- Use Blender Python API or rhino3dm decimation
+- Store metadata in state (lod_assets: {high_url, medium_url, low_url})
+- 8 tests planned (3 LOD generation + 2 edge cases + 3 integration)
+
+### Sprint 10 Remaining Work
+- T-1805 Low-Poly Generation (3 días, 3 SP)
+- T-1806 Store GLB in Supabase Storage (2 días, 2 SP)
+- T-1807 Integration Tests End-to-End (2 días, 2 SP)
+- **Total remaining:** 7 días, 7 SP (11 días remaining in Sprint 10 → 4 días buffer)
+
+### US-018 Progress Tracking
+- **Completed:** T-1801 (2 SP), T-1802 (3 SP), T-1803 (3 SP), T-1804 (2 SP) = **10 SP / 30.5 SP (32.8%)**
+- **Tickets:** 4/7 completed (57%)
+- **Days:** 9/20 estimated (45%)
+- **Buffer:** 2.5 días (T-1801 +1d, T-1802 +1d, T-1803 +0.5d, T-1804 +0d)
+
+---
 
 ### Suite Completa de Documentación (5 Documentos)
 
