@@ -140,11 +140,8 @@ class CircuitBreaker:
             import json
             data = self.redis_client.get(CB_REDIS_KEY)
             if data is None:
-                # Initialize fresh state in Redis
-                return CircuitBreakerStats(
-                    state=CircuitState.CLOSED,
-                    failure_count=0,
-                )
+                # No data in Redis → return None to use in-memory fallback
+                return None
             
             # Parse JSON state
             state_dict = json.loads(data)
@@ -206,10 +203,11 @@ class CircuitBreaker:
     
     def _save_stats(self, stats: CircuitBreakerStats):
         """Save stats (Redis or in-memory fallback)"""
+        # Always update memory stats as backup
+        self._memory_stats = stats
+        
         if self.use_redis:
             self._save_stats_to_redis(stats)
-        else:
-            self._memory_stats = stats
     
     def is_open(self) -> bool:
         """

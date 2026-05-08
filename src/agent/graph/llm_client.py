@@ -274,6 +274,17 @@ class LLMClient:
             raise LLMClassificationError(
                 f"LLM classification failed after {LLM_RETRY_ATTEMPTS} attempts"
             ) from e
+        except (RateLimitError, APITimeoutError, OpenAIError) as e:
+            # Tenacity reraise=True re-raises original exception after exhausting retries
+            logger.error(
+                "llm_classify_failed_openai_error",
+                iso_code=iso_code,
+                error_type=type(e).__name__,
+                error=str(e),
+            )
+            raise LLMClassificationError(
+                f"LLM classification failed: {type(e).__name__}"
+            ) from e
 
 
 # Singleton instance (reuse across calls to avoid reinitializing OpenAI client)
