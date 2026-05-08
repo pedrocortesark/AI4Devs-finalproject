@@ -60,11 +60,21 @@ Created: 2026-05-04
 import structlog
 from datetime import datetime
 from typing import Dict, Any
+import json
 
 try:
     from src.agent.graph.state import ValidationState, ValidationStatus, ClassificationMethod
 except ImportError:
     from graph.state import ValidationState, ValidationStatus, ClassificationMethod
+
+# Jinja2 imports for GenerateReport node (T-1804)
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound
+
+# Supabase client for report persistence (T-1804)
+try:
+    from infra.supabase_client import get_supabase_client
+except ImportError:
+    from src.agent.infra.supabase_client import get_supabase_client
 
 logger = structlog.get_logger()
 
@@ -88,6 +98,24 @@ def _append_to_path(state: ValidationState, node_name: str) -> list:
     """
     current_path = state.get("validation_path", [])
     return current_path + [node_name]
+
+
+def _append_to_errors(state: ValidationState, error_msg: str) -> list:
+    """
+    Returns a new list with error_msg appended to the current error_messages.
+
+    Helper for nodes that encounter runtime errors (not validation failures).
+    Used by GenerateReport node for template/rendering errors.
+
+    Args:
+        state     : Current ValidationState
+        error_msg : Error message to append
+
+    Returns:
+        New list with error_msg added at the end.
+    """
+    current_errors = state.get("error_messages", [])
+    return current_errors + [error_msg]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -794,18 +822,27 @@ def node_enrich_metadata(state: ValidationState) -> Dict[str, Any]:
 
 def node_generate_report(state: ValidationState) -> Dict[str, Any]:
     """
-    Node 6: Generate validation report using Jinja2 template.
+    Node 6: Generate JSON validation report using Jinja2 template (T-1804).
 
-    Only reached if all validations passed.
+    This node compiles all validation results from the state into a structured
+    JSON report that is:
+      1. Persisted in database (blocks.validation_report JSONB column)
+      2. Displayed in frontend ValidationReportModal
+      3. Compatible with backend ValidationReport Pydantic schema
 
-    Current implementation (T-1801 skeleton):
-        Stub node that does nothing (report generation in T-1804).
+    Template: src/agent/templates/validation_report.json.j2
+    
+    Template features (NULL-safe):
+      - Errors array: Combines nomenclature_errors + geometry errors
+      - Metadata: Extracts iso_code from block_id, includes material/tipologia
+      - Semantic data: Only included if LLM classification executed (not null)
+      - Geometry summary: Extracted from geometry_metadata (vertices, bbox, volume)
+      - Validation path: Shows node execution order (helps debug rejected files)
 
-    Full implementation (T-1804):
-        Will render Jinja2 template validation_report.json.j2 with state fields.
-        Report structure: {errors[], metadata{}, semantic_data{}, geometry_summary{},
-        timestamp, validated_by, validation_path[]}.
-        Note: Report is stored in database validation_report column, NOT in state.
+    Current implementation (T-1804):
+        Renders Jinja2 template and validates JSON parseability.
+        Report is NOT stored in state (keeps 15 fields limit).
+        Persistence to database will be done in Task 4 (persist_validation_report helper).
 
     Args:
         state: Current ValidationState (reads: all fields)
@@ -813,21 +850,127 @@ def node_generate_report(state: ValidationState) -> Dict[str, Any]:
     Returns:
         Partial state update with:
           - validation_path (list with "GenerateReport" appended)
+          - error_messages (list with error appended if generation fails)
     
-    Note: Report is persisted to database (blocks.validation_report JSONB),
-    not added to ValidationState (keeps 15 fields).
+    Note: Report JSON string is logged but NOT added to state.
+    Database persistence will be done by helper function called from graph.
     """
     node_name = "GenerateReport"
     logger.info("node.enter", node=node_name, block_id=state.get("block_id"))
 
-    # T-1801 SKELETON: No-op for now (real logic in T-1804)
-    # In production: will render Jinja2 template and persist to database
+    try:
+        # Setup Jinja2 environment (FileSystemLoader for templates directory)
+        template_env = Environment(loader=FileSystemLoader("src/agent/templates"))
+        template = template_env.get_template("validation_report.json.j2")
+        
+    except TemplateNotFound as e:
+        error_msg = f"Template not found: {e}"
+        logger.error("template.not_found", error=error_msg, node=node_name)
+        
+        return {
+            "error_messages": _append_to_errors(state, error_msg),
+            "validation_path": _append_to_path(state, node_name),
+        }
+
+    # Prepare template context (extract all relevant fields from state)
+    # Use .get() with defaults for NULL-safe rendering
+    context = {
+        "block_id": state.get("block_id", "UNKNOWN"),
+        "timestamp": datetime.utcnow().isoformat(),
+        "overall_status": state.get("overall_status", ValidationStatus.PROCESSING.value),
+        "nomenclature_valid": state.get("nomenclature_valid", False),
+        "nomenclature_errors": state.get("nomenclature_errors", []),
+        "geometry_valid": state.get("geometry_valid", False),
+        "geometry_metadata": state.get("geometry_metadata", {}),
+        "semantic_data": state.get("semantic_data"),  # Can be None
+        "classification_method": state.get("classification_method"),  # Can be None
+        "validation_path": state.get("validation_path", []),
+        "circuit_breaker_tripped": state.get("circuit_breaker_tripped", False),
+        "retry_count": state.get("retry_count", 0),
+        "completed_at": state.get("completed_at"),  # Can be None (set by terminal nodes)
+        "created_at": state.get("created_at", datetime.utcnow().isoformat()),
+        "validated_by": "SF-PM-Agent-v0.1.0",  # TODO: Extract version from constants
+    }
+
+    try:
+        # Render template
+        report_json_str = template.render(context)
+        
+        # Validate JSON is parseable (will raise JSONDecodeError if invalid)
+        report_dict = json.loads(report_json_str)
+        
+        logger.info(
+            "report.generated",
+            node=node_name,
+            block_id=state.get("block_id"),
+            is_valid=report_dict.get("is_valid"),
+            error_count=len(report_dict.get("errors", [])),
+            has_semantic_data=report_dict.get("semantic_data") is not None,
+            report_size_bytes=len(report_json_str),
+        )
+        
+        # Persist report to database (T-1804 Task 4)
+        try:
+            supabase = get_supabase_client()
+            block_id = state.get("block_id")
+            
+            # UPDATE blocks SET validation_report = report_json::jsonb WHERE block_id = %s
+            response = supabase.table("blocks").update({
+                "validation_report": report_dict  # Supabase converts dict to JSONB automatically
+            }).eq("block_id", block_id).execute()
+            
+            # Check if update was successful
+            if response.data and len(response.data) > 0:
+                logger.info(
+                    "report.persisted",
+                    node=node_name,
+                    block_id=block_id,
+                    rows_updated=len(response.data)
+                )
+            else:
+                # No rows updated (block_id not found or other issue)
+                logger.warning(
+                    "report.persist_no_rows",
+                    node=node_name,
+                    block_id=block_id,
+                    message="UPDATE returned zero rows (block may not exist)"
+                )
+                
+        except Exception as db_error:
+            # Database persistence failed - log warning but DON'T fail the node
+            # Report generation succeeded, DB persistence is best-effort
+            logger.warning(
+                "report.persist_failed",
+                node=node_name,
+                block_id=state.get("block_id"),
+                error=str(db_error),
+                message="Report generated but database persistence failed (non-fatal)"
+            )
+        
+    except json.JSONDecodeError as e:
+        error_msg = f"Generated report is not valid JSON: {e}"
+        logger.error("report.invalid_json", error=error_msg, node=node_name)
+        
+        return {
+            "error_messages": _append_to_errors(state, error_msg),
+            "validation_path": _append_to_path(state, node_name),
+        }
+        
+    except Exception as e:
+        error_msg = f"Report generation failed: {e}"
+        logger.error("report.generation_failed", error=error_msg, node=node_name)
+        
+        return {
+            "error_messages": _append_to_errors(state, error_msg),
+            "validation_path": _append_to_path(state, node_name),
+        }
 
     logger.info("node.complete", node=node_name)
 
     return {
         "validation_path": _append_to_path(state, node_name),
     }
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

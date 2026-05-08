@@ -1,0 +1,94 @@
+{# 
+  validation_report.json.j2 — Jinja2 Template for LangGraph Validation Reports
+  
+  PURPOSE
+  =======
+  Generates structured JSON validation reports from LangGraph ValidationState.
+  This report is persisted in blocks.validation_report JSONB column and displayed
+  in the frontend ValidationReportModal.
+  
+  DESIGN DECISIONS (T-1804)
+  =========================
+  - NULL-safe: All optional fields have default values or conditional blocks
+  - Errors array: Combines nomenclature_errors + geometry errors if present
+  - Metadata section: Extracts iso_code from block_id, includes material/tipologia
+  - Semantic data: Only included if LLM or fallback classification executed
+  - Geometry summary: Extracted from geometry_metadata (vertices, bbox, volume)
+  - Validation path: Shows node execution order (helps debug rejected files)
+  
+  COMPATIBLE WITH
+  ===============
+  - Backend ValidationReport schema (is_valid, errors, metadata, validated_at, validated_by)
+  - Frontend ValidationReportModal (expects this exact JSONB structure)
+  
+  Author: AI Agent (T-1804-AGENT)
+  Created: 2026-05-08
+#}
+{
+  "is_valid": {% if overall_status == "validated" %}true{% else %}false{% endif %},
+  "overall_status": "{{ overall_status }}",
+  "errors": [
+    {%- if nomenclature_errors %}
+      {%- for error in nomenclature_errors %}
+    {
+      "category": "nomenclature",
+      "target": null,
+      "message": "{{ error | replace('"', '\\"') }}"
+    }{% if not loop.last %},{% endif %}
+      {%- endfor %}
+    {%- endif %}
+    {%- if not geometry_valid and geometry_metadata %}
+      {%- if nomenclature_errors %},{% endif %}
+    {
+      "category": "geometry",
+      "target": null,
+      "message": "Geometry validation failed. Check vertices count, bbox, and mesh validity."
+    }
+    {%- endif %}
+  ],
+  "metadata": {
+    "iso_code": "{{ block_id.split('-')[-1] if '-' in block_id else 'UNKNOWN' }}",
+    "block_id": "{{ block_id }}",
+    "material": "{{ semantic_data.material if semantic_data and 'material' in semantic_data else 'Unknown' }}",
+    "tipologia": "{{ semantic_data.tipologia if semantic_data and 'tipologia' in semantic_data else 'unknown' }}",
+    "classification_method": "{{ classification_method if classification_method else 'unknown' }}"
+  },
+  {%- if semantic_data %}
+  "semantic_data": {
+    "tipologia": "{{ semantic_data.tipologia }}",
+    "material": "{{ semantic_data.material if 'material' in semantic_data else 'Unknown' }}",
+    "confidence": {{ semantic_data.confidence if 'confidence' in semantic_data else 0.0 }},
+    "reasoning": "{{ semantic_data.reasoning | replace('"', '\\"') if 'reasoning' in semantic_data else '' }}",
+    "classified_at": "{{ semantic_data.classified_at if 'classified_at' in semantic_data else timestamp }}",
+    "classification_method": "{{ classification_method }}"
+  },
+  {%- else %}
+  "semantic_data": null,
+  {%- endif %}
+  "geometry_summary": {
+    {%- if geometry_metadata %}
+    "volume": {{ geometry_metadata.volume if 'volume' in geometry_metadata else 0.0 }},
+    "bbox": {{ geometry_metadata.bbox | tojson if 'bbox' in geometry_metadata else '{}' }},
+    "vertices_count": {{ geometry_metadata.vertices_count if 'vertices_count' in geometry_metadata else 0 }},
+    "faces_count": {{ geometry_metadata.faces_count if 'faces_count' in geometry_metadata else 0 }},
+    "has_mesh": {% if 'has_mesh' in geometry_metadata %}{{ 'true' if geometry_metadata.has_mesh else 'false' }}{% else %}false{% endif %}
+    {%- else %}
+    "volume": 0.0,
+    "bbox": {},
+    "vertices_count": 0,
+    "faces_count": 0,
+    "has_mesh": false
+    {%- endif %}
+  },
+  "validation_path": [
+    {%- for node_name in validation_path %}
+    "{{ node_name }}"{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ],
+  "circuit_breaker_tripped": {% if circuit_breaker_tripped is defined %}{{ 'true' if circuit_breaker_tripped else 'false' }}{% else %}false{% endif %},
+  "retry_count": {{ retry_count if retry_count is defined else 0 }},
+  "timestamp": "{{ completed_at if completed_at else timestamp }}",
+  "validated_at": "{{ completed_at if completed_at else timestamp }}",
+  "validated_by": "{{ validated_by }}",
+  "created_at": "{{ created_at }}"
+}
