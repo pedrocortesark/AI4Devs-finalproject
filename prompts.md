@@ -17447,3 +17447,73 @@ TIMELINE:
 Total: 24 horas (3 días)
 
 NEXT: Tras aprobación usuario, comenzar implementación.
+
+---
+## [251] - T-1802 LLM Classification Implementation Complete
+**Fecha:** 2026-05-08 09:40
+**Prompt Original:**
+> Si
+
+**Contexto:**
+Usuario aprobó plan de T-1802. Agente ejecutó implementación completa en 3 días (Day 1: Implementation, Day 2-3: Testing + Regression).
+
+**DELIVERABLES COMPLETADOS:**
+
+**Day 1 - Implementation (~1,240 LOC)**:
+- `src/agent/graph/llm_client.py` (~300 LOC): GPT-4 Turbo client con JSON Mode, retry logic (Tenacity 3x exponential backoff), custom exceptions (LLMClassificationError, LLMTimeoutError, LLMInvalidResponseError), singleton pattern
+- `src/agent/graph/circuit_breaker.py` (~350 LOC): Circuit Breaker GLOBAL con Redis persistence, in-memory fallback, state machine (CLOSED/OPEN/HALF_OPEN), 5 failure threshold, 300s TTL auto-recovery
+- `src/agent/graph/classification_helpers.py` (~200 LOC): Fallback regex classification (5 ISO-19650 patterns + default "other"), prompt injection prevention (8 forbidden patterns → [REDACTED_SECURITY]), material color lookup, confidence validation
+- `src/agent/constants.py` (~100 LOC): LLM configuration (model, temperature, timeout, retry), versioned prompts (v1 with JSON schema), confidence threshold 0.7, forbidden patterns regex, fallback patterns, Circuit Breaker constants
+- `src/agent/graph/nodes.py` (~150 LOC): node_classify_tipologia actualizado con lógica real (check CB → sanitize → LLM call → validate confidence → fallback on failure → record CB success/failure)
+- Commit 3c2d2b3: "feat(agent): T-1802 Day 1 - LLM Client + Circuit Breaker + Classification Logic" (6 files, 1,218 insertions)
+
+**Day 2-3 - Testing + Regression (~650 LOC)**:
+- `tests/agent/unit/test_llm_classification.py` (~400 LOC, 22 tests):
+  * 6 happy path (valid JSON, all 6 tipologías parametrized)
+  * 5 error cases (timeout, invalid JSON, missing fields, invalid confidence, rate limit retries)
+  * 5 helpers (fallback regex 5 patterns + default, prompt injection 3 patterns, confidence validation)
+  * 6 parametrized tests (all ISO-19650 patterns + default "other")
+  * Zero OpenAI tokens consumed (all mocked)
+- `tests/agent/unit/test_circuit_breaker.py` (~250 LOC, 10 tests):
+  * 5 state transitions (CLOSED → OPEN after 5 failures, HALF_OPEN → CLOSED on success, HALF_OPEN → OPEN on failure, auto-recovery after 300s)
+  * 2 Redis persistence (save to Redis with setex TTL 300s, load from Redis with lowercase state enum)
+  * 1 in-memory fallback (redis_client=None)
+  * 1 manual reset (admin operation)
+  * 1 singleton test
+- `tests/agent/unit/test_stategraph.py` (3 autouse fixtures): mock_llm_client, mock_circuit_breaker, mock_redis_client for T-1801 regression testing
+- Commit 8a964d2: "test(agent): T-1802 Test Suite + Regression Fixes" (3 files, 792 insertions)
+
+**BUGS FIXED:**
+1. RateLimitError constructor (required response/body args in openai >=1.0)
+2. Prompt injection count (3 patterns matched not 2)
+3. LLM singleton reset between tests (reset _llm_client_instance)
+4. CB counter stuck at 1 (Redis mock returning None → fresh stats, fixed with in-memory backup)
+5. datetime not JSON serializable (changed to time.time() float timestamps)
+6. CircuitState enum case mismatch ("OPEN" → "open" lowercase)
+7. T-1801 regression (added 3 autouse fixtures for mocks)
+8. Classification method assertion (FALLBACK_REGEX → LLM_GPT4)
+
+**TEST RESULTS:**
+✅ 32/32 PASS T-1802 (22 LLM + 10 CB)
+✅ 11/11 PASS T-1801 (StateGraph, zero regression)
+✅ 68/82 PASS total agent tests (14 fallos pre-existentes no relacionados: geometry_centering, decimation, glb_output_validation requieren fast_simplification module)
+
+**DOD VALIDATION:**
+✅ GPT-4 Turbo classification functional (6 tipologías: dovela, capitel, columna, clave, imposta, other)
+✅ Circuit Breaker GLOBAL with Redis persistence (5 failures threshold, 300s TTL)
+✅ Confidence threshold 0.7 implemented (triggers fallback if below)
+✅ Prompt injection prevention active (8 forbidden patterns)
+✅ 32/32 tests PASS (exceeds 26/26 requirement)
+✅ Zero regression on T-1801 (11/11 tests still PASS)
+✅ Prompts versioned in constants (CLASSIFICATION_PROMPTS["v1"])
+
+**METRICS:**
+- LOC Implementation: ~1,240
+- LOC Tests: ~650
+- Total LOC: ~1,890
+- Test Coverage: 32 tests (22 LLM + 10 CB)
+- Commits: 2 (Day 1 + Day 2-3)
+- Duration: 3 días (según plan)
+- Regression: 0 (11/11 T-1801 tests still PASS)
+
+**NEXT:** Actualizar memory-bank (activeContext.md, progress.md) y marcar T-1802 COMPLETE en backlog.

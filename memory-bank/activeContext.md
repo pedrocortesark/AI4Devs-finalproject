@@ -171,7 +171,45 @@
    - **Registro:** prompts.md #249
    - **Next:** T-1802 LLM Classification + Circuit Breaker (3 días, 5 SP)
 
-## Next Steps (Post T-1801 — StateGraph Skeleton COMPLETED)
+---
+
+15. **T-1802-AGENT LLM Classification + Circuit Breaker GLOBAL** (✅ COMPLETADO — May 8, 2026)
+   - **Objetivo:** Implementar clasificación LLM con GPT-4 Turbo + Circuit Breaker GLOBAL + confidence threshold 0.7 + prompt injection prevention
+   - **Implementación completa (Day 1 - ~1,240 LOC):**
+     - **LangChain OpenAI Client (llm_client.py ~300 LOC):** ChatOpenAI con JSON Mode forzado, model "gpt-4-turbo", temperature 0.2 (determinismo), timeout 10s, retry logic Tenacity (3 intentos: 2s, 4s, 8s exponential backoff), custom exceptions (LLMClassificationError, LLMTimeoutError, LLMInvalidResponseError), singleton pattern get_llm_client()
+     - **Circuit Breaker GLOBAL (circuit_breaker.py ~350 LOC):** Redis persistence con key "circuit_breaker:openai:global" (scope GLOBAL, NO per-block), in-memory fallback si Redis down, state machine CLOSED/OPEN/HALF_OPEN, failure threshold 5 consecutive ANY block, TTL 300s auto-recovery, CircuitBreakerStats dataclass with to_dict() JSON serialization
+     - **Classification Helpers (classification_helpers.py ~200 LOC):** Fallback regex classification (5 ISO-19650 patterns: D→dovela, CA→capitel, CO→columna, CL→clave, IM→imposta + default "other"), prompt injection prevention (8 forbidden patterns: "ignore previous", "you are now", "disregard", "forget everything", "new instructions", "system prompt", "admin mode", "developer mode" → [REDACTED_SECURITY]), material color lookup MATERIAL_COLORS dict 62 types, confidence validation threshold 0.7
+     - **Constants Updated (constants.py ~100 LOC):** LLM configuration (model, temperature, timeout, retry attempts), CLASSIFICATION_PROMPTS versioned dict (v1 with JSON schema {tipologia, confidence, reasoning}), CONFIDENCE_THRESHOLD = 0.7, FORBIDDEN_PATTERNS regex list, FALLBACK_REGEX_PATTERNS dict, CB_* constants (Redis key, failure threshold 5, recovery timeout 300s, half-open max retries 3, memory fallback enabled True)
+     - **node_classify_tipologia Updated (~150 LOC):** Real LLM classification logic flow: get Circuit Breaker → check if open → sanitize user strings → call LLM → validate confidence threshold → merge with geometry metadata → record CB success/failure → fallback regex on error/low confidence → return classification result
+     - **Commit 3c2d2b3:** "feat(agent): T-1802 Day 1 - LLM Client + Circuit Breaker + Classification Logic" (6 files, 1,218 insertions)
+   - **Testing completo (Day 2-3 - ~650 LOC):**
+     - **test_llm_classification.py (~400 LOC, 22 tests PASS):** 6 happy path (valid JSON, all 6 tipologías parametrized), 5 error cases (timeout raises LLMTimeoutError, invalid JSON raises LLMInvalidResponseError, missing required fields, invalid confidence value, rate limit retries with RateLimitError proper constructor), 5 helpers (fallback regex 5 patterns + default "other", prompt injection 3 patterns detected, confidence meets/below threshold), 6 parametrized tests (all ISO-19650 patterns), ZERO OpenAI tokens consumed (all mocked with unittest.mock.patch)
+     - **test_circuit_breaker.py (~250 LOC, 10 tests PASS):** 5 state transitions (initial CLOSED, trips after 5 failures CLOSED→OPEN, resets on success when CLOSED, HALF_OPEN success closes circuit, HALF_OPEN failure reopens circuit), 2 Redis persistence (saves to Redis with setex TTL 300s, loads from Redis with lowercase state "open"), 1 in-memory fallback (redis_client=None), 1 manual reset admin operation, 1 singleton test
+     - **test_stategraph.py (3 autouse fixtures):** mock_llm_client (returns dovela confidence 0.85), mock_circuit_breaker (is_open=False, record_success/failure mocked), mock_redis_client (MagicMock) → T-1801 regression ZERO (11/11 PASS preserved)
+     - **Commit 8a964d2:** "test(agent): T-1802 Test Suite + Regression Fixes" (3 files, 792 insertions)
+   - **Bugs Fixed (8 total):**
+     - RateLimitError constructor requires response/body args (openai >=1.0)
+     - Prompt injection count mismatch (3 patterns matched not 2)
+     - LLM singleton test requires ChatOpenAI mock + reset _llm_client_instance
+     - CB counter stuck at 1 (Redis mock returning None → fresh stats, fixed with _memory_stats backup)
+     - datetime not JSON serializable (changed to time.time() float timestamps)
+     - CircuitState enum case mismatch ("OPEN" → "open" lowercase)
+     - T-1801 regression (added 3 autouse fixtures for mocks)
+     - Classification method assertion outdated (FALLBACK_REGEX → LLM_GPT4)
+   - **DoD verificado:**
+     - ✅ GPT-4 Turbo classification functional (6 tipologías: dovela, capitel, columna, clave, imposta, other)
+     - ✅ Circuit Breaker GLOBAL with Redis persistence (5 failures threshold, 300s TTL)
+     - ✅ Confidence threshold 0.7 implemented (triggers fallback if below)
+     - ✅ Prompt injection prevention active (8 forbidden patterns)
+     - ✅ 32/32 tests PASS T-1802 (exceeds 26/26 requirement: 22 LLM + 10 CB)
+     - ✅ Zero regression T-1801 (11/11 tests still PASS)
+     - ✅ Prompts versioned in constants (CLASSIFICATION_PROMPTS["v1"])
+   - **Quality metrics:** LOC implementation ~1,240 + tests ~650 = total ~1,890, test coverage 32/32 PASS (100%), TDD strict (mock-first, zero OpenAI tokens), commits 2 (Day 1 + Day 2-3), duration 3 días (según plan), regression 0 (11/11 T-1801 preserved + 68/82 total agent tests PASS, 14 pre-existing failures unrelated)
+   - **Branch:** `feature/US-018-T-1801-stategraph-setup` (same branch as T-1801)
+   - **Registro:** prompts.md #250 (plan), #251 (completion)
+   - **Next:** T-1803 Refactor Validators (3 días, 3 SP)
+
+## Next Steps (Post T-1802 — LLM Classification COMPLETED)
 
 **⏳ Awaiting Decision:** Aprobación de arquitectura por Sagrada Família (reunión programada May 3-5)
 
