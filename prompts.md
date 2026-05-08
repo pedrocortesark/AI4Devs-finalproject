@@ -17517,3 +17517,228 @@ Usuario aprobó plan de T-1802. Agente ejecutó implementación completa en 3 d�
 - Regression: 0 (11/11 T-1801 tests still PASS)
 
 **NEXT:** Actualizar memory-bank (activeContext.md, progress.md) y marcar T-1802 COMPLETE en backlog.
+
+---
+## [252] - T-1803 Refactor Validators as LangGraph Nodes
+**Fecha:** 2026-05-08 10:00
+**Prompt Original:**
+> vamos alla
+
+**Contexto:**
+Usuario solicita continuar tras completar T-1802. Siguiente ticket en roadmap US-018 es T-1803 Refactor Validators (3 días, 3 SP). Objetivo: Integrar validadores existentes US-002 como nodos LangGraph sin cambiar lógica interna (zero regression commitment).
+
+**ANÁLISIS DE CÓDIGO EXISTENTE:**
+
+**3 Servicios a Integrar (US-002):**
+1. **NomenclatureValidator** (`src/agent/services/nomenclature_validator.py` ~100 LOC):
+   - Método: `validate_nomenclature(layers: List[LayerInfo]) -> List[ValidationErrorItem]`
+   - Lógica: Regex ISO-19650 pattern `^[A-Z]{2,3}-[A-Z0-9]{3,4}-[A-Z]{1,2}-\d{3}$`
+   - Tests existentes: `tests/unit/test_nomenclature_validator.py` (15 tests)
+   - Status: Funcional, 15/15 tests PASS
+
+2. **GeometryValidator** (`src/agent/services/geometry_validator.py` ~150 LOC):
+   - Método: `validate_geometry(model: rhino3dm.File3dm) -> List[ValidationErrorItem]`
+   - Lógica: 4 checks (null geometry, invalid geometry, degenerate bbox, zero volume)
+   - Tests existentes: `tests/unit/test_geometry_validator.py` (~12 tests estimados)
+   - Status: Funcional, tests PASS
+
+3. **UserStringExtractor** (`src/agent/services/user_string_extractor.py` ~100 LOC):
+   - Método: `extract(model: rhino3dm.File3dm) -> UserStringCollection`
+   - Lógica: Extract document/layer/object user strings
+   - Tests existentes: tests en US-002
+   - Status: Funcional
+
+**4 Nodos StateGraph Afectados (T-1801):**
+- `node_validate_nomenclature` (línea ~50 nodes.py) — Actualmente stub, siempre pasa
+- `node_extract_geometry` (línea ~100 nodes.py) — Stub con file_exists check
+- `node_validate_geometry` (línea ~150 nodes.py) — Stub, siempre pasa
+- `node_enrich_metadata` (línea ~200 nodes.py) — Stub, no-op
+
+**PLANIFICACIÓN T-1803 (8 Tareas, 3 días):**
+
+**OBJETIVO:** Refactorizar nodos stubs para llamar a validators existentes usando Adapter Pattern (wrappers), mantener validators 100% sin cambios, zero regression en 27 tests US-002 + 5 nuevos tests integración StateGraph.
+
+**TAREAS:**
+
+**Day 1 - Adapter Pattern Setup (8h):**
+
+1. **Crear Adapter: ValidateNomenclature** (2h):
+   - Wrapper en `node_validate_nomenclature(state: ValidationState) -> ValidationState`
+   - Lógica: Extract `geometry_metadata.layers` from state → convert to `List[LayerInfo]` → call `validator.validate_nomenclature(layers)` → update `state["nomenclature_valid"]` (True/False) + `state["nomenclature_errors"]` (list ValidationErrorItem) → return state
+   - Sin cambios a NomenclatureValidator (zero refactor validator code)
+   - Imports: `from src.agent.services.nomenclature_validator import NomenclatureValidator`
+   - Docstring detallado con ejemplo adapter pattern
+
+2. **Crear Adapter: ExtractGeometry** (3h):
+   - Wrapper en `node_extract_geometry(state: ValidationState) -> ValidationState`
+   - Lógica: 
+     - Check `file_exists_in_storage(block_id)` (ya existe stub)
+     - Load rhino3dm.File3dm: `rhino3dm.File3dm.Read(file_path)`
+     - Extract layers: Iterate `model.Layers` → create `List[LayerInfo]`
+     - Extract geometry metadata: bbox, volume, vertices_count
+     - Store in `state["geometry_metadata"]`: `{layers: [], bbox: {}, volume: float, vertices_count: int, file_exists_in_storage: bool, rhino_model: model}`
+     - Return state
+   - Integración: Llamar a UserStringExtractor para obtener UserStringCollection (enrich_metadata usa esto)
+   - Sin cambios a UserStringExtractor (zero refactor)
+
+3. **Crear Adapter: ValidateGeometry** (2h):
+   - Wrapper en `node_validate_geometry(state: ValidationState) -> ValidationState`
+   - Lógica: Extract `geometry_metadata.rhino_model` → call `validator.validate_geometry(model)` → update `state["geometry_valid"]` (True/False si errors empty) + `state["geometry_errors"]` (list ValidationErrorItem) → return state
+   - Sin cambios a GeometryValidator (zero refactor)
+
+4. **Crear Adapter: EnrichMetadata** (1h):
+   - Wrapper en `node_enrich_metadata(state: ValidationState) -> ValidationState`
+   - Lógica: Extract `geometry_metadata.user_strings` (ya extraído en step 2) → parse material from UserStringCollection → update `state["semantic_data"]["material"]` → return state
+   - Integración con MATERIAL_COLORS dict (constants.py, ya existe T-1802)
+   - Sin cambios a UserStringExtractor (zero refactor)
+
+**Commit Day 1:** "feat(agent): T-1803 Adapter Pattern for 4 StateGraph Nodes" (nodes.py updated, 4 adapters ~200 LOC)
+
+**Day 2 - Testing Integration (8h):**
+
+5. **Tests Integración StateGraph** (4h):
+   - `tests/agent/unit/test_stategraph_validators.py` (nuevo archivo ~300 LOC)
+   - 5 nuevos tests:
+     - **INT-01:** Nomenclature OK → extract_geometry ejecutado (validates flow)
+     - **INT-02:** Nomenclature FAIL → extract_geometry NO ejecutado (fail-fast skip)
+     - **INT-03:** Geometry OK → enrich_metadata ejecutado
+     - **INT-04:** Geometry FAIL → enrich_metadata NO ejecutado (fail-fast skip)
+     - **INT-05:** Full happy path con validators reales → estado VALIDATED, semantic_data poblado
+   - Mocks: rhino3dm.File3dm.Read() con fixtures reales (tests/fixtures/*.3dm ya disponibles)
+
+6. **Verificar Zero Regression US-002** (2h):
+   - Ejecutar tests existentes US-002:
+     - `tests/unit/test_nomenclature_validator.py` (15 tests)
+     - `tests/unit/test_geometry_validator.py` (~12 tests)
+     - `tests/unit/test_user_string_extractor.py` (~5 tests estimados)
+   - **Baseline esperado:** 27/27 tests PASS (sin modificación de validators)
+   - **Nueva baseline:** 27/27 US-002 + 5/5 integration + 11/11 T-1801 + 32/32 T-1802 = 75/75 PASS
+
+7. **Actualizar StateGraph Tests Existentes** (2h):
+   - Modificar `tests/agent/unit/test_stategraph.py` (T-1801):
+     - HP-04: `test_semantic_data_populated_in_happy_path` → ahora validators reales, verificar `geometry_metadata` tiene layers/bbox/volume
+     - EC-01: `test_nomenclature_fail_skips_to_rejected` → ahora nomenclature validator real, cambiar mock a invalid layer name
+     - EC-02: `test_geometry_fail_skips_to_rejected` → ahora geometry validator real, cambiar mock a degenerate bbox
+   - **Expected:** 11/11 tests still PASS (adapters mantienen contrato state)
+
+**Commit Day 2:** "test(agent): T-1803 Integration Tests + Zero Regression Validation" (test_stategraph_validators.py + updated test_stategraph.py)
+
+**Day 3 - Documentation + Cleanup (4h):**
+
+8. **Documentación + Cleanup** (4h):
+   - Actualizar docstrings en nodes.py (4 adapters con JSDoc-style examples)
+   - Actualizar `docs/US-018/T-1803-REFACTOR-TechnicalSpec.md` (nuevo archivo):
+     - Adapter Pattern diagram (ASCII art)
+     - Flow diagram: ValidationState → Adapter → Validator → ValidationState
+     - Zero regression strategy explained
+     - Tests coverage table (27 US-002 + 5 integration = 32 total)
+   - Actualizar `memory-bank/systemPatterns.md`:
+     - Nueva sección "Adapter Pattern for Validators" con rationale
+     - Ventajas: Reusabilidad validators, testabilidad isolada, zero regression guaranteed
+   - Registrar en `prompts.md` (#252 completion entry)
+   - Actualizar `memory-bank/activeContext.md` (entry #16: T-1803 ✅)
+   - Actualizar `memory-bank/progress.md` (Sprint 10 Day 8-9)
+
+**Commit Day 3:** "docs(agent): T-1803 Documentation + Adapter Pattern Guide"
+
+**ARTIFACTS A CREAR:**
+
+**Código (~200 LOC):**
+1. `src/agent/graph/nodes.py` (updated): 4 adapters refactored (~200 LOC total updates)
+
+**Tests (~300 LOC):**
+2. `tests/agent/unit/test_stategraph_validators.py` (nuevo): 5 integration tests
+3. `tests/agent/unit/test_stategraph.py` (updated): 3 tests with real validators
+
+**Documentación (~400 LOC markdown):**
+4. `docs/US-018/T-1803-REFACTOR-TechnicalSpec.md` (nuevo)
+5. `memory-bank/systemPatterns.md` (updated): Adapter Pattern section
+6. `prompts.md` (entry #252 completion)
+7. `memory-bank/activeContext.md` (entry #16)
+8. `memory-bank/progress.md` (Sprint 10 Day 8-9)
+
+**DEFINITION OF DONE:**
+
+✅ 4 nodos integrados en StateGraph (ValidateNomenclature, ExtractGeometry, ValidateGeometry, EnrichMetadata)
+✅ 32/32 tests PASS US-002 + StateGraph integration (27 US-002 + 5 nuevos)
+✅ Zero regression validada con baseline US-002 (27/27 tests untouched)
+✅ Código adapter documentado con JSDoc/docstrings exhaustivos
+✅ Adapter Pattern guide en memory-bank/systemPatterns.md
+✅ 11/11 T-1801 tests still PASS (adapters mantienen contrato ValidationState)
+✅ 32/32 T-1802 tests still PASS (no afectados por refactor)
+✅ Total: 75/75 tests PASS (27 US-002 + 5 integration + 11 T-1801 + 32 T-1802)
+
+**RIESGOS IDENTIFICADOS:**
+
+1. **Breaking changes en validators:** Mitigado con Adapter Pattern (wrappers aíslan cambios)
+2. **rhino3dm loading en tests:** Mitigado con mocks de File3dm.Read() usando fixtures reales
+3. **Performance degradation:** Mitigado con profile benchmarks (target <50ms por nodo adapter)
+4. **Integration test complexity:** Mitigado con fixtures reutilizables (tests/fixtures/*.3dm ya disponibles)
+
+**TIMELINE:**
+
+- Día 1: Adapter Pattern Setup (8h) → 4 adapters refactored
+- Día 2: Testing Integration (8h) → 5 nuevos tests + zero regression verification
+- Día 3: Documentation + Cleanup (4h) → Adapter Pattern guide + memory-bank updates
+- **Total:** 20 horas (2.5 días @ 8hr/día) vs 24h estimado original → buffer 4h
+
+**MÉTRICAS ESPERADAS:**
+
+- LOC Implementation: ~200 (4 adapters en nodes.py)
+- LOC Tests: ~300 (5 integration tests + 3 updated)
+- LOC Documentation: ~400 (TechnicalSpec + systemPatterns)
+- Total LOC: ~900
+- Test Coverage: 75/75 PASS (27 US-002 + 5 integration + 11 T-1801 + 32 T-1802)
+- Regression: 0 (27/27 US-002 validators untouched)
+- Commits: 3 (Day 1 + Day 2 + Day 3)
+
+**VALIDACIÓN ADAPTER PATTERN:**
+
+**Antes (T-1801 Stubs):**
+```python
+def node_validate_nomenclature(state: ValidationState) -> ValidationState:
+    """Stub - always passes"""
+    return {**state, "nomenclature_valid": True, "nomenclature_errors": []}
+```
+
+**Después (T-1803 Adapter):**
+```python
+def node_validate_nomenclature(state: ValidationState) -> ValidationState:
+    """
+    Adapter: Validates nomenclature using NomenclatureValidator (US-002).
+    
+    Adapter Pattern: Extract state → call validator → update state.
+    Zero regression: NomenclatureValidator code unchanged.
+    
+    Args:
+        state: ValidationState with geometry_metadata.layers
+    
+    Returns:
+        Updated state with nomenclature_valid (bool) + nomenclature_errors (list)
+    """
+    from src.agent.services.nomenclature_validator import NomenclatureValidator
+    
+    # Extract layers from state
+    layers = state.get("geometry_metadata", {}).get("layers", [])
+    
+    # Call validator (UNCHANGED code US-002)
+    validator = NomenclatureValidator()
+    errors = validator.validate_nomenclature(layers)
+    
+    # Update state
+    return {
+        **state,
+        "nomenclature_valid": len(errors) == 0,
+        "nomenclature_errors": errors,
+    }
+```
+
+**VENTAJAS ADAPTER PATTERN:**
+
+1. **Zero Regression:** Validators existentes 100% sin cambios (15 tests nomenclature + 12 geometry untouched)
+2. **Testabilidad:** Validators testables independientemente (unit tests US-002) + adapters testables con StateGraph (integration tests T-1803)
+3. **Reusabilidad:** Validators reutilizables fuera de LangGraph (e.g., batch validation scripts, CLI tools)
+4. **Mantenibilidad:** Cambios en validators NO afectan StateGraph structure, cambios en StateGraph NO afectan validators
+5. **Clear Separation of Concerns:** Validators = Business Logic (ISO-19650, geometry checks), Adapters = Integration Layer (state transformation)
+
+**NEXT:** Tras aprobación usuario, comenzar implementación Day 1 (4 adapters refactor).
