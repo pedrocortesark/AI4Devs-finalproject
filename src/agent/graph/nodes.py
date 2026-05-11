@@ -78,6 +78,118 @@ except ImportError:
 
 logger = structlog.get_logger()
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DECORATOR: T-1805 Audit Trail Middleware
+# ─────────────────────────────────────────────────────────────────────────────
+
+def with_audit_trail(func):
+    """
+    Decorator to add automatic audit trail events to LangGraph nodes.
+
+    Wraps a node function to automatically insert NODE_ENTERED and NODE_COMPLETED events.
+    Implements middleware pattern for non-invasive instrumentation.
+
+    Design rationale:
+        - DRY principle: Avoid duplicating insert_event calls in 8 nodes
+        - Separation of concerns: Business logic (node) vs observability (audit)
+        - Testability: Decorator can be unit-tested independently
+        - Maintainability: Add new audit logic in one place
+
+    Behavior:
+        1. Before node execution: insert_event(EventType.NODE_ENTERED)
+        2. Execute node function (unchanged business logic)
+        3. After node execution: insert_event(EventType.NODE_COMPLETED)
+        4. Best-effort: Audit failures logged but don't crash node
+
+    Applies to:
+        - All 8 StateGraph nodes (ExtractGeometry, ValidateNomenclature, etc.)
+        - Terminal nodes (MarkValidated, MarkRejected)
+
+    Usage:
+        >>> @with_audit_trail
+        ... def node_validate_nomenclature(state: ValidationState) -> Dict[str, Any]:
+        ...     # Node logic unchanged
+        ...     return {"nomenclature_valid": True, ...}
+
+    Args:
+        func: Node function to wrap (must accept ValidationState, return Dict)
+
+    Returns:
+        Wrapped function with automatic audit trail events
+
+    Side effects:
+        - INSERT into events table (2 events per node execution)
+        - Structured logs: audit.node_entered, audit.node_completed
+
+    Example execution:
+        >>> state = make_initial_state("block-123")
+        >>> wrapped = with_audit_trail(node_validate_nomenclature)
+        >>> result = wrapped(state)
+        # DB: INSERT event (node_entered), INSERT event (node_completed)
+        # Logs: audit.node_entered, audit.node_completed
+    """
+    from functools import wraps
+    
+    try:
+        from src.agent.constants import EventType
+    except ImportError:
+        from agent.constants import EventType
+    
+    @wraps(func)
+    def wrapper(state: ValidationState) -> Dict[str, Any]:
+        # Extract node name from function name (node_validate_nomenclature → ValidateNomenclature)
+        func_name = func.__name__
+        node_name = func_name.replace("node_", "").replace("_", " ").title().replace(" ", "")
+        
+        # Get block_id from state
+        block_id = state.get("block_id", "unknown")
+        
+        # NODE_ENTERED event (before execution)
+        try:
+            insert_event(block_id, EventType.NODE_ENTERED, node_name, state)
+            logger.debug(
+                "audit.node_entered",
+                node=node_name,
+                block_id=block_id
+            )
+        except Exception as e:
+            # Best-effort: Log error but don't crash node startup
+            logger.warning(
+                "audit.node_entered_failed",
+                node=node_name,
+                block_id=block_id,
+                error=str(e)
+            )
+        
+        # Execute original node function (unchanged)
+        result = func(state)
+        
+        # NODE_COMPLETED event (after execution)
+        # Merge result into state for state_snapshot (includes node's return values)
+        updated_state = {**state, **result}
+        
+        try:
+            insert_event(block_id, EventType.NODE_COMPLETED, node_name, updated_state)
+            logger.debug(
+                "audit.node_completed",
+                node=node_name,
+                block_id=block_id
+            )
+        except Exception as e:
+            # Best-effort: Log error but don't crash node completion
+            logger.warning(
+                "audit.node_completed_failed",
+                node=node_name,
+                block_id=block_id,
+                error=str(e)
+            )
+        
+        return result
+    
+    return wrapper
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER: append the current node name to the validation_path breadcrumbs
 # ─────────────────────────────────────────────────────────────────────────────
@@ -278,6 +390,7 @@ def insert_event(
 # NODE 1: ValidateNomenclature
 # ─────────────────────────────────────────────────────────────────────────────
 
+@with_audit_trail
 def node_validate_nomenclature(state: ValidationState) -> Dict[str, Any]:
     """
     Node 1: Validate that all layer names comply with ISO-19650 pattern.
@@ -355,6 +468,7 @@ def node_validate_nomenclature(state: ValidationState) -> Dict[str, Any]:
 # NODE 2: ExtractGeometry
 # ─────────────────────────────────────────────────────────────────────────────
 
+@with_audit_trail
 def node_extract_geometry(state: ValidationState) -> Dict[str, Any]:
     """
     Node 2: Download .3dm file from Supabase Storage and extract geometry metadata.
@@ -596,6 +710,7 @@ def node_extract_geometry(state: ValidationState) -> Dict[str, Any]:
 # NODE 3: ValidateGeometry
 # ─────────────────────────────────────────────────────────────────────────────
 
+@with_audit_trail
 def node_validate_geometry(state: ValidationState) -> Dict[str, Any]:
     """
     Node 3: Validate geometry topology using GeometryValidator (US-002).
@@ -676,6 +791,7 @@ def node_validate_geometry(state: ValidationState) -> Dict[str, Any]:
 # NODE 4: ClassifyTipologia
 # ─────────────────────────────────────────────────────────────────────────────
 
+@with_audit_trail
 def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
     """
     Node 4: Classify architectural piece using LLM (GPT-4) or regex fallback.
@@ -743,11 +859,32 @@ def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
             block_id=block_id,
         )
         
+        # T-1805: Insert CIRCUIT_BREAKER_TRIPPED event
+        try:
+            from src.agent.constants import EventType
+        except ImportError:
+            from agent.constants import EventType
+        
+        insert_event(block_id, EventType.CIRCUIT_BREAKER_TRIPPED, node_name, state)
+        logger.info(
+            "audit.circuit_breaker_tripped_event",
+            block_id=block_id,
+            node=node_name,
+        )
+        
         # Use fallback regex classification
         semantic_data = fallback_classify_by_regex(iso_code)
         semantic_data = merge_llm_with_metadata(semantic_data, geometry_metadata)
         classification_method = ClassificationMethod.FALLBACK_REGEX
         circuit_breaker_tripped = True
+        
+        # T-1805: Insert FALLBACK_ACTIVATED event
+        insert_event(block_id, EventType.FALLBACK_ACTIVATED, node_name, state)
+        logger.info(
+            "audit.fallback_activated_event",
+            block_id=block_id,
+            node=node_name,
+        )
         
         return {
             "semantic_data": semantic_data,
@@ -824,11 +961,31 @@ def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
         circuit_breaker_tripped = circuit_breaker.is_open()
         
         if circuit_breaker_tripped:
+            # T-1805: Insert CIRCUIT_BREAKER_TRIPPED event (newly tripped)
+            try:
+                from src.agent.constants import EventType
+            except ImportError:
+                from agent.constants import EventType
+            
+            insert_event(block_id, EventType.CIRCUIT_BREAKER_TRIPPED, node_name, state)
             logger.error(
                 "circuit_breaker_newly_tripped",
                 node=node_name,
                 block_id=block_id,
             )
+        
+        # T-1805: Insert FALLBACK_ACTIVATED event
+        try:
+            from src.agent.constants import EventType
+        except ImportError:
+            from agent.constants import EventType
+        
+        insert_event(block_id, EventType.FALLBACK_ACTIVATED, node_name, state)
+        logger.info(
+            "audit.fallback_activated_event",
+            block_id=block_id,
+            node=node_name,
+        )
 
     logger.info(
         "node.complete",
@@ -850,6 +1007,7 @@ def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
 # NODE 5: EnrichMetadata
 # ─────────────────────────────────────────────────────────────────────────────
 
+@with_audit_trail
 def node_enrich_metadata(state: ValidationState) -> Dict[str, Any]:
     """
     Node 5: Enrich semantic_data with material from UserStrings.
@@ -976,6 +1134,7 @@ def node_enrich_metadata(state: ValidationState) -> Dict[str, Any]:
 # NODE 6: GenerateReport
 # ─────────────────────────────────────────────────────────────────────────────
 
+@with_audit_trail
 def node_generate_report(state: ValidationState) -> Dict[str, Any]:
     """
     Node 6: Generate JSON validation report using Jinja2 template (T-1804).
@@ -1177,6 +1336,7 @@ def node_mark_validated(state: ValidationState) -> Dict[str, Any]:
 # NODE 8: MarkRejected (TERMINAL)
 # ─────────────────────────────────────────────────────────────────────────────
 
+@with_audit_trail
 def node_mark_rejected(state: ValidationState) -> Dict[str, Any]:
     """
     Terminal Node: Mark block as REJECTED (one or more checks failed).

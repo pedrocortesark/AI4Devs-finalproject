@@ -116,14 +116,37 @@ def should_continue_after_extract_geometry(state: ValidationState) -> Literal["V
     """
     geometry_metadata = state.get("geometry_metadata", {})
     file_exists = geometry_metadata.get("file_exists_in_storage", False)
+    next_node = "ValidateNomenclature" if file_exists else "MarkRejected"
+    
+    # T-1805: Insert TRANSITION_CONDITIONAL event
+    block_id = state.get("block_id", "unknown")
+    try:
+        from src.agent.graph.nodes import insert_event
+        from src.agent.constants import EventType
+        
+        # Create updated state with transition metadata
+        transition_state = {
+            **state,
+            "transition_condition": f"file_exists_in_storage == {file_exists}",
+            "next_node": next_node,
+        }
+        
+        insert_event(block_id, EventType.TRANSITION_CONDITIONAL, "ExtractGeometry", transition_state)
+    except Exception as e:
+        logger.warning(
+            "audit.transition_event_failed",
+            block_id=block_id,
+            edge="extract_geometry",
+            error=str(e)
+        )
     
     logger.info(
         "edge.extract_geometry_decision",
         file_exists_in_storage=file_exists,
-        next_node="ValidateNomenclature" if file_exists else "MarkRejected",
+        next_node=next_node,
     )
     
-    return "ValidateNomenclature" if file_exists else "MarkRejected"
+    return next_node
 
 
 def should_continue_after_nomenclature(state: ValidationState) -> Literal["ValidateGeometry", "MarkRejected"]:
@@ -138,14 +161,36 @@ def should_continue_after_nomenclature(state: ValidationState) -> Literal["Valid
     processing (geometry validation, LLM classification) and reject immediately.
     """
     is_valid = state.get("nomenclature_valid", False)
+    next_node = "ValidateGeometry" if is_valid else "MarkRejected"
+    
+    # T-1805: Insert TRANSITION_CONDITIONAL event
+    block_id = state.get("block_id", "unknown")
+    try:
+        from src.agent.graph.nodes import insert_event
+        from src.agent.constants import EventType
+        
+        transition_state = {
+            **state,
+            "transition_condition": f"nomenclature_valid == {is_valid}",
+            "next_node": next_node,
+        }
+        
+        insert_event(block_id, EventType.TRANSITION_CONDITIONAL, "ValidateNomenclature", transition_state)
+    except Exception as e:
+        logger.warning(
+            "audit.transition_event_failed",
+            block_id=block_id,
+            edge="nomenclature",
+            error=str(e)
+        )
     
     logger.info(
         "edge.nomenclature_decision",
         nomenclature_valid=is_valid,
-        next_node="ValidateGeometry" if is_valid else "MarkRejected",
+        next_node=next_node,
     )
     
-    return "ValidateGeometry" if is_valid else "MarkRejected"
+    return next_node
 
 
 def should_continue_after_geometry(state: ValidationState) -> Literal["ClassifyTipologia", "MarkRejected"]:
@@ -160,14 +205,36 @@ def should_continue_after_geometry(state: ValidationState) -> Literal["ClassifyT
     (no point classifying a malformed mesh) and reject immediately.
     """
     is_valid = state.get("geometry_valid", False)
+    next_node = "ClassifyTipologia" if is_valid else "MarkRejected"
+    
+    # T-1805: Insert TRANSITION_CONDITIONAL event
+    block_id = state.get("block_id", "unknown")
+    try:
+        from src.agent.graph.nodes import insert_event
+        from src.agent.constants import EventType
+        
+        transition_state = {
+            **state,
+            "transition_condition": f"geometry_valid == {is_valid}",
+            "next_node": next_node,
+        }
+        
+        insert_event(block_id, EventType.TRANSITION_CONDITIONAL, "ValidateGeometry", transition_state)
+    except Exception as e:
+        logger.warning(
+            "audit.transition_event_failed",
+            block_id=block_id,
+            edge="geometry",
+            error=str(e)
+        )
     
     logger.info(
         "edge.geometry_decision",
         geometry_valid=is_valid,
-        next_node="ClassifyTipologia" if is_valid else "MarkRejected",
+        next_node=next_node,
     )
     
-    return "ClassifyTipologia" if is_valid else "MarkRejected"
+    return next_node
 
 
 # ─────────────────────────────────────────────────────────────────────────────
