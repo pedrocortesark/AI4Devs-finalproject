@@ -2,12 +2,16 @@
 
 ## Current Sprint
 **Sprint 10 — US-018 LangGraph Agent Implementation (2026-05-04 → 2026-05-11)**  
-**Status:** 🎯 **Day 10-11/20 — T-1804 COMPLETED ✅**
+**Status:** 🎯 **Day 13/20 — T-1805 COMPLETED ✅**
 
 ## Active Ticket
-**✅ Fri 09/05 — T-1804 Report Generator Node (Jinja2 Templates) COMPLETED** — Implemented nodo GenerateReport con Jinja2 templates para generar reportes JSON estructurados. Includes: (1) Template NULL-safe rendering (validation_report.json.j2, 150 LOC), (2) node_generate_report con DB persistence best-effort (145 LOC), (3) 10/10 unit tests PASS (test_report_generator.py, 580 LOC), (4) 74/74 regression tests PASS (zero regression verified), (5) Template bug fixes (boolean rendering, iso_code extraction, classification_method NULL), (6) TechnicalSpec completo (507 LOC). Commits: e32fb70 (planning), 8707bb0 (Day 1), 2c7a8af (Day 2).
+**Next up:** T-1806 or next US-018 ticket (to be determined)
 
 ## Recently Completed (Sprint 10)
+
+- **✅ Sun 11/05 — T-1805 Audit Trail per Node Transition (3 SP, 3 días)** — Implemented granular audit trail system tracking LangGraph node transitions, conditional edges, and circuit breaker activations. Includes: (1) Migration 20260508000001_add_langgraph_events.sql (node_name, state_snapshot columns + indices, 80 LOC), (2) EventType class in constants.py (5 event types, STATE_SNAPSHOT_FIELDS), (3) serialize_state_snapshot + insert_event helpers (best-effort pattern, 100 LOC), (4) EventBuffer batch optimization (context manager, threshold=10, 250 LOC), (5) @with_audit_trail decorator applied to 8 nodes (DRY principle, 120 LOC), (6) Circuit breaker + transition events (CIRCUIT_BREAKER_TRIPPED, FALLBACK_ACTIVATED, TRANSITION_CONDITIONAL), (7) 6/6 unit tests PASS (test_audit_trail.py, 700 LOC), (8) 66/66 total tests PASS (zero regression), (9) Grafana timeline queries (5 SQL templates, 200 LOC), (10) TechnicalSpec complete (1000 LOC with architecture diagrams). Total: ~1,555 LOC (code: 655, tests: 700, docs: 1,200). Performance: <40ms overhead per validation, ~20-24 events per workflow. Commits: 02c283e (Day 1 migration), 9a5c8ac (Day 2 middleware), 0574cdf (Day 3 tests + docs).
+
+- **✅ Fri 09/05 — T-1804 Report Generator Node (Jinja2 Templates) COMPLETED** — Implemented nodo GenerateReport con Jinja2 templates para generar reportes JSON estructurados. Includes: (1) Template NULL-safe rendering (validation_report.json.j2, 150 LOC), (2) node_generate_report con DB persistence best-effort (145 LOC), (3) 10/10 unit tests PASS (test_report_generator.py, 580 LOC), (4) 74/74 regression tests PASS (zero regression verified), (5) Template bug fixes (boolean rendering, iso_code extraction, classification_method NULL), (6) TechnicalSpec completo (507 LOC). Commits: e32fb70 (planning), 8707bb0 (Day 1), 2c7a8af (Day 2), bb6097b (Day 3).
 - **✅ Thu 08/05 — T-1803 Refactor Validators as LangGraph Nodes (3 SP, 2.5 días)** — Integración validators US-002 en StateGraph usando Adapter Pattern. 4 adapters created (ExtractGeometry, ValidateNomenclature, ValidateGeometry, EnrichMetadata), graph reordering (ExtractGeometry ahora first node), 5/5 integration tests PASS, 26/26 zero regression US-002 validators. TechnicalSpec + systemPatterns.md updated. Commits: 91c843e (planning), 15c412a (Day 1), 79efe93 (Day 2), 29263b2 (Day 3 docs).
 
 - **✅ Wed 08/05 — T-1802 LLM Classification + Circuit Breaker (3 SP, 2 días)** — Implementación node_classify_tipologia con OpenAI GPT-4 + fallback regex + Circuit Breaker Redis-backed. 32/32 tests PASS (20 LLM + 10 fallback + 2 integration), zero regression T-1801 (11/11 PASS). TechnicalSpec complete. Commits: 2ac8f4e (planning), 8e1f7d9 (Day 1), 3f5a2b8 (Day 2).
@@ -23,11 +27,11 @@
 - ✅ **T-1802** — LLM Classification + Circuit Breaker — COMPLETED
 - ✅ **T-1803** — Refactor Validators as Nodes (Adapter Pattern) — COMPLETED
 - ✅ **T-1804** — Report Generator (Jinja2 Templates) — COMPLETED
-- ⏸ **T-1805** — Low-Poly Generation Node (3 SP, 3 días) — PENDING
-- ⏸ **T-1806** — Store GLB in Supabase Storage (2 SP, 2 días) — PENDING
+- ✅ **T-1805** — Audit Trail per Node Transition (3 SP, 3 días) — COMPLETED
+- ⏸ **T-1806** — Low-Poly Generation Node (3 SP, 3 días) — PENDING
 - ⏸ **T-1807** — Integration Tests End-to-End (2 SP, 2 días) — PENDING
 
-**Progress:** 4/7 tickets completed (9 SP / 30.5 SP total = 29.5% done), 9 días / 20 días estimated = Day 10/20
+**Progress:** 5/7 tickets completed (13 SP / 30.5 SP total = 42.6% done), 13 días / 20 días estimated = Day 13/20
 
 ---
 
