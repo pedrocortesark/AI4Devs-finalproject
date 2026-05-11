@@ -294,7 +294,9 @@ def test_hp01_happy_path_complete_report(happy_path_state, mock_supabase):
     assert "error_messages" not in result or result["error_messages"] == []
     
     # Verify database persistence was called
-    mock_supabase.table.assert_called_once_with("blocks")
+    # T-1805: Allow multiple calls (audit trail + report persistence)
+    calls = [call[0][0] for call in mock_supabase.table.call_args_list]
+    assert "blocks" in calls, f"Expected 'blocks' table call, got: {calls}"
     mock_table = mock_supabase.table.return_value
     
     # Extract report_dict from update call
@@ -569,8 +571,10 @@ def test_error_template_not_found(happy_path_state, mock_supabase):
     assert "validation_path" in result
     assert result["validation_path"][-1] == "GenerateReport"
     
-    # Verify database NOT called (report generation failed)
-    mock_supabase.table.assert_not_called()
+    # Verify database NOT called with "blocks" (report generation failed)
+    # T-1805: Allow calls to "events" table (audit trail), but not "blocks"
+    calls = [call[0][0] for call in mock_supabase.table.call_args_list]
+    assert "blocks" not in calls, f"Expected NO 'blocks' table call, got: {calls}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
