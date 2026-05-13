@@ -18409,3 +18409,43 @@ Implementar frontend progress indicator con Supabase Realtime para visualizar en
 5. ETA estimation basado en timestamps de eventos
 6. Error state con highlighting de nodos fallidos
 ---
+
+---
+
+## 258 - T-1809 Observability & Metrics Endpoint (Production Monitoring)
+**Fecha:** 2026-05-13 14:00
+
+**Prompt Original:**
+> Vamos alla
+
+**Contexto Expandido:**
+> Usuario aprueba continuar con T-1809 tras completar exitosamente T-1807 Frontend Progress Indicator.
+> 
+> **Contexto previo:**
+> - T-1807 COMPLETADO: Frontend Progress Indicator con Zustand + Supabase Realtime (23/23 tests PASS)
+> - Commits: 8e45c9c (implementación), c3ed85d (docs)
+> - US-018 progress: 7/9 tickets (75% SP), quedan T-1809 (3 SP) + T-1810 (2 SP)
+> 
+> **Objetivo T-1809:**
+> Implementar endpoint `/api/metrics/langgraph` para monitoreo operacional en producción con métricas críticas:
+> - `total_processed`: Counter desde inicio
+> - `classification_method_distribution`: % LLM vs fallback regex (24h window)
+> - `circuit_breaker_trips_24h`: Counter de activaciones circuit breaker
+> - `avg_processing_time`: Histogram (p50, p95, p99) en segundos
+> - `llm_confidence_avg`: Gauge promedio confidence cuando usa LLM
+> - Dashboard Grafana JSON template con 4 panels
+> 
+> **Ticket:** T-1809-INFRA (3 SP, 5 horas estimadas, 2.5 días)
+> 
+> **Dependencies:**
+> - ✅ T-1805 Audit Trail (events table con node_completed, circuit_breaker_tripped eventos)
+> - ✅ T-1802 LLM Classification (classification_method, llm_confidence fields en state)
+
+**Resumen de la Respuesta/Acción:**
+Voy a implementar T-1809 con enfoque TDD siguiendo el patrón establecido:
+1. **Day 1 (5-6h):** Endpoint backend + queries SQL + schema JSON + tests unitarios (6 tests)
+2. **Day 2 (2-3h):** Dashboard Grafana JSON + Prometheus exporter (opcional) + documentation + integration tests
+3. **Pattern:** Clean Architecture (service layer separation), constants extraction, comprehensive testing
+4. **Tech Stack:** FastAPI + SQLAlchemy + Pydantic schemas + pytest
+5. **Deliverables:** Endpoint funcional, 6/6 tests PASS, dashboard importable, zero regression
+

@@ -1,0 +1,264 @@
+"""
+Metrics service - Business logic for LangGraph observability metrics.
+
+This module implements metrics aggregation from the events table to provide
+operational visibility into The Librarian agent's performance, classification
+methods, and circuit breaker activations.
+
+T-1809-INFRA: Observability & Metrics Endpoint
+"""
+from typing import Optional, Tuple, Dict, Any
+from datetime import datetime, timedelta
+from supabase import Client
+import structlog
+
+from constants import (
+    METRICS_WINDOW_HOURS,
+    PERCENTILES,
+    EVENT_TYPE_GRAPH_COMPLETED,
+    EVENT_TYPE_FALLBACK_ACTIVATED,
+)
+from schemas import (
+    LangGraphMetricsResponse,
+    ClassificationDistribution,
+    ProcessingTimeHistogram,
+)
+
+logger = structlog.get_logger()
+
+
+class MetricsService:
+    """
+    Service class for LangGraph metrics aggregation.
+    
+    Aggregates operational metrics from the events table to provide insights into:
+    - Total blocks processed (all-time counter)
+    - Classification method distribution (LLM vs fallback, 24h window)
+    - Circuit breaker trips (24h window)
+    - Processing time percentiles (p50, p95, p99)
+    - Average LLM confidence (24h window)
+    """
+    
+    def __init__(self, supabase_client: Client):
+        """
+        Initialize metrics service.
+        
+        Args:
+            supabase_client: Configured Supabase client instance
+        """
+        self.supabase = supabase_client
+    
+    def get_langgraph_metrics(self) -> Tuple[bool, Optional[LangGraphMetricsResponse], Optional[str]]:
+        """
+        Aggregate LangGraph metrics from events table.
+        
+        Returns:
+            Tuple of (success, metrics_response, error_message)
+            - success: True if metrics generated successfully
+            - metrics_response: LangGraphMetricsResponse object or None
+            - error_message: Error description or None
+        """
+        try:
+            # Calculate 24h window
+            window_start = datetime.utcnow() - timedelta(hours=METRICS_WINDOW_HOURS)
+            
+            # Query metrics
+            total_processed = self._query_total_processed()
+            classification_dist = self._query_classification_distribution(window_start)
+            circuit_breaker_trips = self._query_circuit_breaker_trips(window_start)
+            processing_time_histogram = self._query_processing_time_percentiles(window_start)
+            llm_confidence_avg = self._query_llm_confidence_avg(window_start)
+            
+            # Build response
+            metrics = LangGraphMetricsResponse(
+                total_processed=total_processed,
+                classification_method_distribution=classification_dist,
+                circuit_breaker_trips_24h=circuit_breaker_trips,
+                avg_processing_time=processing_time_histogram,
+                llm_confidence_avg=llm_confidence_avg,
+                generated_at=datetime.utcnow().isoformat() + "Z"
+            )
+            
+            logger.info(
+                "langgraph.metrics.generated",
+                total_processed=total_processed,
+                circuit_breaker_trips=circuit_breaker_trips,
+                window_hours=METRICS_WINDOW_HOURS
+            )
+            
+            return True, metrics, None
+            
+        except Exception as e:
+            logger.error("langgraph.metrics.error", error=str(e), exc_info=True)
+            return False, None, f"Failed to generate metrics: {str(e)}"
+    
+    def _query_total_processed(self) -> int:
+        """
+        Count total blocks processed since system start.
+        
+        Returns:
+            Total count of GRAPH_COMPLETED events
+        """
+        try:
+            result = self.supabase.table("events") \
+                .select("id", count="exact") \
+                .eq("event_type", EVENT_TYPE_GRAPH_COMPLETED) \
+                .execute()
+            
+            return result.count if result.count else 0
+        except Exception as e:
+            logger.warning("metrics.total_processed.error", error=str(e))
+            return 0
+    
+    def _query_classification_distribution(self, window_start: datetime) -> ClassificationDistribution:
+        """
+        Calculate distribution of classification methods (24h window).
+        
+        Args:
+            window_start: Start of 24h time window
+            
+        Returns:
+            ClassificationDistribution with llm_gpt4 and fallback_regex counts
+        """
+        try:
+            # Query events with state_snapshot containing classification_method
+            result = self.supabase.table("events") \
+                .select("state_snapshot") \
+                .eq("event_type", EVENT_TYPE_GRAPH_COMPLETED) \
+                .gte("created_at", window_start.isoformat()) \
+                .execute()
+            
+            llm_count = 0
+            fallback_count = 0
+            
+            for event in result.data:
+                if event.get("state_snapshot"):
+                    method = event["state_snapshot"].get("classification_method", "")
+                    if method == "LLM_GPT4":
+                        llm_count += 1
+                    elif method == "FALLBACK_REGEX":
+                        fallback_count += 1
+            
+            return ClassificationDistribution(
+                llm_gpt4=llm_count,
+                fallback_regex=fallback_count
+            )
+        except Exception as e:
+            logger.warning("metrics.classification_dist.error", error=str(e))
+            return ClassificationDistribution()
+    
+    def _query_circuit_breaker_trips(self, window_start: datetime) -> int:
+        """
+        Count circuit breaker activations (24h window).
+        
+        Args:
+            window_start: Start of 24h time window
+            
+        Returns:
+            Count of FALLBACK_ACTIVATED events
+        """
+        try:
+            result = self.supabase.table("events") \
+                .select("id", count="exact") \
+                .eq("event_type", EVENT_TYPE_FALLBACK_ACTIVATED) \
+                .gte("created_at", window_start.isoformat()) \
+                .execute()
+            
+            return result.count if result.count else 0
+        except Exception as e:
+            logger.warning("metrics.circuit_breaker.error", error=str(e))
+            return 0
+    
+    def _query_processing_time_percentiles(self, window_start: datetime) -> ProcessingTimeHistogram:
+        """
+        Calculate processing time percentiles (p50, p95, p99).
+        
+        NOTE: This is a simplified implementation. For production, consider using
+        PostgreSQL's percentile_cont() function for better performance.
+        
+        Args:
+            window_start: Start of 24h time window
+            
+        Returns:
+            ProcessingTimeHistogram with p50, p95, p99
+        """
+        try:
+            # Query GRAPH_STARTED and GRAPH_COMPLETED events grouped by block_id
+            result = self.supabase.table("events") \
+                .select("block_id, event_type, created_at") \
+                .in_("event_type", ["GRAPH_STARTED", EVENT_TYPE_GRAPH_COMPLETED]) \
+                .gte("created_at", window_start.isoformat()) \
+                .order("created_at") \
+                .execute()
+            
+            # Group by block_id and calculate durations
+            durations = []
+            block_times: Dict[str, Dict[str, Any]] = {}
+            
+            for event in result.data:
+                block_id = event["block_id"]
+                if block_id not in block_times:
+                    block_times[block_id] = {}
+                
+                if event["event_type"] == "GRAPH_STARTED":
+                    block_times[block_id]["start"] = datetime.fromisoformat(event["created_at"].replace("Z", "+00:00"))
+                elif event["event_type"] == EVENT_TYPE_GRAPH_COMPLETED:
+                    block_times[block_id]["end"] = datetime.fromisoformat(event["created_at"].replace("Z", "+00:00"))
+            
+            # Calculate durations in seconds
+            for block_id, times in block_times.items():
+                if "start" in times and "end" in times:
+                    duration = (times["end"] - times["start"]).total_seconds()
+                    durations.append(duration)
+            
+            # Calculate percentiles
+            if not durations:
+                return ProcessingTimeHistogram()
+            
+            durations.sort()
+            n = len(durations)
+            
+            p50 = durations[int(n * 0.50)] if n > 0 else 0.0
+            p95 = durations[int(n * 0.95)] if n > 0 else 0.0
+            p99 = durations[int(n * 0.99)] if n > 0 else 0.0
+            
+            return ProcessingTimeHistogram(p50=p50, p95=p95, p99=p99)
+            
+        except Exception as e:
+            logger.warning("metrics.processing_time.error", error=str(e))
+            return ProcessingTimeHistogram()
+    
+    def _query_llm_confidence_avg(self, window_start: datetime) -> Optional[float]:
+        """
+        Calculate average LLM confidence score (24h window).
+        
+        Args:
+            window_start: Start of 24h time window
+            
+        Returns:
+            Average confidence score (0-1) or None if no LLM classifications
+        """
+        try:
+            result = self.supabase.table("events") \
+                .select("state_snapshot") \
+                .eq("event_type", EVENT_TYPE_GRAPH_COMPLETED) \
+                .gte("created_at", window_start.isoformat()) \
+                .execute()
+            
+            confidences = []
+            for event in result.data:
+                if event.get("state_snapshot"):
+                    snapshot = event["state_snapshot"]
+                    if snapshot.get("classification_method") == "LLM_GPT4":
+                        confidence = snapshot.get("llm_confidence")
+                        if confidence is not None:
+                            confidences.append(float(confidence))
+            
+            if not confidences:
+                return None
+            
+            return sum(confidences) / len(confidences)
+            
+        except Exception as e:
+            logger.warning("metrics.llm_confidence.error", error=str(e))
+            return None

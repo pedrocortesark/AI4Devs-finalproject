@@ -691,3 +691,77 @@ class IngestionStatusResponse(BaseModel):
     skipped: Optional[int] = None
     block_ids: Optional[List[str]] = None
     error: Optional[str] = None
+
+
+# ===== T-1809-INFRA: LangGraph Observability Metrics Schemas =====
+
+class ClassificationDistribution(BaseModel):
+    """
+    Distribution of classification methods used in the last 24 hours.
+    
+    Attributes:
+        llm_gpt4: Count of blocks classified using LLM (GPT-4)
+        fallback_regex: Count of blocks classified using fallback regex
+    """
+    llm_gpt4: int = Field(default=0, description="Blocks classified using LLM GPT-4")
+    fallback_regex: int = Field(default=0, description="Blocks classified using fallback regex")
+
+
+class ProcessingTimeHistogram(BaseModel):
+    """
+    Processing time percentiles (p50, p95, p99) in seconds.
+    
+    Attributes:
+        p50: Median processing time (50th percentile)
+        p95: 95th percentile processing time
+        p99: 99th percentile processing time
+    """
+    p50: float = Field(default=0.0, description="Median processing time (seconds)")
+    p95: float = Field(default=0.0, description="95th percentile processing time (seconds)")
+    p99: float = Field(default=0.0, description="99th percentile processing time (seconds)")
+
+
+class LangGraphMetricsResponse(BaseModel):
+    """
+    Response for GET /api/metrics/langgraph endpoint.
+    
+    Provides operational metrics for The Librarian LangGraph agent to monitor
+    performance, classification method usage, and circuit breaker activations.
+    
+    Attributes:
+        total_processed: Total blocks processed since system start
+        classification_method_distribution: Distribution of LLM vs fallback usage (24h)
+        circuit_breaker_trips_24h: Number of circuit breaker activations (24h)
+        avg_processing_time: Processing time histogram (p50, p95, p99)
+        llm_confidence_avg: Average LLM confidence score when using GPT-4 (24h)
+        generated_at: Timestamp when metrics were generated
+    """
+    total_processed: int = Field(..., description="Total blocks processed since system start")
+    classification_method_distribution: ClassificationDistribution = Field(
+        ...,
+        description="Distribution of classification methods (24h window)"
+    )
+    circuit_breaker_trips_24h: int = Field(..., description="Circuit breaker activations (24h)")
+    avg_processing_time: ProcessingTimeHistogram = Field(..., description="Processing time percentiles")
+    llm_confidence_avg: Optional[float] = Field(None, description="Average LLM confidence (24h, 0-1)")
+    generated_at: str = Field(..., description="Metrics generation timestamp (ISO 8601)")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "total_processed": 1523,
+                "classification_method_distribution": {
+                    "llm_gpt4": 1402,
+                    "fallback_regex": 121
+                },
+                "circuit_breaker_trips_24h": 3,
+                "avg_processing_time": {
+                    "p50": 12.5,
+                    "p95": 45.2,
+                    "p99": 89.7
+                },
+                "llm_confidence_avg": 0.87,
+                "generated_at": "2026-05-13T14:30:00Z"
+            }
+        }
+    )
