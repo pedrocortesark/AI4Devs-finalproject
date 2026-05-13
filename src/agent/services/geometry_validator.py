@@ -129,7 +129,8 @@ class GeometryValidator:
                             failure_reason="invalid_geometry")
 
             # Check 3: Degenerate bounding box
-            bbox = obj.Geometry.GetBoundingBox(False)
+            # rhino3dm GetBoundingBox() takes no arguments (unlike .NET Rhino API)
+            bbox = obj.Geometry.GetBoundingBox()
             if not bbox.IsValid:
                 errors.append(ValidationErrorItem(
                     category=GEOMETRY_CATEGORY_NAME,

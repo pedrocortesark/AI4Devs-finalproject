@@ -376,60 +376,43 @@ def mock_openai_client(monkeypatch, mock_openai_responses):
         behavior (str): One of "success", "timeout", "rate_limit"
     
     Returns:
-        Mock OpenAI client configured with specified behavior
+        Mock ChatOpenAI client configured with specified behavior
     """
-    from unittest.mock import Mock, MagicMock
-    from openai import OpenAI
-    from openai.types.chat import ChatCompletion, ChatCompletionMessage
-    from openai.types.chat.chat_completion import Choice
-    import json
+    from unittest.mock import Mock
+    from langchain_core.messages import AIMessage
     
     def _configure_mock(behavior: str = "success"):
         """Inner factory function to configure mock behavior."""
         
-        mock_client = Mock(spec=OpenAI)
-        mock_chat = Mock()
-        mock_completions = Mock()
+        from unittest.mock import Mock, MagicMock
+        from langchain_core.messages import AIMessage
+        import json
+        
+        # Create mock ChatOpenAI client
+        mock_chat_openai = Mock()
         
         if behavior == "success":
             # Return valid classification JSON
             response_data = mock_openai_responses["hp_dovela_success"]
             content = response_data["choices"][0]["message"]["content"]
             
-            # Create proper ChatCompletion object
-            mock_completion = ChatCompletion(
-                id=response_data["id"],
-                object=response_data["object"],
-                created=response_data["created"],
-                model=response_data["model"],
-                choices=[
-                    Choice(
-                        index=0,
-                        message=ChatCompletionMessage(
-                            role="assistant",
-                            content=content
-                        ),
-                        finish_reason="stop",
-                        logprobs=None
-                    )
-                ],
-                usage=response_data["usage"]
-            )
-            
-            mock_completions.create = Mock(return_value=mock_completion)
+            # Mock LangChain ChatOpenAI.invoke() to return AIMessage
+            mock_response = AIMessage(content=content)
+            mock_chat_openai.invoke = Mock(return_value=mock_response)
             
         elif behavior == "timeout":
-            # Simulate timeout after retries
-            from openai import Timeout
-            mock_completions.create = Mock(side_effect=Timeout("Request timeout after 10 seconds"))
+            # Simulate timeout
+            from openai import APITimeoutError
+            mock_chat_openai.invoke = Mock(side_effect=APITimeoutError("Request timeout after 10 seconds"))
             
         elif behavior == "rate_limit":
             # Simulate rate limit error
             from openai import RateLimitError
-            mock_completions.create = Mock(
+            mock_response = Mock(status_code=429)
+            mock_chat_openai.invoke = Mock(
                 side_effect=RateLimitError(
                     "Rate limit exceeded",
-                    response=Mock(status_code=429),
+                    response=mock_response,
                     body={"error": {"message": "Rate limit exceeded"}}
                 )
             )
@@ -437,13 +420,13 @@ def mock_openai_client(monkeypatch, mock_openai_responses):
         else:
             raise ValueError(f"Unknown mock behavior: {behavior}")
         
-        mock_chat.completions = mock_completions
-        mock_client.chat = mock_chat
+        # Monkeypatch ChatOpenAI instantiation in llm_client.py
+        monkeypatch.setattr(
+            "src.agent.graph.llm_client.ChatOpenAI",
+            lambda **kwargs: mock_chat_openai
+        )
         
-        # Monkeypatch OpenAI client instantiation
-        monkeypatch.setattr("src.agent.graph.nodes.OpenAI", lambda **kwargs: mock_client)
-        
-        return mock_client
+        return mock_chat_openai
     
     return _configure_mock
 

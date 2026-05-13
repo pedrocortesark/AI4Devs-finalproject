@@ -86,7 +86,7 @@ class ValidationState(TypedDict, total=False):
     All nodes read from this dict and return a partial update.
     LangGraph merges the returned dict into the running state automatically.
 
-    CRITICAL: This TypedDict has EXACTLY 15 fields as specified in T-1801 tech spec.
+    CRITICAL: This TypedDict has 16 fields (updated from 15 in T-1806 to include geometry_errors).
     Do NOT add or remove fields without updating the spec first.
 
     Fields are grouped by the node that primarily writes to them:
@@ -150,22 +150,23 @@ class ValidationState(TypedDict, total=False):
     nomenclature_valid: bool
     nomenclature_errors: List[str]
 
-    # ── Geometry extraction and validation (6-7 of 15) ─────────────────────
+    # ── Geometry extraction and validation (6-8 of 16) ─────────────────────
     geometry_metadata: Dict[str, Any]
     geometry_valid: bool
+    geometry_errors: List  # List[ValidationErrorItem] — validation errors from GeometryValidator
 
-    # ── Semantic classification (8-10 of 15) ───────────────────────────────
+    # ── Semantic classification (9-11 of 16) ───────────────────────────────
     semantic_data: Dict[str, Any]
     classification_method: ClassificationMethod
     circuit_breaker_tripped: bool
 
-    # ── Global bookkeeping (11-14 of 15) ───────────────────────────────────
+    # ── Global bookkeeping (12-15 of 16) ───────────────────────────────────
     overall_status: ValidationStatus
     error_messages: List[str]
     validation_path: List[str]
     completed_at: str
 
-    # ── Output assets (15 of 15) ───────────────────────────────────────────
+    # ── Output assets (16 of 16) ───────────────────────────────────────────
     low_poly_url: str
 
 
@@ -196,36 +197,37 @@ def make_initial_state(block_id: str, retry_count: int = 0) -> ValidationState:
         >>> state["validation_path"]
         []
         >>> len(state.keys())
-        15
+        16
     
-    Added in T-1801, updated from PoC Spike to match exact spec (15 fields).
+    Added in T-1801, updated to 16 fields in T-1806 (added geometry_errors).
     """
     return ValidationState(
-        # Core identifiers (1-3 of 15)
+        # Core identifiers (1-3 of 16)
         block_id=block_id,
         created_at=datetime.utcnow().isoformat(),
         retry_count=retry_count,
 
-        # Nomenclature validation (4-5 of 15) — set by ValidateNomenclature node
+        # Nomenclature validation (4-5 of 16) — set by ValidateNomenclature node
         nomenclature_valid=False,
         nomenclature_errors=[],
 
-        # Geometry (6-7 of 15) — set by ExtractGeometry + ValidateGeometry nodes
+        # Geometry (6-8 of 16) — set by ExtractGeometry + ValidateGeometry nodes
         geometry_metadata={},
         geometry_valid=False,
+        geometry_errors=[],  # T-1806: Add geometry errors list
 
-        # Semantic classification (8-10 of 15) — set by ClassifyTipologia node
+        # Semantic classification (9-11 of 16) — set by ClassifyTipologia node
         semantic_data={},
         classification_method=ClassificationMethod.FALLBACK_REGEX,  # Default to fallback
         circuit_breaker_tripped=False,
 
-        # Global bookkeeping (11-14 of 15) — updated by any node
+        # Global bookkeeping (12-15 of 16) — updated by any node
         overall_status=ValidationStatus.PROCESSING,
         error_messages=[],
         validation_path=[],
         completed_at="",
 
-        # Output assets (15 of 15) — set by END node after geometry processing
+        # Output assets (16 of 16) — set by END node after geometry processing
         low_poly_url="",
     )
 

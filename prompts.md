@@ -18339,3 +18339,40 @@ Usuario completó T-1805 (Audit Trail) con 66/66 tests PASS y solicitó "Si, vam
 **STATUS:** ✅ APROBADO — Iniciando implementación Día 1
 
 ---
+
+## 256 - Decisión Enfoque E2E Tests T-1806 (Opción B: Mock Storage)
+**Fecha:** 2026-05-13 12:45
+
+**Prompt Original:**
+> vamos con el B, tu recomendacion
+
+**Contexto Expandido (snippet de conversación):**
+> Usuario aprueba Opción B tras revisión de 3 enfoques para tests E2E de T-1806:
+> - Opción A: Storage real + Rhino real + OpenAI mock (completo, +2h bloqueadores)
+> - **Opción B: Mock Storage + Rhino real + OpenAI mock (pragmático, +1h migration)** ✅
+> - Opción C: Mock todo (bajo ROI, duplica tests unitarios)
+>
+> Decisión basada en:
+> 1. Tests E2E de StateGraph deben validar el GRAFO, no Storage/Parsing
+> 2. Upload a Storage ya testeado en test_upload_service.py (17 tests)
+> 3. Rhino parsing ya testeado en test_rhino_parser_service.py (14 tests)
+> 4. Gap real: Flujo completo StateGraph con LLM mock (6 escenarios)
+> 5. Precedente: 32 tests existentes de StateGraph usan mock Storage
+> 6. Velocidad: 6 escenarios E2E en <10s vs >30s con Storage real
+
+**Resumen de la Respuesta/Acción:**
+Ejecutar plan de implementación Opción B:
+1. Aplicar migration T-1805 a Supabase (bloqueador crítico)
+2. Modificar test HP-E2E-01: eliminar e2e_upload_test_file, agregar mock Supabase Storage (patrón test_stategraph_validators.py)
+3. Verificar HP-E2E-01 pasa
+4. Implementar 5 escenarios restantes (EC-E2E-02 a PERF-E2E-06)
+5. Regression validation (70/70 tests)
+6. Documentation (TechnicalSpec + README)
+
+**Detalles Técnicos:**
+- Mock pattern: `with patch("infra.supabase_client.get_supabase_client")`
+- Storage download: `mock_storage.download.return_value = Path("tests/fixtures/test-model.3dm").read_bytes()`
+- Rhino parsing: Real (rhino3dm.File3dm.Read sin mock)
+- OpenAI: Mock con ChatOpenAI → AIMessage (ya implementado en conftest.py)
+- Migration: supabase/migrations/20260508000001_add_langgraph_events.sql
+---

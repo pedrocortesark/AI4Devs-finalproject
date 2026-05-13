@@ -618,7 +618,8 @@ def node_extract_geometry(state: ValidationState) -> Dict[str, Any]:
             
             for obj in model.Objects:
                 if obj.Geometry:
-                    obj_bbox = obj.Geometry.GetBoundingBox(False)
+                    # rhino3dm GetBoundingBox() takes no arguments (unlike .NET Rhino API)
+                    obj_bbox = obj.Geometry.GetBoundingBox()
                     if obj_bbox.IsValid:
                         min_x = min(min_x, obj_bbox.Min.X)
                         min_y = min(min_y, obj_bbox.Min.Y)
@@ -783,6 +784,7 @@ def node_validate_geometry(state: ValidationState) -> Dict[str, Any]:
 
     return {
         "geometry_valid": is_valid,
+        "geometry_errors": errors,  # Include errors for audit trail
         "validation_path": _append_to_path(state, node_name),
     }
 

@@ -167,19 +167,19 @@ class TestStateGraphStructure:
         # Graph has a compiled attribute if compilation succeeded
         assert hasattr(graph, "invoke")
 
-    def test_initial_state_has_15_fields(self):
-        """EC-06: ValidationState has exactly 15 fields (per T-1801 spec)."""
+    def test_initial_state_has_16_fields(self):
+        """EC-06: ValidationState has exactly 16 fields (updated in T-1806 with geometry_errors)."""
         # GIVEN: A fresh initial state
         state = make_initial_state(block_id="test-uuid-001", retry_count=0)
         
-        # THEN: State should have exactly 15 keys
-        assert len(state.keys()) == 15
+        # THEN: State should have exactly 16 keys
+        assert len(state.keys()) == 16
         
         # AND: All required fields are present
         required_fields = {
             "block_id", "created_at", "retry_count",
             "nomenclature_valid", "nomenclature_errors",
-            "geometry_metadata", "geometry_valid",
+            "geometry_metadata", "geometry_valid", "geometry_errors",
             "semantic_data", "classification_method", "circuit_breaker_tripped",
             "overall_status", "error_messages", "validation_path", "completed_at",
             "low_poly_url"
@@ -339,7 +339,7 @@ class TestStatePreservation:
         datetime.fromisoformat(final_state["completed_at"].replace("Z", "+00:00"))
 
     def test_all_state_fields_present_after_execution(self):
-        """EC-06 (extended): All 15 fields present in final state after execution."""
+        """EC-06 (extended): All 16 fields present in final state after execution (updated T-1806)."""
         # GIVEN: Initial state
         initial_state = make_initial_state(block_id="test-uuid-ec-006", retry_count=0)
         
@@ -347,11 +347,11 @@ class TestStatePreservation:
         graph = create_validation_graph()
         final_state = graph.invoke(initial_state)
         
-        # THEN: All 15 fields should still be present
+        # THEN: All 16 fields should still be present
         required_fields = {
             "block_id", "created_at", "retry_count",
             "nomenclature_valid", "nomenclature_errors",
-            "geometry_metadata", "geometry_valid",
+            "geometry_metadata", "geometry_valid", "geometry_errors",
             "semantic_data", "classification_method", "circuit_breaker_tripped",
             "overall_status", "error_messages", "validation_path", "completed_at",
             "low_poly_url"
