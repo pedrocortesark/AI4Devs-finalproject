@@ -2,12 +2,14 @@
 
 ## Current Sprint
 **Sprint 10 — US-018 LangGraph Agent Implementation (2026-05-04 → 2026-05-11)**  
-**Status:** 🎯 **Day 15/20 — T-1807 COMPLETED ✅**
+**Status:** 🎯 **Day 16/20 — T-1809 COMPLETED ✅**
 
 ## Active Ticket
-**Next up:** T-1809 Agent Error Recovery (3 SP, next sequential ticket)
+**Next up:** T-1810 Circuit Breaker Monitoring (2 SP, final ticket Sprint 10)
 
 ## Recently Completed (Sprint 10)
+
+- **✅ Mon 13/05 — T-1809 Observability & Metrics Endpoint (3 SP, 1 día)** — Implemented production-grade metrics endpoint for The Librarian agent monitoring. Includes: (1) 3 Pydantic schemas (LangGraphMetricsResponse, ClassificationDistribution, ProcessingTimeHistogram) in schemas.py (+72 LOC), (2) MetricsService with 5 query methods (total_processed, classification_dist, circuit_breaker, percentiles, llm_confidence) (~250 LOC), (3) GET /api/metrics/langgraph endpoint in api/metrics.py (~55 LOC), (4) Metrics constants in constants.py (METRICS_WINDOW_HOURS=24, EVENT_TYPE_* constants, +9 LOC), (5) 8/8 unit tests PASS (test_metrics_service.py, 1 SKIP performance test), (6) 5/5 integration tests PASS (test_metrics_endpoint.py, 2 SKIP optional features), (7) Zero regression: 33 backend unit tests still passing, (8) TechnicalSpec complete (~800 LOC with alert rules, Grafana panel recommendations, Prometheus exporter design, troubleshooting runbook). Optional features deferred: Grafana dashboard JSON, Prometheus /metrics endpoint, response caching. Total: ~1,435 LOC (code: 386, tests: 530, docs: 800). Architecture: Clean separation (router → service → Supabase), 24h rolling window for metrics, percentiles calculated in Python (production should migrate to PostgreSQL percentile_cont). Commit: 168cd58.
 
 - **✅ Sun 12/05 — T-1807 Frontend Progress Indicator (2 SP, 1 día)** — Implemented real-time progress tracking for LangGraph workflow using Zustand + Supabase Realtime. Includes: (1) uploadProgress.store.ts with 7 actions (startProgress, updateStepStatus, advanceToNextStep, markCompleted, markFailed, calculateETA, reset), (2) ProgressSteps component with 8-step visual display (custom UI, no Ant Design), (3) UploadDrawer component with ETA calculation and auto-close after 5s, (4) useSupabaseEvents hook for Realtime subscription to events table, (5) stategraph.constants.ts with node labels and EventType mappings, (6) Integration in App.tsx (queries blocks table for blockId), (7) 23/23 unit tests PASS (16 store + 7 component), (8) TypeScript strict mode compliance (fixed ignoreDeprecations error), (9) TechnicalSpec complete with 12 sections (1,500 LOC). Total: ~1,300 LOC (code: 800, tests: 500, docs: 1,500). Architecture: Zustand over Redux (simpler boilerplate), custom components using Apple-inspired DS. Commit: 8e45c9c.
 
@@ -34,10 +36,10 @@
 - ✅ **T-1805** — Audit Trail per Node Transition — COMPLETED (3 SP)
 - ✅ **T-1806** — E2E LangGraph Integration Tests — COMPLETED (3 SP, 4/6 PASS + 2/6 SKIP)
 - ✅ **T-1807** — Frontend Progress Indicator — COMPLETED (2 SP)
-- ⏸ **T-1809** — Agent Error Recovery — PENDING (3 SP)
-- ⏸ **T-1810** — Circuit Breaker Monitoring — PENDING (2 SP)
+- ✅ **T-1809** — Observability & Metrics Endpoint — COMPLETED (3 SP)
+- ⏸ **T-1810** — Circuit Breaker Monitoring — PENDING (2 SP, final ticket)
 
-**Progress:** 7/9 tickets completed (23 SP / 30.5 SP total = 75% done), 15 días / 20 días estimated = Day 15/20
+**Progress:** 8/9 tickets completed (26 SP / 30.5 SP total = 85% done), 16 días / 20 días estimated = Day 16/20
 
 ---
 
