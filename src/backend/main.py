@@ -18,6 +18,7 @@ from api.elements import router as elements_router
 from api.parts import router as parts_router
 from api.celery_health import router as celery_health_router
 from api.metrics import router as metrics_router
+from api.prometheus import router as prometheus_router  # T-1809: Prometheus exporter
 
 app = FastAPI(
     title="SF-PM API",
@@ -166,4 +167,6 @@ app.include_router(elements_router, prefix="/api/elements", tags=["Elements"])
 app.include_router(parts_router, prefix="/api", tags=["Parts"])
 app.include_router(celery_health_router, prefix="/api/debug", tags=["Debug"])
 app.include_router(metrics_router, prefix="/api", tags=["Metrics"])
+# T-1809: Prometheus endpoint (no /api prefix - Prometheus expects /metrics at root)
+app.include_router(prometheus_router, tags=["Prometheus"])
 

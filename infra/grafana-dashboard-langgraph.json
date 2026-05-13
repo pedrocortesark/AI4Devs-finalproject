@@ -1,0 +1,522 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "langgraph-metrics",
+    "title": "The Librarian - LangGraph Metrics",
+    "tags": ["langgraph", "ai", "sagrada-familia"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["10s", "30s", "1m", "5m", "15m"],
+      "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d"]
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "templating": {
+      "list": []
+    },
+    "panels": [
+      {
+        "id": 1,
+        "type": "piechart",
+        "title": "Classification Method Distribution (24h)",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "langgraph_classification_method",
+            "legendFormat": "{{method}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          },
+          "pieType": "pie",
+          "tooltip": {
+            "mode": "single"
+          },
+          "displayLabels": ["name", "percent"]
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {
+              "mode": "palette-classic"
+            },
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "llm_gpt4": {
+                    "text": "LLM (GPT-4)",
+                    "color": "green"
+                  },
+                  "fallback_regex": {
+                    "text": "Fallback (Regex)",
+                    "color": "orange"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "description": "Distribution of blocks classified via LLM GPT-4 vs Fallback Regex in the last 24 hours. High fallback usage may indicate LLM API issues or circuit breaker activation."
+      },
+      {
+        "id": 2,
+        "type": "timeseries",
+        "title": "Circuit Breaker Trips (24h)",
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "langgraph_circuit_breaker_trips_24h",
+            "legendFormat": "Circuit Breaker Trips",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 10,
+                  "color": "yellow"
+                },
+                {
+                  "value": 50,
+                  "color": "red"
+                }
+              ]
+            },
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5,
+              "stacking": {
+                "mode": "none",
+                "group": "A"
+              },
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            }
+          }
+        },
+        "description": "Number of times the circuit breaker activated in the last 24 hours. Spikes indicate LLM API degradation or failures. Alert threshold: >50 trips = Critical."
+      },
+      {
+        "id": 3,
+        "type": "histogram",
+        "title": "Processing Time Distribution (24h)",
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 16,
+          "h": 10
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(langgraph_processing_time_seconds_bucket[5m])) by (le)",
+            "legendFormat": "{{le}}",
+            "refId": "A",
+            "format": "heatmap"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "single"
+          },
+          "calculate": false
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {
+              "hideFrom": {
+                "tooltip": false,
+                "viz": false,
+                "legend": false
+              }
+            }
+          }
+        },
+        "description": "Histogram of block processing times over the last 24 hours. Buckets: 1s, 5s, 10s, 30s, 1m, 2m, 5m. Monitor p95 and p99 for performance degradation. Alert threshold: p95 >60s = Warning."
+      },
+      {
+        "id": 4,
+        "type": "gauge",
+        "title": "LLM Confidence Average (24h)",
+        "gridPos": {
+          "x": 16,
+          "y": 8,
+          "w": 8,
+          "h": 10
+        },
+        "targets": [
+          {
+            "expr": "langgraph_llm_confidence",
+            "legendFormat": "LLM Confidence",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "orientation": "auto",
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true,
+          "text": {
+            "valueSize": 48
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "red"
+                },
+                {
+                  "value": 0.5,
+                  "color": "yellow"
+                },
+                {
+                  "value": 0.7,
+                  "color": "green"
+                },
+                {
+                  "value": 0.9,
+                  "color": "blue"
+                }
+              ]
+            },
+            "mappings": [
+              {
+                "type": "special",
+                "options": {
+                  "match": "null",
+                  "result": {
+                    "text": "No LLM Data",
+                    "color": "gray"
+                  }
+                }
+              },
+              {
+                "type": "range",
+                "options": {
+                  "from": -1,
+                  "to": 0,
+                  "result": {
+                    "text": "No Classifications",
+                    "color": "gray"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "description": "Average confidence score (0-1) for blocks classified via LLM GPT-4 in the last 24 hours. Values: -1 = no LLM classifications, <0.7 = low confidence (warning), >0.9 = high confidence."
+      },
+      {
+        "id": 5,
+        "type": "stat",
+        "title": "Total Blocks Processed (All-Time)",
+        "gridPos": {
+          "x": 0,
+          "y": 18,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "langgraph_blocks_processed_total",
+            "legendFormat": "Total Processed",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "blue"
+                },
+                {
+                  "value": 1000,
+                  "color": "green"
+                },
+                {
+                  "value": 10000,
+                  "color": "yellow"
+                }
+              ]
+            }
+          }
+        },
+        "description": "Total blocks processed by The Librarian since system start. Monotonically increasing counter."
+      },
+      {
+        "id": 6,
+        "type": "stat",
+        "title": "Processing Time p50 (Median)",
+        "gridPos": {
+          "x": 6,
+          "y": 18,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(langgraph_processing_time_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "decimals": 2,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 10,
+                  "color": "yellow"
+                },
+                {
+                  "value": 30,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        },
+        "description": "Median (p50) processing time for blocks in the last 5 minutes."
+      },
+      {
+        "id": 7,
+        "type": "stat",
+        "title": "Processing Time p95",
+        "gridPos": {
+          "x": 12,
+          "y": 18,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(langgraph_processing_time_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "decimals": 2,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 30,
+                  "color": "yellow"
+                },
+                {
+                  "value": 60,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        },
+        "description": "95th percentile processing time for blocks in the last 5 minutes. Alert threshold: >60s."
+      },
+      {
+        "id": 8,
+        "type": "stat",
+        "title": "Processing Time p99",
+        "gridPos": {
+          "x": 18,
+          "y": 18,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(langgraph_processing_time_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "decimals": 2,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 60,
+                  "color": "yellow"
+                },
+                {
+                  "value": 120,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        },
+        "description": "99th percentile processing time for blocks in the last 5 minutes. Alert threshold: >120s."
+      }
+    ]
+  },
+  "overwrite": true,
+  "inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "value": "Prometheus"
+    }
+  ],
+  "folderId": null,
+  "folderUid": null
+}
