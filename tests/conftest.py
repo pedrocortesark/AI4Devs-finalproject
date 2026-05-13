@@ -324,3 +324,224 @@ def test_3dm_file_in_storage(supabase_client: Client):
         print(f"🧹 Test fixture cleaned up from storage")
     except Exception:
         pass  # Ignore cleanup errors
+
+
+# ============================================================================
+# T-1806 E2E LangGraph Integration Test Fixtures
+# ============================================================================
+
+@pytest.fixture
+def mock_openai_responses():
+    """
+    Load mock OpenAI response fixtures from JSON files.
+    
+    Returns dict with keys:
+        - hp_dovela_success: Successful classification response
+        - timeout_error: Timeout error simulation
+        - rate_limit_error: Rate limit error simulation
+    
+    Usage in tests:
+        def test_something(mock_openai_responses):
+            success_response = mock_openai_responses["hp_dovela_success"]
+    """
+    from pathlib import Path
+    import json
+    
+    fixtures_dir = Path(__file__).parent / "fixtures" / "openai_responses"
+    
+    responses = {}
+    for json_file in fixtures_dir.glob("*.json"):
+        with open(json_file) as f:
+            responses[json_file.stem] = json.load(f)
+    
+    return responses
+
+
+@pytest.fixture
+def mock_openai_client(monkeypatch, mock_openai_responses):
+    """
+    Mock OpenAI client for E2E tests to avoid consuming tokens.
+    
+    Factory fixture that allows configuring different response behaviors:
+        - "success": Returns valid classification JSON (dovela, confidence 0.92)
+        - "timeout": Raises TimeoutError after 3 retries
+        - "rate_limit": Raises HTTP 429 rate limit error
+    
+    Usage:
+        def test_hp_classification(mock_openai_client):
+            mock_openai_client("success")
+            # StateGraph will now receive mocked response
+    
+    Args:
+        behavior (str): One of "success", "timeout", "rate_limit"
+    
+    Returns:
+        Mock OpenAI client configured with specified behavior
+    """
+    from unittest.mock import Mock, MagicMock
+    from openai import OpenAI
+    from openai.types.chat import ChatCompletion, ChatCompletionMessage
+    from openai.types.chat.chat_completion import Choice
+    import json
+    
+    def _configure_mock(behavior: str = "success"):
+        """Inner factory function to configure mock behavior."""
+        
+        mock_client = Mock(spec=OpenAI)
+        mock_chat = Mock()
+        mock_completions = Mock()
+        
+        if behavior == "success":
+            # Return valid classification JSON
+            response_data = mock_openai_responses["hp_dovela_success"]
+            content = response_data["choices"][0]["message"]["content"]
+            
+            # Create proper ChatCompletion object
+            mock_completion = ChatCompletion(
+                id=response_data["id"],
+                object=response_data["object"],
+                created=response_data["created"],
+                model=response_data["model"],
+                choices=[
+                    Choice(
+                        index=0,
+                        message=ChatCompletionMessage(
+                            role="assistant",
+                            content=content
+                        ),
+                        finish_reason="stop",
+                        logprobs=None
+                    )
+                ],
+                usage=response_data["usage"]
+            )
+            
+            mock_completions.create = Mock(return_value=mock_completion)
+            
+        elif behavior == "timeout":
+            # Simulate timeout after retries
+            from openai import Timeout
+            mock_completions.create = Mock(side_effect=Timeout("Request timeout after 10 seconds"))
+            
+        elif behavior == "rate_limit":
+            # Simulate rate limit error
+            from openai import RateLimitError
+            mock_completions.create = Mock(
+                side_effect=RateLimitError(
+                    "Rate limit exceeded",
+                    response=Mock(status_code=429),
+                    body={"error": {"message": "Rate limit exceeded"}}
+                )
+            )
+        
+        else:
+            raise ValueError(f"Unknown mock behavior: {behavior}")
+        
+        mock_chat.completions = mock_completions
+        mock_client.chat = mock_chat
+        
+        # Monkeypatch OpenAI client instantiation
+        monkeypatch.setattr("src.agent.graph.nodes.OpenAI", lambda **kwargs: mock_client)
+        
+        return mock_client
+    
+    return _configure_mock
+
+
+@pytest.fixture
+def e2e_upload_test_file(supabase_client: Client):
+    """
+    Helper fixture to upload .3dm test files to Supabase Storage for E2E tests.
+    
+    Factory fixture that uploads a file and returns its storage path.
+    Automatically cleans up uploaded files after test completes.
+    
+    Usage:
+        def test_something(e2e_upload_test_file):
+            storage_path = e2e_upload_test_file("test-model.3dm", "SF-C12-D-001.3dm")
+            # File is now at raw-uploads/test-e2e/SF-C12-D-001.3dm
+    
+    Args:
+        source_filename (str): Filename in tests/fixtures/
+        destination_filename (str): Filename to use in Storage (for nomenclature testing)
+    
+    Returns:
+        str: Storage path (e.g., "test-e2e/SF-C12-D-001.3dm")
+    """
+    from pathlib import Path
+    
+    uploaded_files = []
+    
+    def _upload_file(source_filename: str, destination_filename: str) -> str:
+        """Upload a test file and track for cleanup."""
+        BUCKET_NAME = "raw-uploads"
+        DESTINATION_PATH = f"test-e2e/{destination_filename}"
+        SOURCE_FILE = Path(__file__).parent / "fixtures" / source_filename
+        
+        if not SOURCE_FILE.exists():
+            raise FileNotFoundError(f"Test fixture not found: {SOURCE_FILE}")
+        
+        # Upload to Supabase Storage
+        try:
+            with open(SOURCE_FILE, 'rb') as file:
+                supabase_client.storage.from_(BUCKET_NAME).upload(
+                    path=DESTINATION_PATH,
+                    file=file,
+                    file_options={"content-type": "application/octet-stream", "upsert": "true"}
+                )
+            uploaded_files.append(DESTINATION_PATH)
+            return DESTINATION_PATH
+            
+        except Exception as e:
+            pytest.fail(f"Failed to upload test file {source_filename}: {e}")
+    
+    yield _upload_file
+    
+    # Cleanup: Delete all uploaded files
+    if uploaded_files:
+        try:
+            supabase_client.storage.from_("raw-uploads").remove(uploaded_files)
+        except Exception:
+            pass  # Ignore cleanup errors
+
+
+@pytest.fixture
+def e2e_cleanup_blocks(supabase_client: Client):
+    """
+    Cleanup fixture for E2E test blocks with specific iso_code patterns.
+    
+    Deletes blocks created during E2E tests to prevent test pollution.
+    Tracks block_ids created during test and deletes them after test completes.
+    
+    Usage:
+        def test_e2e_flow(e2e_cleanup_blocks):
+            block_id = create_test_block()
+            e2e_cleanup_blocks.track(block_id)
+            # Block will be deleted after test
+    
+    Yields:
+        Cleanup helper with methods:
+            - track(block_id: str): Add block_id to cleanup list
+            - cleanup_now(): Manually trigger cleanup (useful for debugging)
+    """
+    tracked_block_ids = []
+    
+    class CleanupHelper:
+        def track(self, block_id: str):
+            """Track a block_id for cleanup."""
+            tracked_block_ids.append(block_id)
+        
+        def cleanup_now(self):
+            """Manually trigger cleanup (for debugging)."""
+            if tracked_block_ids:
+                try:
+                    supabase_client.table("blocks").delete().in_("id", tracked_block_ids).execute()
+                except Exception as e:
+                    print(f"Warning: Failed to cleanup blocks: {e}")
+    
+    helper = CleanupHelper()
+    
+    yield helper
+    
+    # Auto-cleanup after test
+    helper.cleanup_now()

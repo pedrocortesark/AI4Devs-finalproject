@@ -1,0 +1,13 @@
+{
+  "error": {
+    "message": "Request timeout after 10 seconds",
+    "type": "timeout_error",
+    "param": null,
+    "code": "timeout"
+  },
+  "mock_instructions": {
+    "behavior": "raise_timeout_after_retries",
+    "retries": 3,
+    "delay_pattern": "exponential_backoff"
+  }
+}

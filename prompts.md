@@ -18284,3 +18284,58 @@ MODIFY prompts.md                                              (this entry)
 **STATUS:** ⏸️ PENDING — Esperando aprobación usuario antes de implementar
 
 ---
+
+## 255 - Planificación Detallada T-1806 E2E LangGraph Integration Test
+**Fecha:** 2026-05-12 12:30
+
+**Prompt Original:**
+> sigue con la planificacion detallada
+
+**Contexto:**
+Usuario completó T-1805 (Audit Trail) con 66/66 tests PASS y solicitó "Si, vamos a rematar esta US" (completar toda US-018). Agent inició lectura de backlog para planificar T-1806 E2E Integration Test tras confirmar que es el siguiente ticket (3 SP, no confundir con antiguo T-1806 "Low-Poly Generation" de US-005 ya completado).
+
+**Resumen de la Respuesta/Acción:**
+
+**PLAN DETALLADO T-1806 (1.5 días, 12 horas)**
+
+| Tarea | Estimado | Archivos |
+|-------|----------|----------|
+| **Día 1: Setup + Fixtures + Mock OpenAI (6h)** |||
+| 1. Analizar fixtures disponibles | 0.5h | tests/fixtures/ |
+| 2. Mock OpenAI setup | 2h | tests/fixtures/openai_responses/ (NEW), tests/conftest.py |
+| 3. Conftest E2E fixtures | 1.5h | tests/conftest.py (+120 LOC) |
+| 4. Test estructura base | 2h | tests/agent/integration/test_langgraph_e2e.py (NEW, ~100 LOC) |
+| **Día 2: 6 Escenarios + Assertions + Docs (6h)** |||
+| 5. HP-E2E-01: Válido completo | 1h | test_langgraph_e2e.py (+120 LOC) |
+| 6. EC-E2E-02: Nomenclatura inválida | 0.5h | test_langgraph_e2e.py (+80 LOC) |
+| 7. EC-E2E-03: OpenAI timeout → fallback | 1h | test_langgraph_e2e.py (+100 LOC) |
+| 8. ERR-E2E-04: Geometría degenerada | 0.5h | test_langgraph_e2e.py (+70 LOC) |
+| 9. INT-E2E-05: Concurrencia 6 archivos | 1.5h | test_langgraph_e2e.py (+150 LOC) |
+| 10. PERF-E2E-06: Performance targets | 1h | test_langgraph_e2e.py (+60 LOC), pytest.ini |
+| 11. Regression validation | 0.5h | (pytest run all) |
+| 12. Documentation | 1h | docs/US-018/T-1806-E2E-TechnicalSpec.md (NEW ~300 LOC) |
+
+**TOTAL:** 12h = 1.5 días = 3 SP
+
+**ARCHIVOS A CREAR:**
+- tests/agent/integration/test_langgraph_e2e.py (~680 LOC)
+- tests/fixtures/openai_responses/*.json (~50 LOC)
+- tests/agent/integration/README.md (~80 LOC)
+- docs/US-018/T-1806-E2E-TechnicalSpec.md (~300 LOC)
+
+**MODIFICAR:**
+- tests/conftest.py (+120 LOC)
+- pytest.ini (+5 LOC)
+- Makefile (+3 LOC)
+
+**ACCEPTANCE CRITERIA:**
+- ✅ 6 tests E2E implementados (HP-E2E-01 a PERF-E2E-06)
+- ✅ Zero tokens OpenAI consumidos (mock completo)
+- ✅ Zero regression: 70/70 tests PASS
+- ✅ Performance <90s/archivo con LLM mock
+- ✅ Cleanup automático de bloques test
+- ✅ Documentation completa
+
+**STATUS:** ✅ APROBADO — Iniciando implementación Día 1
+
+---
