@@ -18449,3 +18449,44 @@ Voy a implementar T-1809 con enfoque TDD siguiendo el patrón establecido:
 4. **Tech Stack:** FastAPI + SQLAlchemy + Pydantic schemas + pytest
 5. **Deliverables:** Endpoint funcional, 6/6 tests PASS, dashboard importable, zero regression
 
+
+## 259 - T-1809 Features Opcionales (Grafana Dashboard + Prometheus Exporter)
+**Fecha:** 2026-05-13 15:30
+
+**Prompt Original:**
+> opcion b
+
+**Contexto:**
+- T-1809 core implementation COMPLETADA ✅ (commit 168cd58)
+- 13/13 tests PASSING (8 unit + 5 integration)
+- Sprint 10 Day 16: 8/9 tickets (26 SP / 30.5 SP = 85%)
+- Usuario selecciona Opción B: implementar features opcionales diferidas
+
+**Features a Implementar:**
+1. **Grafana Dashboard JSON Template** (Task 8 deferred):
+   - 4 paneles: Classification Pie Chart, Circuit Breaker Timeline, Processing Time Histogram, LLM Confidence Gauge
+   - Datasource: Prometheus (requiere Task 9)
+   - File: `infra/grafana-dashboard-langgraph.json`
+
+2. **Prometheus Exporter Endpoint** (Task 9 deferred):
+   - Endpoint: `GET /metrics` (Prometheus format)
+   - Métricas expuestas: 
+     - `langgraph_blocks_processed_total` (counter)
+     - `langgraph_classification_method` (gauge, labels: llm_gpt4, fallback_regex)
+     - `langgraph_circuit_breaker_trips_24h` (gauge)
+     - `langgraph_processing_time_seconds` (histogram, buckets)
+     - `langgraph_llm_confidence` (gauge)
+   - Library: prometheus_client (Python)
+   - Router: `api/prometheus.py`
+
+3. **Response Caching** (extra feature):
+   - Cache TTL: 60s
+   - Backend: Redis
+   - Decorator pattern en MetricsService.get_langgraph_metrics()
+
+**Objetivo:** Completar al 100% T-1809 con features de observabilidad production-grade (Grafana + Prometheus stack estándar).
+
+**Resumen de la Respuesta/Acción:**
+Crear plan detallado de 8 tareas (Prometheus exporter → Grafana dashboard → caching → tests → docs). Estimación: 3-4 horas total.
+
+---
