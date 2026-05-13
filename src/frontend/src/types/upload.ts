@@ -175,3 +175,110 @@ export type FileRejectionErrorCode =
   | 'file-too-large'
   | 'file-invalid-type'
   | 'too-many-files';
+
+// ── T-1807: Progress Indicator Types ──────────────────────────────────────────
+
+/**
+ * Status of an individual progress step in the StateGraph workflow
+ */
+export type StepStatus = 
+  | 'idle'       // Not yet started
+  | 'active'     // Currently processing
+  | 'completed'  // Successfully completed
+  | 'error'      // Failed with error
+  | 'warning';   // Completed with warnings (e.g., fallback activated)
+
+/**
+ * Represents a single step in the StateGraph validation workflow
+ */
+export interface ProgressStep {
+  /**
+   * Step index (0-7 for 8 nodes)
+   */
+  index: number;
+  
+  /**
+   * Node name (e.g., 'ExtractGeometry', 'ValidateNomenclature')
+   */
+  nodeName: string;
+  
+  /**
+   * Display label for UI
+   */
+  label: string;
+  
+  /**
+   * Current status of this step
+   */
+  status: StepStatus;
+  
+  /**
+   * Timestamp when step started (ISO string)
+   */
+  startedAt: string | null;
+  
+  /**
+   * Timestamp when step completed (ISO string)
+   */
+  completedAt: string | null;
+  
+  /**
+   * Error message if status is 'error'
+   */
+  errorMessage?: string;
+}
+
+/**
+ * Overall status of the upload + validation process
+ */
+export type UploadProgressStatus = 
+  | 'idle'         // No upload in progress
+  | 'uploading'    // File upload to storage in progress
+  | 'processing'   // LangGraph workflow in progress
+  | 'completed'    // Successfully validated
+  | 'error';       // Failed validation
+
+/**
+ * State shape for upload progress tracking
+ */
+export interface UploadProgressState {
+  /**
+   * ID of the block being processed (from /api/upload/confirm response)
+   */
+  blockId: string | null;
+  
+  /**
+   * Original filename
+   */
+  filename: string | null;
+  
+  /**
+   * Array of 8 progress steps (one per StateGraph node)
+   */
+  steps: ProgressStep[];
+  
+  /**
+   * Index of the currently active step (0-7)
+   */
+  currentStep: number;
+  
+  /**
+   * Overall status of the process
+   */
+  status: UploadProgressStatus;
+  
+  /**
+   * Timestamp when upload started (ISO string)
+   */
+  startedAt: string | null;
+  
+  /**
+   * Estimated time remaining in seconds
+   */
+  eta: number | null;
+  
+  /**
+   * Final validation result message
+   */
+  finalMessage?: string;
+}

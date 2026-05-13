@@ -12,10 +12,12 @@ import Dashboard3D from './components/Dashboard/Dashboard3D';
 import { UploadZone } from './components/UploadZone';
 import { FilePreviewPanel } from './components/FilePreviewPanel';
 import { BlockIngestionStatus } from './components/BlockIngestionStatus';
+import { UploadDrawer } from './components/UploadDrawer';
 import { usePartsStore } from './stores/parts.store';
 import { previewFile } from './services/preview.service';
 import { resetBlocks } from './services/admin.service';
 import { getPresignedUrl, uploadToStorage, confirmUpload } from './services/upload.service';
+import { getSupabaseClient } from './services/supabase.client';
 import type { FilePreviewResponse } from './types/preview';
 import type { UploadProgress } from './types/upload';
 
@@ -63,6 +65,10 @@ function UploadPage() {
   const [isResetting, setIsResetting] = useState(false);
   const [uploadAttempts, setUploadAttempts] = useState(0);
 
+  // T-1807: Progress Drawer
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [trackingBlockId, setTrackingBlockId] = useState<string | null>(null);
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function resetToPhase0() {
@@ -77,6 +83,8 @@ function UploadPage() {
     setUploadErrorDetails(null);
     setIsConfirming(false);
     setUploadAttempts(0);
+    setIsDrawerOpen(false);
+    setTrackingBlockId(null);
   }
 
   // ── Phase 0 → 1: file selected ────────────────────────────────────────────
@@ -121,6 +129,25 @@ function UploadPage() {
       await confirmUpload(file_id, file_key);
       setFileKey(file_key);
       fetchParts();
+
+      // T-1807: Query blocks table to get first block_id for progress tracking
+      try {
+        const supabase = getSupabaseClient();
+        const { data: blocks, error: blocksError } = await supabase
+          .from('blocks')
+          .select('id')
+          .eq('url_original', file_key)
+          .limit(1);
+        
+        if (!blocksError && blocks && blocks.length > 0) {
+          const blockId = blocks[0].id;
+          setTrackingBlockId(blockId);
+          setIsDrawerOpen(true);
+        }
+      } catch (drawerError) {
+        console.warn('[UploadPage] Failed to fetch block ID for drawer:', drawerError);
+        // Non-critical error, drawer won't open but upload continues
+      }
     } catch (e: any) {
       const errorMessage = e.message ?? 'Error al subir el archivo';
       const errorCode = e.response?.status ? `HTTP ${e.response.status}` : e.code;
@@ -496,6 +523,14 @@ function UploadPage() {
           </button>
         )}
       </main>
+
+      {/* T-1807: Upload Progress Drawer */}
+      <UploadDrawer
+        isOpen={isDrawerOpen}
+        blockId={trackingBlockId}
+        filename={selectedFile?.name ?? null}
+        onClose={() => setIsDrawerOpen(false)}
+      />
     </div>
   );
 }

@@ -18376,3 +18376,36 @@ Ejecutar plan de implementación Opción B:
 - OpenAI: Mock con ChatOpenAI → AIMessage (ya implementado en conftest.py)
 - Migration: supabase/migrations/20260508000001_add_langgraph_events.sql
 ---
+
+## 257 - T-1807 Frontend Progress Indicator (Real-time StateGraph visualization)
+**Fecha:** 2026-05-13 09:15
+**Prompt Original:**
+> Continua con el siguiente paso, A
+> 
+> **Contexto previo:**  
+> T-1806 Day 2 completado (E2E tests, 4/6 PASSING). US-018 está en 6/7 tickets (86% completo).
+> 
+> **Opción A seleccionada:** T-1807 Frontend Progress Indicator (2 SP, ~3h)
+> 
+> **Scope según README.md:**
+> - Real-time progress bar in Upload drawer
+> - WebSocket connection to backend events
+> - 8-step progress visualization (one per node)
+> - ETA estimation based on historical data
+> - Error state handling (failed nodes highlighted)
+> 
+> **Technical Approach:**
+> - Subscribe to `events` table via Supabase Realtime
+> - Map EventType to progress steps (NODE_ENTERED → step active, NODE_COMPLETED → step done)
+> - Use Ant Design Steps component with custom icons
+> - Store in Redux state (uploadProgress slice)
+
+**Resumen de la Respuesta/Acción:**
+Implementar frontend progress indicator con Supabase Realtime para visualizar en tiempo real el avance del StateGraph (8 nodos) en el drawer de upload. Incluye:
+1. Redux slice para uploadProgress state
+2. Supabase Realtime subscription al insertar eventos
+3. Componente ProgressSteps (Ant Design) con 8 pasos
+4. Mapeo de EventType → estado visual (idle/active/completed/error)
+5. ETA estimation basado en timestamps de eventos
+6. Error state con highlighting de nodos fallidos
+---
