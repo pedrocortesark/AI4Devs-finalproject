@@ -2,12 +2,16 @@
 
 ## Current Sprint
 **Sprint 10 — US-018 LangGraph Agent Implementation (2026-05-04 → 2026-05-11)**  
-**Status:** 🎯 **Day 13/20 — T-1805 COMPLETED ✅**
+**Status:** 🎯 **Day 15/20 — T-1807 COMPLETED ✅**
 
 ## Active Ticket
-**Next up:** T-1806 or next US-018 ticket (to be determined)
+**Next up:** T-1809 Agent Error Recovery (3 SP, next sequential ticket)
 
 ## Recently Completed (Sprint 10)
+
+- **✅ Sun 12/05 — T-1807 Frontend Progress Indicator (2 SP, 1 día)** — Implemented real-time progress tracking for LangGraph workflow using Zustand + Supabase Realtime. Includes: (1) uploadProgress.store.ts with 7 actions (startProgress, updateStepStatus, advanceToNextStep, markCompleted, markFailed, calculateETA, reset), (2) ProgressSteps component with 8-step visual display (custom UI, no Ant Design), (3) UploadDrawer component with ETA calculation and auto-close after 5s, (4) useSupabaseEvents hook for Realtime subscription to events table, (5) stategraph.constants.ts with node labels and EventType mappings, (6) Integration in App.tsx (queries blocks table for blockId), (7) 23/23 unit tests PASS (16 store + 7 component), (8) TypeScript strict mode compliance (fixed ignoreDeprecations error), (9) TechnicalSpec complete with 12 sections (1,500 LOC). Total: ~1,300 LOC (code: 800, tests: 500, docs: 1,500). Architecture: Zustand over Redux (simpler boilerplate), custom components using Apple-inspired DS. Commit: 8e45c9c.
+
+- **✅ Sat 11/05 — T-1806 E2E LangGraph Integration Tests (3 SP, 2 días)** — Implemented 6 E2E integration tests for complete StateGraph workflow using Option B pattern (mock Storage + real rhino3dm + selective validator mocks). Results: 4/6 PASSING, 2/6 SKIPPED with tech debt documented. Includes: (1) test_langgraph_e2e.py (~800 LOC) with 6 scenarios (HP-E2E-01, EC-E2E-02, EC-E2E-03, ERR-E2E-04, INT-E2E-05, PERF-E2E-06), (2) Bug fixes: ValidationErrorItem import path (try-except pattern), OpenAI APITimeoutError exception type, rhino3dm GetBoundingBox() signature, (3) State schema update: added geometry_errors field (15→16 fields), (4) Regression fix: updated stategraph unit tests for 16-field ValidationState, (5) Tech debt documentation: EC-E2E-03 (ChatOpenAI mock timing), INT-E2E-05 (ThreadPoolExecutor mock propagation), (6) Performance benchmarks: <60s (no LLM), <90s (with LLM), (7) TechnicalSpec complete (650 LOC with decision rationale and implementation patterns). Total tests: 100/114 PASS (14 pre-existing geometry failures unrelated). Commits: f6fb09c (Day 1 scaffold), ceb4254 (Day 2 implementation), 2bda141 (docs).
 
 - **✅ Sun 11/05 — T-1805 Audit Trail per Node Transition (3 SP, 3 días)** — Implemented granular audit trail system tracking LangGraph node transitions, conditional edges, and circuit breaker activations. Includes: (1) Migration 20260508000001_add_langgraph_events.sql (node_name, state_snapshot columns + indices, 80 LOC), (2) EventType class in constants.py (5 event types, STATE_SNAPSHOT_FIELDS), (3) serialize_state_snapshot + insert_event helpers (best-effort pattern, 100 LOC), (4) EventBuffer batch optimization (context manager, threshold=10, 250 LOC), (5) @with_audit_trail decorator applied to 8 nodes (DRY principle, 120 LOC), (6) Circuit breaker + transition events (CIRCUIT_BREAKER_TRIPPED, FALLBACK_ACTIVATED, TRANSITION_CONDITIONAL), (7) 6/6 unit tests PASS (test_audit_trail.py, 700 LOC), (8) 66/66 total tests PASS (zero regression), (9) Grafana timeline queries (5 SQL templates, 200 LOC), (10) TechnicalSpec complete (1000 LOC with architecture diagrams). Total: ~1,555 LOC (code: 655, tests: 700, docs: 1,200). Performance: <40ms overhead per validation, ~20-24 events per workflow. Commits: 02c283e (Day 1 migration), 9a5c8ac (Day 2 middleware), 0574cdf (Day 3 tests + docs).
 
@@ -23,15 +27,17 @@
 ## Sprint 10 Objective
 
 **Implementar LangGraph Agent para validación activa (US-018):**
-- ✅ **T-1801** — StateGraph structure (8 nodes + edges) — COMPLETED
-- ✅ **T-1802** — LLM Classification + Circuit Breaker — COMPLETED
-- ✅ **T-1803** — Refactor Validators as Nodes (Adapter Pattern) — COMPLETED
-- ✅ **T-1804** — Report Generator (Jinja2 Templates) — COMPLETED
-- ✅ **T-1805** — Audit Trail per Node Transition (3 SP, 3 días) — COMPLETED
-- ⏸ **T-1806** — Low-Poly Generation Node (3 SP, 3 días) — PENDING
-- ⏸ **T-1807** — Integration Tests End-to-End (2 SP, 2 días) — PENDING
+- ✅ **T-1801** — StateGraph structure (8 nodes + edges) — COMPLETED (5 SP)
+- ✅ **T-1802** — LLM Classification + Circuit Breaker — COMPLETED (5 SP)
+- ✅ **T-1803** — Refactor Validators as Nodes (Adapter Pattern) — COMPLETED (3 SP)
+- ✅ **T-1804** — Report Generator (Jinja2 Templates) — COMPLETED (2 SP)
+- ✅ **T-1805** — Audit Trail per Node Transition — COMPLETED (3 SP)
+- ✅ **T-1806** — E2E LangGraph Integration Tests — COMPLETED (3 SP, 4/6 PASS + 2/6 SKIP)
+- ✅ **T-1807** — Frontend Progress Indicator — COMPLETED (2 SP)
+- ⏸ **T-1809** — Agent Error Recovery — PENDING (3 SP)
+- ⏸ **T-1810** — Circuit Breaker Monitoring — PENDING (2 SP)
 
-**Progress:** 5/7 tickets completed (13 SP / 30.5 SP total = 42.6% done), 13 días / 20 días estimated = Day 13/20
+**Progress:** 7/9 tickets completed (23 SP / 30.5 SP total = 75% done), 15 días / 20 días estimated = Day 15/20
 
 ---
 

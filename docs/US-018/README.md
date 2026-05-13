@@ -1,7 +1,7 @@
 # US-018: StateGraph + LLM Classification MVP
 
-**Epic Status:** 🚧 In Progress (6/7 tickets complete, 81% done)  
-**Story Points:** 21 SP / 30.5 SP (69% complete)  
+**Epic Status:** 🚧 In Progress (7/8 tickets complete, 88% done)  
+**Story Points:** 23 SP / 30.5 SP (75% complete)  
 **Sprint:** Sprint 15-16  
 **Branch:** `feature/US-018-T-1801-stategraph-setup`
 
@@ -171,25 +171,33 @@ Implement a production-ready orchestrated validation workflow using LangGraph St
 
 ---
 
-### 🚧 T-1807: Frontend Progress Indicator (2 SP) — **PENDING**
+### ✅ T-1807: Frontend Progress Indicator (2 SP) — **COMPLETE**
 
-**Status:** ⏸️ Not Started  
-**Dependencies:** T-1801 (StateGraph must emit progress events)
+**Status:** ✅ Merged  
+**Commit:** 8e45c9c  
+**Tests:** 23/23 PASS (16 store + 7 component)
 
-**Scope:**
-- Real-time progress bar in Upload drawer
-- WebSocket connection to backend events
-- 8-step progress visualization (one per node)
-- ETA estimation based on historical data
-- Error state handling (failed nodes highlighted)
+**Deliverables:**
+- Real-time progress tracking via Supabase Realtime
+- 8-step visual indicator (ProgressSteps component)
+- UploadDrawer with ETA calculation and auto-close
+- Zustand store for state management (uploadProgress.store.ts)
+- useSupabaseEvents hook for event subscription
+- Custom UI components (no Ant Design)
+- TypeScript strict mode compliance
 
-**Technical Approach:**
-- Subscribe to `events` table via Supabase Realtime
-- Map EventType to progress steps (NODE_ENTERED → step active, NODE_COMPLETED → step done)
-- Use Ant Design Steps component with custom icons
-- Store in Redux state (uploadProgress slice)
+**Key Files:**
+- `src/frontend/src/stores/uploadProgress.store.ts` (Zustand store, 7 actions)
+- `src/frontend/src/components/ProgressSteps.tsx` (8-step visual display)
+- `src/frontend/src/components/UploadDrawer.tsx` (slide-in panel with ETA)
+- `src/frontend/src/hooks/useSupabaseEvents.ts` (Realtime subscription)
+- `src/frontend/src/constants/stategraph.constants.ts` (node labels, event mapping)
+- `src/frontend/src/App.tsx` (integration)
+- `src/frontend/src/types/upload.ts` (TypeScript interfaces)
+- `tests/frontend/src/stores/uploadProgress.store.test.ts` (16 tests)
+- `tests/frontend/src/components/ProgressSteps.test.tsx` (7 tests)
 
-**Effort:** ~3 hours (2 SP)
+**Documentation:** [T-1807-FRONTEND-TechnicalSpec.md](./T-1807-FRONTEND-TechnicalSpec.md)
 
 ---
 
