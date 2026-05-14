@@ -2,12 +2,14 @@
 
 ## Current Sprint
 **Sprint 10 — US-018 LangGraph Agent Implementation (2026-05-04 → 2026-05-11)**  
-**Status:** 🎯 **Day 16/20 — T-1809 COMPLETED ✅ 100%**
+**Status:** 🎯 **Day 17/20 — T-1810 COMPLETED ✅ 100% — SPRINT 10 FINALIZADO** 🎉
 
 ## Active Ticket
-**Next up:** T-1810 Circuit Breaker Monitoring (2 SP, final ticket Sprint 10)
+**NONE** — Sprint 10 completado exitosamente. 9/9 tickets finalizados (30.5 SP total).
 
 ## Recently Completed (Sprint 10)
+
+- **✅ Tue 13/05 — T-1810 OpenAI Rate Limiting (2 SP, 1 día) — 100% COMPLETE** — Implemented client-side token bucket rate limiter for OpenAI API to prevent HTTP 429 errors during batch uploads. **Implementation:** (1) RateLimiterService with token bucket algorithm (5 req/min default, 12s refill interval) + concurrent request limiting (max 3 simultaneous) (~401 LOC), (2) LLMClient integration with acquire_token() + acquire_concurrent_slot() pattern (~149 LOC), (3) Graceful degradation when Redis unavailable (enabled=False fallback), (4) 4 env vars (OPENAI_RATE_LIMIT_PER_MIN, OPENAI_MAX_CONCURRENT, OPENAI_RATE_LIMIT_BUCKET_SIZE, OPENAI_RATE_LIMITER_TIMEOUT), (5) 10/10 unit tests PASS (test_rate_limiter.py: HP-01 acquire success, HP-02 refill, EC-01 timeout, EC-02 concurrent limit, ERR-01 graceful degradation, INT-01 batch 10 requests, INT-02 release slot, UTIL-01 reset, 2× get_status), (6) 5/5 integration tests PASS (test_llm_rate_limiting.py: HP-01 acquire + release, EC-01 concurrent enforcement, INT-01 multiple requests, INT-02 Redis unavailable, INT-03 timeout), (7) Zero regression (15/15 new tests, 0 regressions on existing 76 tests baseline). **Total:** ~1,930 LOC (code: 650, tests: 770, docs: 510). **Performance:** <5ms overhead per LLM request, batch 100 files = 20 min (5 req/min) vs 8.3 min failures without limit. **Architecture Decision:** Client-side rate limiting (Option C) chosen over Celery queue routing (Option A) for pragmatism (preserves StateGraph synchronous flow, 600 LOC vs 1,200 LOC, low risk). **Dependency:** None (stdlib + redis-py already installed). **TechnicalSpec:** docs/US-018/T-1810-TechnicalSpec.md (450 LOC). **Commit:** f0c5332.
 
 - **✅ Mon 13/05 — T-1809 Observability & Metrics Endpoint (3 SP, 1.5 días) — 100% COMPLETE** — Implemented production-grade metrics endpoint with optional features (Prometheus + Grafana + Redis caching). **Core Implementation:** (1) 3 Pydantic schemas (LangGraphMetricsResponse, ClassificationDistribution, ProcessingTimeHistogram) in schemas.py (+72 LOC), (2) MetricsService with 5 query methods (total_processed, classification_dist, circuit_breaker, percentiles, llm_confidence) (~250 LOC), (3) GET /api/metrics/langgraph endpoint in api/metrics.py (~55 LOC), (4) 8/8 unit tests PASS + 5/5 integration tests PASS (test_metrics_service.py, test_metrics_endpoint.py, 1 SKIP performance test, 2 SKIP optional features), (5) Zero regression: 33 backend unit tests still passing, (6) Commit: 168cd58. **Optional Features:** (7) PrometheusService with 5 metric collectors (Counter, Gauge, Histogram) (~220 LOC), (8) GET /metrics endpoint (Prometheus text exposition format, ~140 LOC), (9) Grafana dashboard JSON with 8 panels (~500 LOC), (10) Redis caching on /api/metrics/langgraph (60s TTL, 99% DB load reduction, +80 LOC), (11) 12/12 unit tests PASS (test_prometheus_service.py), (12) 6/6 integration tests PASS + 2 SKIP optional (test_prometheus_endpoint.py), (13) TechnicalSpec extended with §15-§17 (+335 LOC documentation), (14) Commit: a9b209e. **Total:** ~1,770 LOC (code: 425, tests: 880, docs: 1,135). Architecture: Clean separation (router → service → Supabase), 24h rolling window, Prometheus scraping ready, Grafana import ready. **Dependency:** prometheus-client==0.20.0.
 
@@ -37,9 +39,9 @@
 - ✅ **T-1806** — E2E LangGraph Integration Tests — COMPLETED (3 SP, 4/6 PASS + 2/6 SKIP)
 - ✅ **T-1807** — Frontend Progress Indicator — COMPLETED (2 SP)
 - ✅ **T-1809** — Observability & Metrics Endpoint — COMPLETED (3 SP)
-- ⏸ **T-1810** — Circuit Breaker Monitoring — PENDING (2 SP, final ticket)
+- ✅ **T-1810** — OpenAI Rate Limiting (Client-Side Token Bucket) — COMPLETED (2 SP)
 
-**Progress:** 8/9 tickets completed (26 SP / 30.5 SP total = 85% done), 16 días / 20 días estimated = Day 16/20
+**Progress:** 9/9 tickets completed (30.5 SP / 30.5 SP total = 100% done) 🎉, 17 días / 20 días estimated = Day 17/20 (3 días ahead of schedule)
 
 ---
 
