@@ -21,6 +21,7 @@
     "noFallthroughCasesInSwitch": true,
 
     /* Path Mapping */
+    // "ignoreDeprecations": "6.0", // Temporarily disabled - TS version incompatibility
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

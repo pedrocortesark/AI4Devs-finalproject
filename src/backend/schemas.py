@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
+from constants import MAX_FILE_SIZE_BYTES
 
 class UploadRequest(BaseModel):
     """
@@ -10,12 +11,28 @@ class UploadRequest(BaseModel):
 
     Attributes:
         filename (str): The name of the file to upload. Must end with .3dm.
-        size (int): The size of the file in bytes. Must be greater than 0.
+        size (int): The size of the file in bytes. Must be greater than 0 and less than 500MB.
         checksum (Optional[str]): optional checksum of the file for integrity verification.
     """
     filename: str = Field(..., description="Name of the file to upload (must be .3dm)")
     size: int = Field(..., gt=0, description="Size in bytes")
     checksum: Optional[str] = Field(None, description="Optional checksum for validation")
+
+    @field_validator('size')
+    @classmethod
+    def validate_file_size(cls, v: int) -> int:
+        """
+        Validate file size does not exceed 500MB (max upload limit).
+
+        Raises:
+            ValueError: If file size exceeds MAX_FILE_SIZE_BYTES constant.
+        """
+        if v > MAX_FILE_SIZE_BYTES:
+            raise ValueError(
+                f"File size {v} bytes exceeds maximum allowed size of "
+                f"500MB ({MAX_FILE_SIZE_BYTES} bytes)"
+            )
+        return v
 
 class UploadResponse(BaseModel):
     """
@@ -43,10 +60,10 @@ class ConfirmUploadRequest(BaseModel):
     a file to the presigned URL, to trigger backend processing.
 
     Attributes:
-        file_id (str): The unique identifier returned from the presigned URL request.
+        file_id (UUID): The unique identifier returned from the presigned URL request.
         file_key (str): The S3 object key where the file was uploaded.
     """
-    file_id: str = Field(..., description="UUID of the uploaded file")
+    file_id: UUID = Field(..., description="UUID of the uploaded file")
     file_key: str = Field(..., description="S3 object key (path in bucket)")
 
 
@@ -234,17 +251,22 @@ class PartCanvasItem(BaseModel):
         iso_code: Part identifier (ISO-19650 format, e.g., SF-C12-D-001)
         status: Lifecycle state (reuses existing BlockStatus enum)
         tipologia: Part typology (capitel, columna, dovela, clave, imposta, etc.)
-        low_poly_url: Storage URL to simplified GLB file (~1000 triangles, ~300-400KB with Draco)
-        bbox: 3D bounding box for camera centering and spatial queries
-        workshop_id: Assigned workshop UUID (NULL if unassigned)
+        material_type: Material type (US-015: for LOD system)
+        high_poly_url: Storage URL to high-detail GLB (~7k tris, ~600-800KB, LOD Level 0: 0-5m)
+        mid_poly_url: Storage URL to mid-detail GLB (~2k tris, ~300-400KB, LOD Level 1: 5-20m)
+        low_poly_url: Storage URL to low-detail GLB (~500 tris, ~150-200KB, LOD Level 2: 20-50m)
+        bbox: 3D bounding box for camera centering, spatial queries, and LOD Level 3 (>50m proxy)
     """
     id: UUID = Field(..., description="Block UUID")
     iso_code: str = Field(..., description="Part identifier (e.g., SF-C12-D-001)")
     status: BlockStatus = Field(..., description="Lifecycle state")
     tipologia: str = Field(..., description="Part typology")
-    low_poly_url: Optional[str] = Field(None, description="GLB file URL for 3D rendering")
+    material_type: Optional[str] = Field(None, description="Material type (Montjuïc, Gaudí, Synthetic)")
+    high_poly_url: Optional[str] = Field(None, description="High-detail GLB URL (~7k tris, LOD 0-5m)")
+    mid_poly_url: Optional[str] = Field(None, description="Mid-detail GLB URL (~2k tris, LOD 5-20m)")
+    low_poly_url: Optional[str] = Field(None, description="Low-detail GLB URL (~500 tris, LOD 20-50m)")
+    mtl_url: Optional[str] = Field(None, description="Companion MTL URL for per-face Rhino layer colors (high-poly only)")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
-    workshop_id: Optional[UUID] = Field(None, description="Assigned workshop UUID")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -253,9 +275,11 @@ class PartCanvasItem(BaseModel):
         "iso_code": "SF-C12-D-001",
         "status": "validated",
         "tipologia": "capitel",
+        "material_type": "Montjuïc",
+        "high_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/high-poly/550e8400.glb",
+        "mid_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/mid-poly/550e8400.glb",
         "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
-        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-        "workshop_id": "123e4567-e89b-12d3-a456-426614174000"
+        "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]}
         }
         }
     )
@@ -312,8 +336,6 @@ class PartDetailResponse(BaseModel):
         created_at: Row creation timestamp (ISO 8601 format)
         low_poly_url: Presigned CDN URL for GLB file (TTL 5min), None if not generated yet
         bbox: 3D bounding box for camera positioning
-        workshop_id: Assigned workshop UUID (NULL if unassigned)
-        workshop_name: Workshop human-readable name (NULL if unassigned)
         validation_report: Automatic validation results from The Librarian agent
         glb_size_bytes: File size of GLB in bytes (optional, from validation metadata)
         triangle_count: Number of triangles (optional, from validation metadata)
@@ -325,8 +347,6 @@ class PartDetailResponse(BaseModel):
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
     low_poly_url: Optional[str] = Field(None, description="Presigned CDN URL for GLB (TTL 5min)")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
-    workshop_id: Optional[UUID] = Field(None, description="Assigned workshop UUID")
-    workshop_name: Optional[str] = Field(None, description="Workshop human-readable name")
     validation_report: Optional[ValidationReport] = Field(None, description="Validation results from agent")
     glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
     triangle_count: Optional[int] = Field(None, description="Triangle count (for performance)")
@@ -341,8 +361,6 @@ class PartDetailResponse(BaseModel):
         "created_at": "2026-02-15T10:30:00Z",
         "low_poly_url": "https://d1234abcd.cloudfront.net/low-poly/550e8400.glb?X-Amz-Expires=300&...",
         "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
-        "workshop_id": "123e4567-e89b-12d3-a456-426614174000",
-        "workshop_name": "Taller Granollers",
         "validation_report": {
         "is_valid": True,
         "errors": [],
@@ -412,7 +430,7 @@ class ElementStatus(str, Enum):
 
 class Element(BaseModel):
     """
-    Element schema optimized for 3D canvas rendering (US-005).
+    Element schema optimized for 3D canvas rendering (US-005 + US-015 LOD).
 
     Contract: Must match TypeScript interface Element exactly (T-1505-FRONT).
 
@@ -421,13 +439,19 @@ class Element(BaseModel):
     - Renamed: tipologia → material_type (internationalization)
     - Changed: material_type from enum to str (validated against 62 real materials)
 
+    LOD System (US-015):
+    - 4-level LOD: high_poly (0-5m), mid_poly (5-20m), low_poly (20-50m), bbox (>50m)
+    - URLs are CDN-transformed presigned URLs to GLB files
+
     Attributes:
         id: Element UUID
         iso_code: ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)
         status: Lifecycle state (ElementStatus enum)
         material_type: Stone material type (validated against 62 MATERIAL_COLORS)
-        low_poly_url: Presigned CDN URL to GLB file (~1000 triangles)
-        bbox: 3D bounding box for camera centering
+        high_poly_url: CDN URL to high-detail GLB (~7k tris, Level 0: 0-5m viewing)
+        mid_poly_url: CDN URL to mid-detail GLB (~2k tris, Level 1: 5-20m viewing)
+        low_poly_url: CDN URL to low-detail GLB (~500 tris, Level 2: 20-50m viewing)
+        bbox: 3D bounding box for camera centering and LOD Level 3 (>50m wireframe proxy)
     """
     id: UUID = Field(..., description="Element UUID")
     iso_code: str = Field(..., description="ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)")
@@ -436,13 +460,33 @@ class Element(BaseModel):
         ...,
         description="Stone material type (one of 62 real materials: Montjuïc, Ulldecona, etc.)"
     )
+    high_poly_url: Optional[str] = Field(
+        None,
+        description="CDN URL to high-detail GLB (~7k tris, LOD Level 0: 0-5m viewing distance)"
+    )
+    mid_poly_url: Optional[str] = Field(
+        None,
+        description="CDN URL to mid-detail GLB (~2k tris, LOD Level 1: 5-20m viewing distance)"
+    )
     low_poly_url: Optional[str] = Field(
         None,
-        description="Presigned CDN URL for GLB file (NULL if async processing incomplete)"
+        description="CDN URL to low-detail GLB (~500 tris, LOD Level 2: 20-50m viewing distance)"
+    )
+    mtl_url: Optional[str] = Field(
+        None,
+        description="Companion MTL URL for per-face Rhino layer colors (high-poly only)"
     )
     bbox: Optional[BoundingBox] = Field(
         None,
-        description="3D bounding box (NULL if async processing incomplete)"
+        description="3D bounding box (used for camera centering and LOD Level 3: >50m wireframe proxy)"
+    )
+    agrupacio: Optional[str] = Field(
+        None,
+        description="Architectural grouping from Rhino metadata (SF_ARC_Agrupacio1 attribute)"
+    )
+    rhino_metadata: Optional[dict] = Field(
+        None,
+        description="Raw Rhino 3DM metadata (JSONB) containing userstrings like Material, Codi, etc."
     )
 
     @field_validator('material_type')
@@ -460,7 +504,7 @@ class Element(BaseModel):
         Raises:
             ValueError: If material not in VALID_MATERIALS list
         """
-        from agent.constants import VALID_MATERIALS
+        from constants import VALID_MATERIALS
 
         if v not in VALID_MATERIALS:
             raise ValueError(
@@ -477,6 +521,8 @@ class Element(BaseModel):
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
         "material_type": "Montjuïc",
+        "high_poly_url": "https://d1234abcd.cloudfront.net/models/high-poly/550e8400_20260307T120000Z.glb",
+        "mid_poly_url": "https://d1234abcd.cloudfront.net/models/mid-poly/550e8400_20260307T120000Z.glb",
         "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400_20260307T120000Z.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
         }
@@ -547,17 +593,19 @@ class ElementDetail(BaseModel):
     status: ElementStatus = Field(..., description="Lifecycle state")
     material_type: str = Field(..., description="Stone material type (62 options)")
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
+    updated_at: Optional[str] = Field(None, description="Last update timestamp (ISO 8601)")
     low_poly_url: Optional[str] = Field(None, description="Presigned CDN URL (TTL 5min)")
     bbox: Optional[BoundingBox] = Field(None, description="3D bounding box")
     validation_report: Optional[ValidationReport] = Field(None, description="Validation results")
     glb_size_bytes: Optional[int] = Field(None, description="GLB file size in bytes")
     triangle_count: Optional[int] = Field(None, description="Triangle count (performance)")
+    rhino_metadata: Optional[dict] = Field(None, description="Rhino 3DM metadata (JSONB)")
 
     @field_validator('material_type')
     @classmethod
     def validate_material_type(cls, v: str) -> str:
         """Validate material_type against 62 real materials."""
-        from agent.constants import VALID_MATERIALS
+        from constants import VALID_MATERIALS
 
         if v not in VALID_MATERIALS:
             raise ValueError(f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} valid materials.")
@@ -579,7 +627,11 @@ class ElementDetail(BaseModel):
         "metadata": {"layer_count": 1, "object_count": 1}
         },
         "glb_size_bytes": 312456,
-        "triangle_count": 987
+        "triangle_count": 987,
+        "rhino_metadata": {
+            "userstrings": {"Codi": "GLPER.B-PAE0720.0701", "Material": "Montjuïc"},
+            "geometry_type": "InstanceReference"
+        }
         }
         }
     )
@@ -602,5 +654,114 @@ class ElementNavigationResponse(BaseModel):
         "current_index": 42,
         "total_count": 150
         }
+        }
+    )
+
+
+# ===== US-020: Preview and Ingestion Status Schemas =====
+
+class BlockPreview(BaseModel):
+    """Preview info for a single InstanceDefinition in a .3dm file."""
+    name: str
+    is_instance_object: bool
+    has_metadata: bool
+    codi: Optional[str] = None
+    material: Optional[str] = None
+    iso_valid: bool
+    iso_issues: List[str]
+    user_strings: Dict[str, str]
+    already_exists: bool
+
+
+class FilePreviewResponse(BaseModel):
+    """Response for POST /api/upload/preview."""
+    filename: str
+    total_blocks: int
+    valid_blocks: int       # is_instance_object AND iso_valid AND has_metadata AND NOT already_exists
+    invalid_blocks: int     # not valid AND not duplicate
+    duplicate_blocks: int   # already_exists=True
+    blocks: List[BlockPreview]
+
+
+class IngestionStatusResponse(BaseModel):
+    """Response for GET /api/upload/ingestion-status/{task_id}."""
+    task_id: str
+    ready: bool
+    registered: Optional[int] = None
+    skipped: Optional[int] = None
+    block_ids: Optional[List[str]] = None
+    error: Optional[str] = None
+
+
+# ===== T-1809-INFRA: LangGraph Observability Metrics Schemas =====
+
+class ClassificationDistribution(BaseModel):
+    """
+    Distribution of classification methods used in the last 24 hours.
+    
+    Attributes:
+        llm_gpt4: Count of blocks classified using LLM (GPT-4)
+        fallback_regex: Count of blocks classified using fallback regex
+    """
+    llm_gpt4: int = Field(default=0, description="Blocks classified using LLM GPT-4")
+    fallback_regex: int = Field(default=0, description="Blocks classified using fallback regex")
+
+
+class ProcessingTimeHistogram(BaseModel):
+    """
+    Processing time percentiles (p50, p95, p99) in seconds.
+    
+    Attributes:
+        p50: Median processing time (50th percentile)
+        p95: 95th percentile processing time
+        p99: 99th percentile processing time
+    """
+    p50: float = Field(default=0.0, description="Median processing time (seconds)")
+    p95: float = Field(default=0.0, description="95th percentile processing time (seconds)")
+    p99: float = Field(default=0.0, description="99th percentile processing time (seconds)")
+
+
+class LangGraphMetricsResponse(BaseModel):
+    """
+    Response for GET /api/metrics/langgraph endpoint.
+    
+    Provides operational metrics for The Librarian LangGraph agent to monitor
+    performance, classification method usage, and circuit breaker activations.
+    
+    Attributes:
+        total_processed: Total blocks processed since system start
+        classification_method_distribution: Distribution of LLM vs fallback usage (24h)
+        circuit_breaker_trips_24h: Number of circuit breaker activations (24h)
+        avg_processing_time: Processing time histogram (p50, p95, p99)
+        llm_confidence_avg: Average LLM confidence score when using GPT-4 (24h)
+        generated_at: Timestamp when metrics were generated
+    """
+    total_processed: int = Field(..., description="Total blocks processed since system start")
+    classification_method_distribution: ClassificationDistribution = Field(
+        ...,
+        description="Distribution of classification methods (24h window)"
+    )
+    circuit_breaker_trips_24h: int = Field(..., description="Circuit breaker activations (24h)")
+    avg_processing_time: ProcessingTimeHistogram = Field(..., description="Processing time percentiles")
+    llm_confidence_avg: Optional[float] = Field(None, description="Average LLM confidence (24h, 0-1)")
+    generated_at: str = Field(..., description="Metrics generation timestamp (ISO 8601)")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "total_processed": 1523,
+                "classification_method_distribution": {
+                    "llm_gpt4": 1402,
+                    "fallback_regex": 121
+                },
+                "circuit_breaker_trips_24h": 3,
+                "avg_processing_time": {
+                    "p50": 12.5,
+                    "p95": 45.2,
+                    "p99": 89.7
+                },
+                "llm_confidence_avg": 0.87,
+                "generated_at": "2026-05-13T14:30:00Z"
+            }
         }
     )

@@ -128,6 +128,43 @@ CREATE INDEX idx_blocks_low_poly_processing
 
 **Design Decision**: No pagination on `/api/parts` endpoint — canvas needs all parts loaded at once for proper 3D scene rendering. Response size kept <200KB via field selection (no heavy JSON payloads).
 
+### Pydantic Field Validators with Extracted Constants (T-1507-TEST)
+
+**Pattern**: Use `@field_validator` decorators with centralized constants for business logic validation at the API boundary.
+
+**Implementation** (`src/backend/schemas.py`):
+```python
+from constants import MAX_FILE_SIZE_BYTES  # 500MB = 524,288,000 bytes
+
+class UploadRequest(BaseModel):
+    filename: str
+    size: int = Field(..., gt=0)
+    
+    @field_validator('size')
+    @classmethod
+    def validate_file_size(cls, v: int) -> int:
+        """Validate file size does not exceed 500MB (max upload limit)."""
+        if v > MAX_FILE_SIZE_BYTES:
+            raise ValueError(
+                f"File size {v} bytes exceeds maximum allowed size of "
+                f"500MB ({MAX_FILE_SIZE_BYTES} bytes)"
+            )
+        return v
+```
+
+**Benefits**:
+- **Fail-Fast Validation**: Invalid requests rejected at API boundary (before service layer)
+- **Automatic 422 Responses**: Pydantic validation errors return HTTP 422 Unprocessable Entity
+- **DRY Principle**: Constants in `constants.py` eliminate magic numbers (500 * 1024 * 1024)
+- **Type Safety**: Pydantic UUID field type auto-validates UUID format (rejects "not-a-uuid" strings)
+
+**Use Cases**:
+- File size limits (ERR-BE-03: 500MB max upload)
+- UUID format validation (ERR-BE-02: Pydantic UUID field type)
+- Enum constraints (material_type validated against VALID_MATERIALS list)
+
+**Anti-Pattern**: Do NOT duplicate validation logic in service layer — centralize in schemas.py.
+
 ## Backend Architecture Patterns
 
 ### Clean Architecture (Implemented in T-004-BACK)
@@ -935,5 +972,235 @@ return FileProcessingResult(
 2. **ISO-19650 Compliance**: Document/layer metadata for audit trail
 3. **Manufacturing Integration**: Object-level part numbers, QA notes, mass calculations
 4. **Validation Rules**: Future nomenclature validation can reference extracted user strings
+
+---
+
+## 3D Renderer Patterns (Frontend)
+
+### Custom LOD System with OBJLoader (2026-03-13)
+
+**Context**: Three.js Level-of-Detail (LOD) system for 3D part visualization in dashboard. Initial implementation used drei's `<Detailed>` component, but encountered geometry positioning bug (elements rendered at origin [0,0,0] instead of absolute Rhino coordinates).
+
+**Root Cause**: The `@react-three/drei` library's `<Detailed>` component has implicit dependency on `useGLTF` hook and GLTFLoader. When used with custom loaders (OBJLoader, FBXLoader, etc.), `<Detailed>` fails to preserve object transformations.
+
+**Solution**: Custom `useLOD` hook that replaces drei's `<Detailed>` with distance-based conditional rendering.
+
+#### Implementation Pattern
+
+**Custom Hook** (`src/frontend/src/hooks/useLOD.ts`):
+```typescript
+import { useFrame, useThree } from '@react-three/fiber';
+import { useState } from 'react';
+import * as THREE from 'three';
+
+export function useLOD(elementPosition: [number, number, number]): number {
+  const { camera } = useThree();
+  const [lodLevel, setLodLevel] = useState(1);
+
+  useFrame(() => {
+    const distance = camera.position.distanceTo(
+      new THREE.Vector3(...elementPosition)
+    );
+    let newLevel: number;
+    if (distance < 5) newLevel = 0;       // High poly: 0-5 meters
+    else if (distance < 20) newLevel = 1; // Mid poly: 5-20 meters
+    else if (distance < 50) newLevel = 2; // Low poly: 20-50 meters
+    else newLevel = 3;                    // BBox only: >50 meters
+
+    if (newLevel !== lodLevel) {
+      setLodLevel(newLevel);
+    }
+  });
+
+  return lodLevel;
+}
+```
+
+**Component Usage** (`src/frontend/src/components/Dashboard/ElementMesh.tsx`):
+```tsx
+// Import custom hook instead of drei's Detailed
+import { useLOD } from '@/hooks/useLOD';
+
+function ElementMesh({ element, position }: ElementMeshProps) {
+  const lodLevel = useLOD(position);
+  
+  // Load OBJ files (drei's useGLTF not applicable)
+  const highPoly = useOBJ(element.high_poly_url);
+  const midPoly = useOBJ(element.mid_poly_url);
+  const lowPoly = useOBJ(element.low_poly_url);
+  
+  return (
+    <group position={position} rotation={[-Math.PI/2, 0, 0]}>
+      {/* Conditional rendering based on LOD level */}
+      {lodLevel === 0 && highPoly && <primitive object={highPoly.clone()} />}
+      {lodLevel === 1 && midPoly && <primitive object={midPoly.clone()} />}
+      {lodLevel === 2 && lowPoly && <primitive object={lowPoly.clone()} />}
+      {lodLevel === 3 && <BBoxProxy bbox={element.bbox} />}
+    </group>
+  );
+}
+```
+
+#### LOD Distance Thresholds
+
+| Level | Distance | Mesh Type | Use Case |
+|-------|----------|-----------|----------|
+| 0 | 0-5m | High Poly | Close inspection, detail review |
+| 1 | 5-20m | Mid Poly | Normal viewing, navigation |
+| 2 | 20-50m | Low Poly | Overview, context |
+| 3 | >50m | BBox Wireframe | Scene organization, spatial layout |
+
+**Design Rationale**:
+- **5m threshold**: User can see fine detail (carvings, joinery)
+- **20m threshold**: User can identify part type and orientation
+- **50m threshold**: User needs context, not geometry
+- **>50m**: BBox only (wireframe) reduces GPU load for distant parts
+
+#### Performance Characteristics
+
+**Before** (drei's Detailed + OBJLoader):
+- ❌ Geometry at origin [0,0,0] (transformation lost)
+- ❌ BBox wireframe rendered correctly (absolute position preserved)
+- ❌ Incompatible with custom loaders
+
+**After** (custom useLOD):
+- ✅ Geometry at absolute Rhino coordinates (transformation preserved)
+- ✅ Smooth LOD transitions (no flicker)
+- ✅ Works with any Three.js loader (OBJ, FBX, PLY, etc.)
+- ✅ ~60 FPS with 18 parts loaded (tested on MacBook Pro M1)
+
+#### Anti-Patterns
+
+**❌ DO NOT** use drei's `<Detailed>` with custom Three.js loaders:
+```tsx
+// WRONG: Detailed assumes useGLTF, breaks with OBJLoader
+<Detailed distances={[0, 5, 20, 50]}>
+  <primitive object={objMesh} />
+</Detailed>
+```
+
+**❌ DO NOT** call `useGLTF.preload()` on OBJ file URLs:
+```tsx
+// WRONG: useGLTF.preload() only works with GLB files
+useGLTF.preload(element.low_poly_url); // URL points to .obj, not .glb
+```
+
+**✅ DO** use custom useLOD hook with conditional rendering:
+```tsx
+// CORRECT: Custom LOD hook works with any loader
+const lodLevel = useLOD(position);
+{lodLevel === 0 && <primitive object={highPolyMesh} />}
+{lodLevel === 1 && <primitive object={midPolyMesh} />}
+```
+
+#### Related Decisions
+- **2026-03-13**: Migrated from GLB to OBJ format due to trimesh export bugs (see `memory-bank/decisions.md`)
+- **Backend**: OBJ files generated with absolute Rhino coordinates preserved
+- **Coordinate System**: Rhino Z-up → Three.js Y-up via `rotation={[-Math.PI/2, 0, 0]}`
+
+#### Files Modified
+- `src/frontend/src/hooks/useLOD.ts` (NEW)
+- `src/frontend/src/components/Dashboard/ElementMesh.tsx` (refactored)
+- `src/frontend/src/components/Dashboard/PartsScene.tsx` (removed useGLTF references)
+
+---
+
+## Agent Architecture Patterns
+
+### Adapter Pattern for LangGraph Validators (T-1803)
+
+**Context:** LangGraph StateGraph nodes must return partial state updates (dicts), but existing validators (US-002) return domain-specific objects. T-1803 required integrating production validators into StateGraph **without modifying validator code** (zero regression requirement).
+
+**Pattern:** Adapter (Wrapper) Pattern
+
+**Structure:**
+```
+┌─────────────────────────────────────────────────┐
+│          LangGraph StateGraph                   │
+│                                                 │
+│  ┌────────────┐   ┌────────────┐              │
+│  │ Validate   │──▶│ Validate   │              │
+│  │Nomenclature│   │ Geometry   │              │
+│  │ (Adapter)  │   │ (Adapter)  │              │
+│  └─────┬──────┘   └─────┬──────┘              │
+│        │ calls          │ calls                │
+│        ▼                ▼                      │
+│  ┌─────────────────────────────────┐          │
+│  │    US-002 Validators (UNCHANGED) │          │
+│  │                                 │          │
+│  │  NomenclatureValidator          │          │
+│  │  GeometryValidator              │          │
+│  │  UserStringExtractor            │          │
+│  │                                 │          │
+│  │  26 tests PASS (zero regression)│          │
+│  └─────────────────────────────────┘          │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**Implementation Pattern:**
+```python
+# Adapter Wrapper (src/agent/graph/nodes.py)
+def node_validate_nomenclature(state: ValidationState) -> Dict[str, Any]:
+    """
+    T-1803 ADAPTER: Calls NomenclatureValidator (US-002) via wrapper.
+    
+    Pattern:
+    1. Extract state fields → List[LayerInfo]
+    2. Call original validator → List[ValidationErrorItem]
+    3. Update state with results → Dict[str, Any]
+    """
+    from src.agent.services.nomenclature_validator import NomenclatureValidator
+    
+    # 1. Extract from state
+    geometry_metadata = state.get("geometry_metadata", {})
+    layers = geometry_metadata.get("layers", [])
+    
+    # 2. Call original validator (UNCHANGED US-002 code)
+    validator = NomenclatureValidator()
+    errors = validator.validate_nomenclature(layers)
+    
+    # 3. Update state
+    return {
+        "nomenclature_valid": len(errors) == 0,
+        "nomenclature_errors": errors,
+        "validation_path": _append_to_path(state, "ValidateNomenclature"),
+    }
+```
+
+**Benefits:**
+1. **Zero Regression:** Validators remain 100% unchanged (26 US-002 tests still PASS)
+2. **Reusability:** Validators usable independently (CLI tools, standalone scripts, future graphs)
+3. **Testability:** Clear separation → Validators isolated (unit tests), Adapters integrated (StateGraph tests)
+4. **Maintainability:** Changes to validators don't break StateGraph (loose coupling)
+5. **Future-Proofing:** Adding new validators → create adapter wrapper (no graph changes)
+
+**When to Use:**
+- Integrating existing services into LangGraph StateGraph
+- Need zero regression guarantee (service code cannot change)
+- Service returns domain objects, but StateGraph needs dict updates
+- Service used in multiple contexts (not just StateGraph)
+
+**When NOT to Use:**
+- Service only used within StateGraph (direct implementation preferred)
+- Service already returns dicts (no adaptation needed)
+- Tight coupling acceptable (service designed for StateGraph)
+
+**Related Files:**
+- `src/agent/graph/nodes.py` - 4 adapter implementations (ValidateNomenclature, ExtractGeometry, ValidateGeometry, EnrichMetadata)
+- `src/agent/services/nomenclature_validator.py` - US-002 validator (UNCHANGED)
+- `src/agent/services/geometry_validator.py` - US-002 validator (UNCHANGED)
+- `docs/US-018/T-1803-REFACTOR-TechnicalSpec.md` - Full architecture documentation
+
+**Lessons Learned:**
+1. **Mock Fixtures Must Match Real APIs:** UserStringCollection mock initially didn't support dict access (caused test failures)
+2. **Graph Reordering Has Cascading Effects:** Changing node order broke existing tests (fixed with autouse fixtures)
+3. **State Reuse for Performance:** Store `rhino_model` in state to avoid re-parsing (used by multiple nodes)
+
+**Metrics (T-1803):**
+- Implementation: ~900 LOC (4 adapters + graph reordering + 5 integration tests)
+- Test Coverage: **74/74 tests PASS** (5 integration + 26 US-002 + 11 T-1801 + 32 T-1802)
+- Zero Regression: ✅ VERIFIED (26 US-002 tests unchanged)
+- Duration: 2.5 días (Day 1: Adapters, Day 2: Testing, Day 3: Documentation)
 
 ---

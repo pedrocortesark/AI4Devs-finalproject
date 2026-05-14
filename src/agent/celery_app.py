@@ -5,7 +5,17 @@ This module initializes the Celery application instance with secure
 configurations for distributed task processing.
 """
 
+import os
 from celery import Celery
+
+
+# RAILWAY FIX: Remove template env vars that Celery can't parse.
+# Railway injects CELERY_BROKER_URL=${REDIS_PASSWORD} which takes precedence
+# over constructor parameters. Delete them so config.py settings are used.
+if 'CELERY_BROKER_URL' in os.environ and '${' in os.environ['CELERY_BROKER_URL']:
+    del os.environ['CELERY_BROKER_URL']
+if 'CELERY_RESULT_BACKEND' in os.environ and '${' in os.environ['CELERY_RESULT_BACKEND']:
+    del os.environ['CELERY_RESULT_BACKEND']
 
 
 # Conditional import: support both direct execution and module import
@@ -44,7 +54,8 @@ celery_app = Celery(
     CELERY_APP_NAME,
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=['tasks.file_validation', 'tasks.geometry_processing'],
+    # Do NOT use include=[] - causes circular import
+    # Tasks will be imported explicitly after app initialization
 )
 
 # Configuration
@@ -77,3 +88,11 @@ celery_app.conf.update(
     # Celery 6.0 compatibility
     broker_connection_retry_on_startup=True,
 )
+
+# Import tasks AFTER celery_app is fully initialized to avoid circular imports
+# This registers the @celery_app.task decorated functions with the Celery instance
+try:
+    from tasks import file_validation, geometry_processing  # noqa: F401
+except ImportError:
+    # In test/dev context with full module paths
+    from src.agent.tasks import file_validation, geometry_processing  # noqa: F401

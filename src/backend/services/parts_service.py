@@ -14,122 +14,24 @@ from constants import (
     PARTS_LIST_SELECT_FIELDS,
     QUERY_FIELD_IS_ARCHIVED,
     QUERY_FIELD_CREATED_AT,
-    QUERY_ORDER_DESC,
 )
 
 
 class PartsService:
     """
-    Service for parts listing operations.
+    Service for parts list operations.
 
-    Provides business logic for fetching parts with dynamic filtering,
-    optimized for 3D canvas rendering in Dashboard (US-005).
+    Handles database queries and transforms raw data into API-ready format.
     """
 
     def __init__(self, supabase_client: Client):
         """
-        Initialize PartsService with database client.
+        Initialize service with Supabase client.
 
         Args:
-            supabase_client: Supabase client instance for database operations
+            supabase_client: Authenticated Supabase client
         """
         self.supabase = supabase_client
-
-    def _apply_cdn_transformation(self, url: Optional[str]) -> Optional[str]:
-        """
-        Transform Supabase S3 URL to CDN URL when USE_CDN is enabled.
-
-        This method implements the URL transformation strategy for GLB file delivery
-        optimization (T-1001-INFRA). It only transforms URLs that match our S3 bucket
-        pattern to avoid double-transformation of already-CDN URLs.
-
-        Detection Logic:
-        - 'processed-geometry': Our S3 bucket name for optimized GLB files
-        - 'supabase.co': Ensures we only transform Supabase Storage URLs, not external CDNs
-
-        Args:
-            url: Original URL from database (S3 or NULL)
-
-        Returns:
-            CDN URL if transformation applied, original URL if skipped, None if input was None
-        """
-        from config import settings
-
-        # Early return: NULL URLs remain NULL (geometry not processed yet)
-        if url is None:
-            return None
-
-        # Early return: CDN disabled (development mode with direct S3 access)
-        if not settings.USE_CDN:
-            return url
-
-        # Early return: Not a Supabase S3 URL (external CDN or already transformed)
-        if 'processed-geometry' not in url or 'supabase.co' not in url:
-            return url
-
-        # Transform: Extract path after bucket name and prepend CDN base URL
-        # Example: https://xxx.supabase.co/.../processed-geometry/low-poly/550e8400.glb
-        #       -> https://xxx.cloudfront.net/low-poly/550e8400.glb
-        path = url.split('processed-geometry/')[-1]
-        return f"{settings.CDN_BASE_URL}/{path}"
-
-    def _transform_row_to_part_item(self, row: Dict[str, Any]) -> PartCanvasItem:
-        """
-        Transform database row to PartCanvasItem Pydantic model.
-
-        Handles NULL-safe extraction of optional fields (low_poly_url, bbox, workshop_id)
-        and JSONB parsing for bounding box data.
-
-        T-1001-INFRA: Delegates CDN URL transformation to _apply_cdn_transformation().
-
-        Args:
-            row: Database row dictionary from Supabase query result
-
-        Returns:
-            PartCanvasItem with all fields populated from row
-        """
-        # Parse bbox from JSONB to Pydantic model (NULL-safe)
-        bbox_data = row.get("bbox")
-        bbox = None
-        if bbox_data is not None:
-            bbox = BoundingBox(
-                min=bbox_data["min"],
-                max=bbox_data["max"]
-            )
-
-        # T-1001-INFRA: Apply CDN transformation if enabled (extracted method)
-        low_poly_url = self._apply_cdn_transformation(row.get("low_poly_url"))
-
-        return PartCanvasItem(
-            id=row["id"],
-            iso_code=row["iso_code"],
-            status=row["status"],
-            tipologia=row["tipologia"],
-            low_poly_url=low_poly_url,  # CDN-transformed or original
-            bbox=bbox,
-            workshop_id=row.get("workshop_id")  # NULL-safe
-        )
-
-    def _build_filters_applied(self, status: Optional[str], tipologia: Optional[str], workshop_id: Optional[str]) -> Dict[str, str]:
-        """
-        Build filters_applied dictionary from non-NULL filter parameters.
-
-        Args:
-            status: Status filter value
-            tipologia: Tipologia filter value
-            workshop_id: Workshop ID filter value
-
-        Returns:
-            Dictionary with only non-NULL filters included
-        """
-        filters = {}
-        if status is not None:
-            filters["status"] = status
-        if tipologia is not None:
-            filters["tipologia"] = tipologia
-        if workshop_id is not None:
-            filters["workshop_id"] = workshop_id
-        return filters
 
     def list_parts(
         self,
@@ -163,25 +65,23 @@ class PartsService:
         query = query.eq(QUERY_FIELD_IS_ARCHIVED, False)
 
         # Apply optional filters
-        if status is not None:
+        if status:
             query = query.eq("status", status)
-
-        if tipologia is not None:
+        if tipologia:
             query = query.eq("tipologia", tipologia)
-
-        if workshop_id is not None:
+        if workshop_id:
             query = query.eq("workshop_id", workshop_id)
 
-        # Apply ordering (newest first)
-        query = query.order(QUERY_FIELD_CREATED_AT, desc=QUERY_ORDER_DESC)
+        # Sort by created_at descending (newest first)
+        query = query.order(QUERY_FIELD_CREATED_AT, desc=True)
 
         # Execute query
-        result = query.execute()
+        response = query.execute()
 
-        # Transform DB rows to Pydantic models
-        parts = [self._transform_row_to_part_item(row) for row in result.data]
+        # Transform rows to PartCanvasItem
+        parts = [self._transform_row_to_part_item(row) for row in response.data]
 
-        # Build filters_applied dict for transparency
+        # Build filters_applied dict
         filters_applied = self._build_filters_applied(status, tipologia, workshop_id)
 
         return PartsListResponse(
@@ -189,3 +89,59 @@ class PartsService:
             count=len(parts),
             filters_applied=filters_applied
         )
+
+    def _transform_row_to_part_item(self, row: Dict[str, Any]) -> PartCanvasItem:
+        """
+        Transform database row to PartCanvasItem.
+
+        Handles NULL values for optional fields (low_poly_url, bbox, workshop_id).
+
+        Args:
+            row: Raw database row dict
+
+        Returns:
+            PartCanvasItem with standardized structure
+        """
+        # Parse bbox from JSONB (handle NULL)
+        bbox = None
+        if row.get("bbox"):
+            bbox_data = row["bbox"]
+            bbox = BoundingBox(
+                min=bbox_data["min"],
+                max=bbox_data["max"]
+            )
+
+        return PartCanvasItem(
+            id=row["id"],
+            iso_code=row["iso_code"],
+            status=row["status"],
+            tipologia=row["tipologia"],
+            low_poly_url=row.get("low_poly_url"),
+            high_poly_url=row.get("high_poly_url"),
+            mid_poly_url=row.get("mid_poly_url"),
+            mtl_url=row.get("mtl_url"),
+            bbox=bbox,
+        )
+
+    def _build_filters_applied(
+        self,
+        status: Optional[str],
+        tipologia: Optional[str],
+        workshop_id: Optional[str]
+    ) -> Dict[str, Any]:
+        """
+        Build filters_applied dict for transparency.
+
+        Args:
+            status: Status filter value
+            tipologia: Tipologia filter value
+            workshop_id: Workshop ID filter value
+
+        Returns:
+            Dict with applied filters (None if not applied)
+        """
+        return {
+            "status": status,
+            "tipologia": tipologia,
+            "workshop_id": workshop_id
+        }

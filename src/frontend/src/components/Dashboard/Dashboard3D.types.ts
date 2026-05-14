@@ -26,8 +26,6 @@ export interface Dashboard3DProps {
   /** Custom empty state message */
   emptyMessage?: string;
   
-  /** Initial sidebar dock position (default: 'right') */
-  initialSidebarDock?: DockPosition;
 }
 
 /**

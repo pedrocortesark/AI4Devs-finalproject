@@ -28,8 +28,9 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
   const clearSelection = usePartsStore((state: any) => state.clearSelection);
   const selectedId = usePartsStore((state: any) => state.selectedId);
   const parts = usePartsStore((state: any) => state.parts); // reactive: re-renders when parts load
+  const filters = usePartsStore((state: any) => state.filters); // reactive: re-renders when filters change
   const getFilteredParts = usePartsStore((state: any) => state.getFilteredParts);
-  const filteredParts = useMemo(() => getFilteredParts(), [parts, getFilteredParts]);
+  const filteredParts = useMemo(() => getFilteredParts(), [parts, filters, getFilteredParts]);
 
   // Merge default config with custom config
   const cameraPosition = cameraConfig?.position || CAMERA_CONFIG.POSITION;
@@ -95,16 +96,29 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         {/* Coordinate System Helper — Shows origin (0,0,0) with RGB axes */}
         <axesHelper args={[100]} /> {/* 100m axes for scale reference */}
 
-        {/* Ambient Light */}
-        <ambientLight intensity={LIGHTING_CONFIG.AMBIENT_INTENSITY} />
+        {/* Enhanced Lighting for Better Geometry Visualization */}
+        {/* Ambient Light - soft overall illumination */}
+        <ambientLight intensity={0.6} />
+        
+        {/* Hemisphere Light - simulates sky/ground ambient */}
+        <hemisphereLight 
+          args={['#ffffff', '#444444', 0.5]} 
+          position={[0, 100, 0]} 
+        />
 
-        {/* Directional Light with Shadows */}
+        {/* Main Directional Light (Key Light) with Shadows */}
         <directionalLight
-          position={LIGHTING_CONFIG.DIRECTIONAL_POSITION as [number, number, number]}
-          intensity={LIGHTING_CONFIG.DIRECTIONAL_INTENSITY}
+          position={[50, 100, 50]}
+          intensity={1.2}
           castShadow
-          shadow-mapSize-width={LIGHTING_CONFIG.SHADOW_MAP_SIZE}
-          shadow-mapSize-height={LIGHTING_CONFIG.SHADOW_MAP_SIZE}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+        />
+        
+        {/* Fill Light - softer light from opposite side */}
+        <directionalLight
+          position={[-50, 50, -50]}
+          intensity={0.4}
         />
 
         {/* Grid */}
@@ -122,6 +136,7 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
         {/* Orbit Controls — makeDefault registers controls in R3F context so <Bounds> can find them */}
         <OrbitControls
           makeDefault
+          target={CAMERA_CONFIG.TARGET}
           enableDamping={CONTROLS_CONFIG.ENABLE_DAMPING}
           dampingFactor={CONTROLS_CONFIG.DAMPING_FACTOR}
           minDistance={CONTROLS_CONFIG.MIN_DISTANCE}
@@ -139,8 +154,8 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           <PartsScene parts={filteredParts} selectedId={selectedId} />
         </Suspense>
 
-        {/* Debug Helpers — TEMPORARILY ENABLED for diagnosis */}
-        <DebugHelpers parts={filteredParts} enabled={true} />
+        {/* Debug Helpers — disabled, kept for local development use only */}
+        <DebugHelpers parts={filteredParts} enabled={false} />
 
         {/* Stats Panel (dev only) */}
         {showStats && <Stats />}

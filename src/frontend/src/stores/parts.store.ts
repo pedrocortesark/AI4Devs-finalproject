@@ -15,8 +15,10 @@ import { listParts } from '@/services/parts.service';
  * Parts filter structure
  */
 export interface PartsFilters {
-  status: string[];
-  tipologia: string[];
+  material: string[];    // Filter by material_type (Montjuïc, Ulldecona, etc.)
+  agrupacio: string[];   // Filter by SF_ARC_Agrupacio1 Rhino metadata key
+  tipologia: string[];   // Filter by tipologia (capitel, columna, dovela, etc.)
+  status: string[];      // Filter by status (validated, uploaded, etc.)
   workshop_id: string | null;
   [key: string]: string | string[] | null | undefined;  // Index signature for Record compatibility (allows undefined from Partial)
 }
@@ -39,9 +41,16 @@ interface PartsState {
   
   /** Error message if fetch fails */
   error: string | null;
+
+  /**
+   * Color rendering mode for 3D canvas.
+   * 'material' — uniform stone color per element (from MATERIAL_COLORS[tipologia])
+   * 'layer'    — per-face Rhino layer colors via MTL companion file (mtl_url)
+   */
+  colorMode: 'material' | 'layer';
   
-  /** Fetch parts from API */
-  fetchParts: () => Promise<void>;
+  /** Fetch parts from API. Pass silent=true to skip the loading indicator (background polls). */
+  fetchParts: (silent?: boolean) => Promise<void>;
   
   /** Update filters (partial merge) */
   setFilters: (filters: Partial<PartsFilters>) => void;
@@ -57,6 +66,9 @@ interface PartsState {
   
   /** Clear selection */
   clearSelection: () => void;
+
+  /** Switch color rendering mode */
+  setColorMode: (mode: 'material' | 'layer') => void;
 }
 
 /**
@@ -82,16 +94,19 @@ interface PartsState {
 export const usePartsStore = create<PartsState>((set, get) => ({
   parts: [],
   filters: {
-    status: [],
+    material: [],
+    agrupacio: [],
     tipologia: [],
+    status: [],
     workshop_id: null,
   },
   selectedId: null,
   isLoading: false,
   error: null,
+  colorMode: 'material',
 
-  fetchParts: async () => {
-    set({ isLoading: true, error: null });
+  fetchParts: async (silent = false) => {
+    if (!silent) set({ isLoading: true, error: null });
 
     try {
       const parts = await listParts(get().filters);
@@ -102,13 +117,13 @@ export const usePartsStore = create<PartsState>((set, get) => ({
         current.length === parts.length &&
         current.every((p, i) => p.id === parts[i].id && p.status === parts[i].status && p.low_poly_url === parts[i].low_poly_url);
       if (unchanged) {
-        set({ isLoading: false });
+        if (!silent) set({ isLoading: false });
       } else {
         set({ parts, isLoading: false });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch parts';
-      set({ error: errorMessage, isLoading: false });
+      if (!silent) set({ error: errorMessage, isLoading: false });
     }
   },
 
@@ -126,8 +141,10 @@ export const usePartsStore = create<PartsState>((set, get) => ({
   clearFilters: () => {
     set({
       filters: {
-        status: [],
+        material: [],
+        agrupacio: [],
         tipologia: [],
+        status: [],
         workshop_id: null,
       }
     });
@@ -135,23 +152,33 @@ export const usePartsStore = create<PartsState>((set, get) => ({
 
   getFilteredParts: () => {
     const { parts, filters } = get();
-    
+
     return parts.filter(part => {
-      // Apply status filter (OR logic)
-      if (filters.status.length > 0 && !filters.status.includes(part.status)) {
+      // Apply material filter (OR logic) — filters by material_type via tipologia field
+      if (filters.material.length > 0 && !filters.material.includes(part.tipologia)) {
         return false;
       }
-      
+
+      // Apply agrupacio filter (OR logic) — filters by SF_ARC_Agrupacio1
+      if (filters.agrupacio.length > 0 && (part.agrupacio === null || !filters.agrupacio.includes(part.agrupacio))) {
+        return false;
+      }
+
       // Apply tipologia filter (OR logic)
-      if (filters.tipologia.length > 0 && !filters.tipologia.includes(part.tipologia)) {
+      if (filters.tipologia && filters.tipologia.length > 0 && !filters.tipologia.includes(part.tipologia)) {
         return false;
       }
-      
+
+      // Apply status filter (OR logic)
+      if (filters.status && filters.status.length > 0 && !filters.status.includes(part.status)) {
+        return false;
+      }
+
       // Apply workshop_id filter
       if (filters.workshop_id && part.workshop_id !== filters.workshop_id) {
         return false;
       }
-      
+
       return true;
     });
   },
@@ -162,5 +189,9 @@ export const usePartsStore = create<PartsState>((set, get) => ({
 
   clearSelection: () => {
     set({ selectedId: null });
+  },
+
+  setColorMode: (mode) => {
+    set({ colorMode: mode });
   },
 }));

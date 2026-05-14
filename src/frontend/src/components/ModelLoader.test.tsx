@@ -17,7 +17,8 @@ vi.mock('@react-three/fiber', () => ({
 
 vi.mock('@react-three/drei', () => ({
   useGLTF: vi.fn(() => ({ 
-    scene: { 
+    scene: {
+      isObject3D: true, // Required by ModelLoader validation (line 198)
       clone: () => ({ 
         traverse: vi.fn() 
       }) 

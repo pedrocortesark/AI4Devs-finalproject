@@ -59,7 +59,7 @@ jobs:
           DATABASE_USER=postgres
           DATABASE_PASSWORD=${DB_PASSWORD}
           DATABASE_NAME=sfpm_db_test
-          DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@db:5432/sfpm_db_test
+          DATABASE_URL=${{ secrets.SUPABASE_DATABASE_URL }}
           REDIS_PASSWORD=${REDIS_PASS}
           CELERY_BROKER_URL=redis://:${REDIS_PASS}@redis:6379/0
           CELERY_RESULT_BACKEND=redis://:${REDIS_PASS}@redis:6379/0
@@ -77,13 +77,7 @@ jobs:
           DOCKER_BUILDKIT: 1
 
       - name: Start infrastructure services
-        run: docker compose up -d db redis agent-worker
-
-      - name: Wait for database to be ready
-        run: |
-          echo "Waiting for PostgreSQL to be ready..."
-          timeout 30 bash -c 'until docker compose exec -T db pg_isready -U postgres; do sleep 1; done'
-          echo "✅ PostgreSQL is ready"
+        run: docker compose up -d redis agent-worker
 
       - name: Wait for Redis to be ready
         run: |
@@ -119,8 +113,6 @@ jobs:
         run: |
           echo "=== Backend container logs ==="
           docker compose logs backend
-          echo "=== Database container logs ==="
-          docker compose logs db
           echo "=== Redis container logs ==="
           docker compose logs redis
           echo "=== Agent worker container logs ==="
@@ -137,7 +129,7 @@ jobs:
           DATABASE_USER=postgres
           DATABASE_PASSWORD=dummy
           DATABASE_NAME=sfpm_db_test
-          DATABASE_URL=postgresql://postgres:dummy@db:5432/sfpm_db_test
+          DATABASE_URL=dummy
           REDIS_PASSWORD=dummy
           CELERY_BROKER_URL=redis://:dummy@redis:6379/0
           CELERY_RESULT_BACKEND=redis://:dummy@redis:6379/0
@@ -170,7 +162,7 @@ jobs:
           DATABASE_USER=postgres
           DATABASE_PASSWORD=test_ci_password_$(openssl rand -hex 8)
           DATABASE_NAME=sfpm_db_test
-          DATABASE_URL=postgresql://postgres:test_ci_password@db:5432/sfpm_db_test
+          DATABASE_URL=dummy
           REDIS_PASSWORD=test_redis_$(openssl rand -hex 8)
           CELERY_BROKER_URL=redis://:test_redis_password@redis:6379/0
           CELERY_RESULT_BACKEND=redis://:test_redis_password@redis:6379/0
@@ -213,7 +205,7 @@ jobs:
           DATABASE_USER=postgres
           DATABASE_PASSWORD=dummy
           DATABASE_NAME=sfpm_db
-          DATABASE_URL=postgresql://postgres:dummy@db:5432/sfpm_db
+          DATABASE_URL=dummy
           REDIS_PASSWORD=dummy
           CELERY_BROKER_URL=redis://:dummy@redis:6379/0
           CELERY_RESULT_BACKEND=redis://:dummy@redis:6379/0
@@ -237,7 +229,7 @@ jobs:
           DATABASE_USER=postgres
           DATABASE_PASSWORD=dummy
           DATABASE_NAME=sfpm_db
-          DATABASE_URL=postgresql://postgres:dummy@db:5432/sfpm_db
+          DATABASE_URL=dummy
           REDIS_PASSWORD=dummy
           CELERY_BROKER_URL=redis://:dummy@redis:6379/0
           CELERY_RESULT_BACKEND=redis://:dummy@redis:6379/0

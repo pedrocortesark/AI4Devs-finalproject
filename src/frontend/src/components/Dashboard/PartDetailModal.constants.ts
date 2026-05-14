@@ -241,7 +241,9 @@ export const ANIMATION_DURATIONS = {
  */
 export const DEFAULTS = {
   INITIAL_TAB: 'viewer' as TabId,
-  ENABLE_NAVIGATION: true,
+  // TEMPORARILY DISABLED: Backend endpoint /api/parts/{id}/adjacent was removed in US-015 cleanup
+  // Re-enable when navigation endpoint is implemented for elements
+  ENABLE_NAVIGATION: false,
   AUTO_CLOSE_ERROR_DELAY: 3000, // 3 seconds
 } as const;
 

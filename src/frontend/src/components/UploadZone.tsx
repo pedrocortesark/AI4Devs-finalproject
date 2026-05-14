@@ -161,15 +161,15 @@ export function UploadZone({
         
         {isDragActive ? (
           <p style={STYLES.dragText}>
-            Drop the file here...
+            Suelta el archivo aquí...
           </p>
         ) : (
           <div>
             <p style={STYLES.instructionText.primary}>
-              Drag & drop your .3dm file here, or click to select
+              Arrastra tu archivo .3dm aquí, o haz clic para seleccionar
             </p>
             <p style={STYLES.instructionText.secondary}>
-              Maximum file size: {formatSizeInMB(maxFileSize)}MB
+              Tamaño máximo: {formatSizeInMB(maxFileSize)} MB
             </p>
           </div>
         )}

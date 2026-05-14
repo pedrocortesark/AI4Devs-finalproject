@@ -15,6 +15,7 @@ Status: ✅ Tests reorganized from test_parts_api.py (should PASS)
 Author: AI Assistant (T-0510-TEST-BACK TDD-RED Phase)
 Date: 2026-02-23
 """
+import pytest
 from uuid import uuid4
 from fastapi.testclient import TestClient
 
@@ -105,9 +106,13 @@ def test_fi02_filter_by_tipologia(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_fi03_filter_by_workshop_id(supabase_client: Client):
     """
     FI-03: Filter by workshop_id (UUID validation enforced).
+
+    OBSOLETE: workshop_id column removed in T-1501-DB migration.
+    Workshops are not used in MVP scope.
 
     Given: Block A (workshop_id = W1), Block B (workshop_id = W2)
     When: GET /api/parts?workshop_id=W1
@@ -195,9 +200,12 @@ def test_fi04_multiple_filters_with_and_logic(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_fi05_invalid_uuid_returns_400(supabase_client: Client):
     """
     FI-05: Invalid UUID format in workshop_id returns 400 Bad Request.
+
+    OBSOLETE: workshop_id parameter removed from API after T-1501-DB migration.
 
     Given: Valid endpoint with filter accepting UUID
     When: GET /api/parts?workshop_id=not-a-uuid

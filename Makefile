@@ -1,4 +1,4 @@
-.PHONY: build build-prod up-db up-backend up-frontend up down init-db setup-events migrate-t0503 migrate-all migrate-local migrate-cloud test test-all test-infra test-unit test-integration test-storage shell clean front-install test-front front-shell help
+.PHONY: build build-prod up-backend up-frontend up down init-db setup-events migrate test test-all test-infra test-unit test-integration test-storage shell clean front-install test-front front-shell help
 
 # Force bash as shell (required on Windows with GnuWin32 make)
 SHELL := bash
@@ -49,11 +49,7 @@ lint-docker:
 	docker run --rm -i hadolint/hadolint < src/agent/Dockerfile
 	docker run --rm -i hadolint/hadolint < src/frontend/Dockerfile
 
-# Start only the database
-up-db:
-	docker compose up -d db
-
-# Start backend + its dependencies (db + redis)
+# Start backend + its dependencies (redis only)
 up-backend:
 	docker compose up -d backend
 
@@ -80,52 +76,26 @@ init-db:
 setup-events:
 	docker compose run --rm backend python /app/infra/setup_events_table.py
 
-# Apply T-0503-DB migration (add low_poly_url and bbox columns)
-migrate-t0503:
-	@echo "📦 Applying T-0503-DB migration (low_poly_url + bbox)..."
-	docker compose run --rm backend python /app/infra/apply_t0503_migration.py
-
-# Apply all pending migrations (runs all SQL files in supabase/migrations/)
-# NOTE: connects to local Docker db container, NOT Supabase cloud
-migrate-all:
-	@echo "📦 Applying all Supabase migrations..."
-	@for file in supabase/migrations/*.sql; do \
-		echo "  Applying $$file..."; \
-		docker compose run --rm backend bash -c "PGPASSWORD=\$$DATABASE_PASSWORD psql -h db -U \$$DATABASE_USER -d \$$DATABASE_NAME -f /app/$$file" || exit 1; \
-	done
-	@echo "✅ All migrations applied successfully"
-
-# Apply all migrations to LOCAL Docker PostgreSQL (requires: make up-db)
-# Use this when the postgres_data volume already exists (not fresh install).
-# On a fresh install (make clean + make up-db), migrations run automatically
-# via docker-entrypoint-initdb.d.
-migrate-local:
-	@echo "🐘 Applying all migrations to local Docker DB..."
-	@for file in supabase/migrations/*.sql; do \
-		echo "  Applying $$file..."; \
-		docker compose exec -T db psql -U $$DATABASE_USER -d $$DATABASE_NAME < "$$file" || exit 1; \
-	done
-	@echo "✅ Local migrations applied"
-
-# Apply all migrations to Supabase CLOUD (production)
+# Apply all migrations to Supabase
 # Uses Docker to run psql — no local psql installation needed.
 # Requires SUPABASE_DATABASE_URL in .env
-# Usage: make migrate-cloud
-migrate-cloud:
-	@echo "☁️  Applying all migrations to Supabase cloud..."
-	@if [ -z "$$SUPABASE_DATABASE_URL" ]; then \
+# Usage: make migrate
+migrate:
+	@echo "☁️  Applying all migrations to Supabase..."
+	@set -a && source .env && set +a && \
+	if [ -z "$$SUPABASE_DATABASE_URL" ]; then \
 		echo "❌ SUPABASE_DATABASE_URL is not set. Check your .env file."; \
 		exit 1; \
-	fi
-	@for file in supabase/migrations/*.sql; do \
+	fi && \
+	for file in supabase/migrations/*.sql; do \
 		echo "  Applying $$file..."; \
 		MSYS_NO_PATHCONV=1 docker run --rm \
 			--dns 8.8.8.8 --dns 8.8.4.4 \
 			-v "$$(pwd)/supabase/migrations:/migrations" \
 			postgres:15-alpine \
-			psql "$$SUPABASE_DATABASE_URL?sslmode=require" -f "/migrations/$$(basename $$file)" || exit 1; \
-	done
-	@echo "✅ Cloud migrations applied successfully"
+			psql "$$SUPABASE_DATABASE_URL" -f "/migrations/$$(basename $$file)" || exit 1; \
+	done && \
+	echo "✅ All migrations applied successfully"
 
 # Run all tests inside Docker (backend + agent)
 test:
@@ -170,11 +140,11 @@ up-frontend:
 
 # Install frontend dependencies inside Docker
 front-install:
-	docker compose run --rm frontend npm install
+	docker compose run --rm -u root frontend npm install
 
 # Run frontend tests (TDD workflow)
 test-front:
-	docker compose run --rm frontend bash -c "npm install && npm test"
+	docker compose run --rm -u root frontend bash -c "npm install && npm test"
 
 # Open a shell inside the frontend container
 front-shell:
@@ -195,8 +165,7 @@ help:
 	@echo "  Docker lifecycle:"
 	@echo "    make build         - Build Docker images (dev)"
 	@echo "    make build-prod    - Build production images (all services)"
-	@echo "    make up-db         - Start only the database"
-	@echo "    make up-backend    - Start backend + its dependencies (db + redis)"
+	@echo "    make up-backend    - Start backend + its dependencies (redis only)"
 	@echo "    make up            - Start all services (dev mode)"
 	@echo "    make up-prod       - Start all services (prod images, local test)"
 	@echo "    make down          - Stop all services"

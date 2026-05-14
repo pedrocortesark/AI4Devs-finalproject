@@ -41,61 +41,62 @@ export const CLASS_NAMES = {
 } as const;
 
 /**
- * Inline styles for the dropzone component
- * TODO: Consider moving to CSS modules or styled-components in future iterations
+ * Inline styles for the dropzone component — Mac OS Dark Mode design system
  */
 export const STYLES = {
   dropzone: {
     base: {
-      border: '2px dashed #ccc',
-      borderRadius: '8px',
-      padding: '40px 20px',
+      border: '2px dashed rgba(255, 255, 255, 0.12)',
+      borderRadius: '12px',
+      padding: '48px 32px',
       textAlign: 'center' as const,
       transition: 'all 0.2s ease-in-out',
     },
     idle: {
-      backgroundColor: '#fafafa',
-      borderColor: '#ccc',
+      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+      borderColor: 'rgba(255, 255, 255, 0.12)',
       cursor: 'pointer' as const,
       opacity: 1,
     },
     active: {
-      backgroundColor: '#f0f8ff',
-      borderColor: '#4299e1',
+      backgroundColor: 'rgba(0, 122, 255, 0.08)',
+      borderColor: 'rgba(0, 122, 255, 0.6)',
     },
     error: {
-      backgroundColor: '#fff5f5',
-      borderColor: '#fc8181',
+      backgroundColor: 'rgba(255, 59, 48, 0.06)',
+      borderColor: 'rgba(255, 59, 48, 0.5)',
     },
     disabled: {
       cursor: 'not-allowed' as const,
-      opacity: 0.5,
+      opacity: 0.4,
     },
   },
   dragText: {
     margin: 0,
-    color: '#4299e1',
+    color: '#007AFF',
     fontWeight: 500,
+    fontSize: '15px',
   },
   instructionText: {
     primary: {
       margin: '0 0 8px 0',
-      fontSize: '16px',
-      color: '#2d3748',
+      fontSize: '15px',
+      color: 'rgba(255, 255, 255, 0.85)',
+      fontWeight: 500,
     },
     secondary: {
       margin: 0,
-      fontSize: '14px',
-      color: '#718096',
+      fontSize: '13px',
+      color: 'rgba(255, 255, 255, 0.4)',
     },
   },
   errorContainer: {
     marginTop: '12px',
     padding: '12px 16px',
-    backgroundColor: '#fed7d7',
-    border: '1px solid #fc8181',
-    borderRadius: '6px',
-    color: '#c53030',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    border: '1px solid rgba(255, 59, 48, 0.35)',
+    borderRadius: '8px',
+    color: '#FF6B60',
     fontSize: '14px',
   },
 } as const;

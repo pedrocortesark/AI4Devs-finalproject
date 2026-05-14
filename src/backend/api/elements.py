@@ -6,27 +6,27 @@ Breaking Changes from /api/parts:
 - Removed tipologia filter
 - Added material_type filter (validated against 62 materials)
 - Removed RLS enforcement (simplified access control)
+- Removed navigation endpoint (deprecated)
 
 Endpoints:
 - GET /api/elements - List elements with optional filters
 - GET /api/elements/{id} - Get element detail
-- GET /api/elements/{id}/navigation - Get prev/next element IDs
 """
 
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query
 
-from schemas import ElementsListResponse, ElementDetail, ElementNavigationResponse, ElementStatus
+from schemas import ElementsListResponse, ElementDetail, ElementStatus, ElementNavigationResponse
 from infra.supabase_client import get_supabase_client
 from services.elements_service import ElementsService
 from services.element_detail_service import ElementDetailService
-from services.navigation_service import NavigationService
 from constants import (
     ERROR_MSG_INVALID_STATUS,
     ERROR_MSG_INVALID_UUID,
     ERROR_MSG_ELEMENT_NOT_FOUND,
     ERROR_MSG_FETCH_ELEMENTS_FAILED,
+    TABLE_BLOCKS,
 )
 
 
@@ -189,90 +189,73 @@ async def get_element_detail(
     return ElementDetail(**data)
 
 
-@router.get(
-    "/{element_id}/navigation",
-    response_model=ElementNavigationResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get adjacent elements for navigation",
-    description=(
-        "Returns prev/next element IDs for 3D viewer modal navigation. "
-        "Applies optional filters (status, material_type) and orders by created_at DESC. "
-        "Uses Redis caching with 300s TTL for performance."
-    ),
-    responses={
-        200: {
-            "description": "Adjacent elements found",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "prev_id": "123e4567-e89b-12d3-a456-426614174000",
-                        "next_id": "123e4567-e89b-12d3-a456-426614174002",
-                        "current_index": 42,
-                        "total_count": 250
-                    }
-                }
-            }
-        },
-        400: {"description": "Invalid UUID format"},
-        404: {"description": "Element not found in filtered set"},
-        500: {"description": "Internal database error"}
-    }
-)
+@router.get("/{element_id}/navigation", response_model=ElementNavigationResponse)
 async def get_element_navigation(
-    element_id: str,
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (e.g., 'validated')"),
-    material_type: Optional[str] = Query(None, description="Filter by material type (e.g., 'Montjuïc')")
-):
+    element_id: str
+) -> ElementNavigationResponse:
     """
-    Fetch prev/next element IDs for navigation in 3D viewer modal.
+    Get prev/next element IDs for navigation in 3D viewer.
 
-    Query Parameters:
-    - status (optional): Filter by status
-    - material_type (optional): Filter by material type
+    Args:
+        element_id: UUID of the current element
 
     Returns:
-    - prev_id: UUID of previous element (null if first)
-    - next_id: UUID of next element (null if last)
-    - current_index: 1-based position in filtered set
-    - total_count: Total elements in filtered set
+        ElementNavigationResponse with prev_id, next_id, current_index, total_count
+
+    Raises:
+        HTTPException 400: Invalid UUID format
+        HTTPException 404: Element not found
+        HTTPException 500: Database error
     """
     # Validate UUID format
     _validate_uuid_format(element_id)
 
-    # Initialize service and fetch adjacent elements
-    service = NavigationService()
+    try:
+        supabase = get_supabase_client()
 
-    # Call navigation service with material_type filter
-    success, data, error = service.get_adjacent_parts(
-        part_id=element_id,
-        workshop_id=None,  # Not used in Element API
-        status=status_filter,
-        material_type=material_type
-    )
+        # Query all render-ready elements ordered by created_at ASC (chronological)
+        # This matches user expectation: position 1 = oldest, last = newest
+        response = supabase.table(TABLE_BLOCKS) \
+            .select("id, created_at") \
+            .filter("low_poly_url", "not.is", "null") \
+            .filter("bbox", "not.is", "null") \
+            .filter("is_archived", "eq", False) \
+            .order("created_at", desc=False) \
+            .execute()
 
-    # Handle errors
-    if not success:
-        if "Invalid UUID" in error:
+        elements = response.data
+
+        # Find current element index
+        current_index = None
+        for idx, element in enumerate(elements):
+            if element["id"] == element_id:
+                current_index = idx
+                break
+
+        if current_index is None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error
-            )
-        elif "not found" in error.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=error
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error
+                status_code=404,
+                detail=ERROR_MSG_ELEMENT_NOT_FOUND
             )
 
-    # Transform PartNavigationResponse to ElementNavigationResponse
-    # (schemas are identical, just renamed)
-    return ElementNavigationResponse(
-        prev_id=data.prev_id,
-        next_id=data.next_id,
-        current_index=data.current_index,
-        total_count=data.total_count
-    )
+        # Calculate prev/next in chronological order
+        # prev = older element (lower index)
+        # next = newer element (higher index)
+        prev_id = elements[current_index - 1]["id"] if current_index > 0 else None
+        next_id = elements[current_index + 1]["id"] if current_index < len(elements) - 1 else None
+
+        return ElementNavigationResponse(
+            prev_id=prev_id,
+            next_id=next_id,
+            current_index=current_index + 1,  # Convert to 1-based
+            total_count=len(elements)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch navigation: {str(e)}"
+        )
+

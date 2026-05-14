@@ -19,15 +19,25 @@ try:
 except ImportError:
     rhino3dm = None  # For test environment without rhino3dm installed
 
-# Direct imports from src.agent namespace
-from src.agent.constants import (
-    GEOMETRY_CATEGORY_NAME,
-    MIN_VALID_VOLUME,
-    GEOMETRY_ERROR_INVALID,
-    GEOMETRY_ERROR_NULL,
-    GEOMETRY_ERROR_DEGENERATE_BBOX,
-    GEOMETRY_ERROR_ZERO_VOLUME,
-)
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
+try:
+    from src.agent.constants import (
+        GEOMETRY_CATEGORY_NAME,
+        MIN_VALID_VOLUME,
+        GEOMETRY_ERROR_INVALID,
+        GEOMETRY_ERROR_NULL,
+        GEOMETRY_ERROR_DEGENERATE_BBOX,
+        GEOMETRY_ERROR_ZERO_VOLUME,
+    )
+except ImportError:
+    from constants import (
+        GEOMETRY_CATEGORY_NAME,
+        MIN_VALID_VOLUME,
+        GEOMETRY_ERROR_INVALID,
+        GEOMETRY_ERROR_NULL,
+        GEOMETRY_ERROR_DEGENERATE_BBOX,
+        GEOMETRY_ERROR_ZERO_VOLUME,
+    )
 
 # Import backend schema for validation errors
 try:
@@ -119,7 +129,8 @@ class GeometryValidator:
                             failure_reason="invalid_geometry")
 
             # Check 3: Degenerate bounding box
-            bbox = obj.Geometry.GetBoundingBox(False)
+            # rhino3dm GetBoundingBox() takes no arguments (unlike .NET Rhino API)
+            bbox = obj.Geometry.GetBoundingBox()
             if not bbox.IsValid:
                 errors.append(ValidationErrorItem(
                     category=GEOMETRY_CATEGORY_NAME,

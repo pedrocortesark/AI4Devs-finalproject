@@ -64,7 +64,6 @@ def test_perf01_response_time_under_500ms_with_100_parts(
             "iso_code": f"TEST-PERF01-{i:04d}",
             "status": "validated" if i % 2 == 0 else "completed",
             "tipologia": "capitel" if i % 3 == 0 else "columna",
-            "workshop_id": str(uuid4()),
             "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
             "low_poly_url": f"https://example.com/lowpoly/{uuid4()}.glb" if i % 4 == 0 else None
         }
@@ -180,7 +179,6 @@ def test_perf03_stress_test_250_parts_p95_latency(
             "iso_code": f"TEST-PERF03-{i:04d}",
             "status": "validated" if i % 2 == 0 else "completed",
             "tipologia": ["capitel", "columna", "basa", "fuste"][i % 4],
-            "workshop_id": str(uuid4()) if i % 5 == 0 else None,
             "bbox": {"min": [-2.5, 0.0, -2.5], "max": [2.5, 5.0, 2.5]},
             "low_poly_url": f"https://example.com/{uuid4()}.glb" if i % 3 == 0 else None
         }

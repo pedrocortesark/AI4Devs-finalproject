@@ -8,7 +8,11 @@ for ISO-19650 compliance and manufacturing traceability.
 
 import structlog
 from typing import Dict
-from src.agent.models import UserStringCollection
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
+try:
+    from src.agent.models import UserStringCollection
+except ImportError:
+    from models import UserStringCollection
 
 logger = structlog.get_logger()
 

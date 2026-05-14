@@ -46,6 +46,9 @@ htmlcov/
 # Docker
 *.log
 
+# Claude
+.claude/
+
 # Node.js (for frontend)
 node_modules/
 npm-debug.log*
@@ -99,3 +102,7 @@ data/processed/*
 *.backup
 *.bak
 *.old
+
+# Added by ggshield
+.cache_ggshield
+*.rhl

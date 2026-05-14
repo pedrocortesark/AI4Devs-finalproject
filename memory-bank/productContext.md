@@ -98,12 +98,31 @@ Nomenclaturas Uniclass 2015 / IFC, metadatos obligatorios, audit trail completo 
   * 3 endpoints: `GET /api/elements` (list), `GET /api/elements/{id}` (detail), `GET /api/elements/{id}/navigation` (prev/next)
   * Clean Architecture service layer: ElementsService + ElementDetailService with application-level render-ready filtering (low_poly_url+bbox not null)
   * Material validation: `material_type` validated against 63 real stone types from MATERIAL_COLORS dictionary (Montjuïc, Ulldecona, Floresta, etc.)
+- **Element E2E Integration Tests** (T-1507-TEST DONE 2026-02-09) — **Multi-Layer Test Strategy**
+  * Backend pytest: 11/14 PASS (79%) — Upload validation (ERR-BE-02 UUID, ERR-BE-03 500MB limit), E2E flow, Element API contract
+  * Frontend Vitest: 443/459 PASS (96.5%) — Improved +72 tests from 371 baseline (+19.4%), failures reduced 68→10 (-85.3%)
+  * MSW 2.x integration: Mock Service Worker for API testing (import from 'msw/node' for Node.js environment)
+  * UUID dependency: Installed uuid v11.1.0 + @types/uuid for test helpers (element data generation)
+  * Pydantic validation: UUID field type + @field_validator for type-safe request validation (422 Unprocessable Entity on invalid format/size)
+  * Constants extraction: MAX_FILE_SIZE_BYTES (500MB = 524288000 bytes) centralized in constants.py for DRY principle
   * Breaking changes: Removed workshop_id/workshop_name/tipologia fields, simplified access control (no RLS)
   * 4 Pydantic schemas: Element, ElementsListResponse, ElementDetail, ElementNavigationResponse
   * Constants extracted: ELEMENTS_LIST_SELECT_FIELDS, ELEMENT_DETAIL_SELECT_FIELDS, error messages
   * Docstrings: Google Style with Examples sections
   * 10/11 unit tests PASS (91%), 13/25 integration tests PASS (52% core functionality verified)
   * Production-ready for frontend integration (T-1505-FRONT)
+- **Zod Validation with Element Schemas** (T-1505-FRONT DONE 2026-03-09)
+  * Contract-first validation: Pydantic (backend) → Zod (frontend) → TypeScript (compile-time)
+  * 6 production-ready modules: types/elements.ts (Element/ElementDetail contracts + computeBBoxCenter() helper), constants/materials.ts (62 MATERIAL_COLORS + RGB helpers getMaterialColor()/getMaterialColorHex()), schemas/elements.schema.ts (8 Zod schemas), services/elements.service.ts (3 fetch functions with Zod parsing + ElementApiError), stores/elements.store.ts (Zustand store with 4 actions), test/elements.schema.test.ts (38 tests)
+  * Material synchronization: 62 real stone types (Montjuïc, Ulldecona, Floresta, etc.) with RGB values synchronized with backend agent/constants.py
+  * Service layer: fetchElements() GET /api/elements, fetchElementDetail(id) GET /api/elements/{id}, fetchElementNavigation(id) GET /api/elements/{id}/navigation with runtime Zod validation
+  * State management: useElementsStore with loadElements/selectElement/clearSelection/setFilters actions
+  * Test coverage: 38/38 tests PASS (100%) — HP-ZOD 5, HP-SVC 3, HP-CMP 3, EC-TYPE 3, EC-NULL 3, EC-COLOR 4, ERR-ZOD 4, ERR-SVC 3, ERR-CMP 3, INT-E2E 3, INT-MOCK 3
+  * Error handling: ERR-CMP-01 pattern - re-throws errors after state update for test compatibility
+  * Refactor: JSDoc documentation enhancements to ElementsStore interface
+  * Clean Architecture: API service layer isolated from components, contract alignment verified
+  * Zero regression: TDD workflow ENRICH→RED→GREEN→REFACTOR complete, 38 tests passing throughout
+  * Production-ready: Contract validation enforced, material colors integrated, ready for Element 3D canvas integration
 - **Canvas API Integration Tests** (T-0510-TEST-BACK DONE 2026-02-23)
   * 5 integration test suites covering GET /api/parts endpoint: Functional (6 tests), Filters (5 tests), RLS (4 tests), Performance (4 tests), Index Usage (4 tests)
   * Test coverage: 13/23 PASS (56%) — Functional core 100% verified (11/11 ✅), 7 FAILED aspirational (document future NFRs), RLS 1/4 PASS (service role), 3/4 SKIPPED (require JWT T-022-INFRA)

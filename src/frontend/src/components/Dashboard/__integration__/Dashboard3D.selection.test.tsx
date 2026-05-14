@@ -22,6 +22,21 @@ import { setupStoreMock } from './test-helpers';
 // Mock the Zustand store
 vi.mock('@/stores/parts.store');
 
+// Mock usePartDetail hook (DetailsPanel fetches part data — not relevant to selection tests)
+vi.mock('@/components/Dashboard/PartDetailModal.hooks', () => ({
+  usePartDetail: vi.fn(() => ({
+    partData: null,
+    loading: true,
+    error: null,
+    retry: vi.fn(),
+  })),
+}));
+
+// Mock PartViewer3D (Three.js canvas doesn't work in jsdom)
+vi.mock('@/components/details/PartViewer3D', () => ({
+  PartViewer3D: () => <div data-testid="part-viewer-3d-mock" />,
+}));
+
 describe('Dashboard3D Selection & Modal Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,94 +81,91 @@ describe('Dashboard3D Selection & Modal Integration', () => {
   });
 
   /**
-   * Test 12: ESC key closes modal and deselects part
-   * 
-   * Integration Point: Window.keydown(ESC) → partsStore.clearSelection → Modal unmounts
-   * Expected: Modal closes, selectedId becomes null
+   * Test 12: ESC key closes the details panel
+   *
+   * Integration Point: Window.keydown(ESC) → DetailsPanel.onClose → panel hidden
+   * Expected: Panel closes (no longer in panelOpen state)
    */
   it('closes modal and deselects part when ESC key pressed', async () => {
-    const mockClearSelection = vi.fn();
-
-    // Given: Part is selected and modal is open
+    // Given: Part is selected and details panel is open
     setupStoreMock({
       parts: [mockPartCapitel, mockPartColumna],
       selectedId: mockPartCapitel.id,
-      clearSelection: mockClearSelection,
+      clearSelection: vi.fn(),
       getFilteredParts: vi.fn(() => [mockPartCapitel, mockPartColumna]),
     });
 
     render(<Dashboard3D />);
 
-    // Verify modal is visible
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeInTheDocument();
+    // Open details panel with 'D' key
+    fireEvent.keyDown(window, { key: 'D' });
+
+    // Panel should now be open
+    await waitFor(() => {
+      const panel = screen.getByTestId('details-panel');
+      expect(panel.className).toMatch(/panelOpen/);
+    });
 
     // When: Press ESC key
     fireEvent.keyDown(window, { key: 'Escape' });
 
-    // Then: clearSelection was called
+    // Then: Panel should be closed
     await waitFor(() => {
-      expect(mockClearSelection).toHaveBeenCalled();
+      const panel = screen.getByTestId('details-panel');
+      expect(panel.className).toMatch(/panelClosed/);
     });
   });
 
   /**
-   * Test 13: Backdrop click closes modal
-   * 
-   * Integration Point: Modal backdrop click → partsStore.clearSelection
-   * Expected: Clicking outside modal closes it
+   * Test 13: 'D' key toggles the details panel
+   *
+   * Integration Point: Window.keydown(D) → showDetailsPanel toggles
    */
   it('closes modal when backdrop is clicked', async () => {
-    const mockClearSelection = vi.fn();
-
-    // Given: Modal is open
     setupStoreMock({
       parts: [mockPartCapitel, mockPartColumna],
       selectedId: mockPartCapitel.id,
-      clearSelection: mockClearSelection,
+      clearSelection: vi.fn(),
       getFilteredParts: vi.fn(() => [mockPartCapitel, mockPartColumna]),
     });
 
     render(<Dashboard3D />);
 
-    // When: Click backdrop (the dialog div IS the backdrop)
-    const backdrop = screen.getByTestId('modal-backdrop');
-    fireEvent.click(backdrop);
-
-    // Then: clearSelection was called
+    // Open panel
+    fireEvent.keyDown(window, { key: 'D' });
     await waitFor(() => {
-      expect(mockClearSelection).toHaveBeenCalled();
+      expect(screen.getByTestId('details-panel').className).toMatch(/panelOpen/);
+    });
+
+    // Close panel by pressing D again
+    fireEvent.keyDown(window, { key: 'D' });
+    await waitFor(() => {
+      expect(screen.getByTestId('details-panel').className).toMatch(/panelClosed/);
     });
   });
 
   /**
-   * Test 14: Selected part shows emissive glow
-   * 
-   * Integration Point: partsStore.selectedId → PartMesh emissive material
-   * Expected: Material has emissive color matching status
-   * 
-   * NOTE: Testing 3D material properties in jsdom is limited.
-   * This test verifies that the selectedId state is accessible to PartMesh.
+   * Test 14: Details panel opens when part is selected and D is pressed
+   *
+   * Integration Point: partsStore.selectedId + 'D' key → DetailsPanel visible
    */
-  it('applies emissive glow to selected part', () => {
-    // Given: Part is selected
+  it('applies emissive glow to selected part', async () => {
     setupStoreMock({
       parts: [mockPartCapitel, mockPartColumna],
       selectedId: mockPartCapitel.id,
       getFilteredParts: vi.fn(() => [mockPartCapitel, mockPartColumna]),
     });
 
-    // When: Render Dashboard
-    const { container } = render(<Dashboard3D />);
+    render(<Dashboard3D />);
 
-    // Then: Verify modal is rendered (indicates selection works)
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeInTheDocument();
+    // Press D to open details panel
+    fireEvent.keyDown(window, { key: 'D' });
 
-    // In real implementation, PartMesh checks:
-    // const isSelected = selectedId === part.id;
-    // and applies: emissive={isSelected ? STATUS_COLORS[part.status] : 0x000000}
-    // We can't test Three.js material directly in jsdom, but selection state is verified
+    // Panel should now be rendered and open
+    await waitFor(() => {
+      const panel = screen.getByTestId('details-panel');
+      expect(panel.className).toMatch(/panelOpen/);
+    });
   });
 
   /**

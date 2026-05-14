@@ -34,12 +34,16 @@ export interface PartCanvasItem {
   id: string;                      // UUID string
   iso_code: string;                // e.g., "SF-C12-D-001"
   status: BlockStatus;             // Enum value
-  tipologia: string;               // "capitel" | "columna" | "dovela" | etc.
-  low_poly_url: string | null;     // Supabase Storage URL to GLB, or null if not processed
-  mid_poly_url?: string | null;    // T-0507: Mid-poly URL (1000 tris) for LOD Level 0 - graceful fallback to low_poly_url
-  bbox: BoundingBox | null;        // 3D bounding box, or null if not extracted yet
+  tipologia: string;               // material_type (Montjuïc, Ulldecona, etc.) — mapped from API
+  agrupacio: string | null;        // SF_ARC_Agrupacio1 from Rhino metadata
+  high_poly_url?: string | null;   // US-015: High-poly URL (~7k tris) for LOD Level 0 (0-5m)
+  mid_poly_url?: string | null;    // US-015: Mid-poly URL (~2k tris) for LOD Level 1 (5-20m)
+  low_poly_url: string | null;     // US-015: Low-poly URL (~500 tris) for LOD Level 2 (20-50m), required fallback
+  mtl_url?: string | null;         // Companion MTL for per-face Rhino layer colors (high-poly only)
+  bbox: BoundingBox | null;        // 3D bounding box, or null if not extracted yet (used for LOD Level 3 >50m)
   workshop_id: string | null;      // UUID string or null if unassigned
   workshop_name?: string | null;   // Workshop display name (joined from workshops table) or null if unassigned
+  rhino_metadata?: Record<string, unknown> | null;  // Raw Rhino metadata for material extraction
 }
 
 export interface PartsListResponse {
@@ -101,7 +105,13 @@ export interface PartDetail {
   /** Creation timestamp (ISO 8601 datetime) */
   created_at: string;
   
-  /** Presigned CDN URL for GLB file (TTL 5min), null if not generated yet */
+  /** Presigned CDN URL for high-poly OBJ file (~7k tris), null if not generated yet */
+  high_poly_url: string | null;
+  
+  /** Presigned CDN URL for mid-poly OBJ file (~2k tris), null if not generated yet */
+  mid_poly_url: string | null;
+  
+  /** Presigned CDN URL for low-poly OBJ file (~500 tris), null if not generated yet */
   low_poly_url: string | null;
   
   /** 3D bounding box for camera positioning */
@@ -121,4 +131,10 @@ export interface PartDetail {
   
   /** Triangle count (for performance monitoring) */
   triangle_count: number | null;
+
+  /** Stone/material type (e.g., "Montjuïc", "Ulldecona") — maps to MATERIAL_COLORS */
+  material_type?: string | null;
+
+  /** Raw Rhino metadata attributes from .3dm file (key/value pairs) */
+  rhino_metadata?: Record<string, unknown> | null;
 }

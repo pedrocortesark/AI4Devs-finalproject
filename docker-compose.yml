@@ -16,16 +16,14 @@ services:
       - ./supabase:/app/supabase  # Mount migrations for test verification
       - ./docs:/app/docs  # Mount docs for spec file tests
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${SUPABASE_DATABASE_URL}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # Used by config.py to build CELERY_BROKER_URL with URL encoding
       - PYTHONPATH=/app:/app/src  # Enable imports from agent module
     # Run container as non-root user (uid=1000 matches Dockerfile)
     user: "1000:1000"
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -49,35 +47,6 @@ services:
     networks:
       - sf-network
 
-  db:
-    image: postgres:15-alpine
-    container_name: sf-pm-db
-    ports:
-      - "127.0.0.1:5432:5432"  # Only expose to localhost for security
-    environment:
-      - POSTGRES_USER=${DATABASE_USER}
-      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
-      - POSTGRES_DB=${DATABASE_NAME}
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${DATABASE_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./supabase/migrations:/docker-entrypoint-initdb.d
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
-    restart: unless-stopped
-    networks:
-      - sf-network
-
   frontend:
     build:
       context: ./src/frontend
@@ -88,12 +57,15 @@ services:
       - "127.0.0.1:5173:5173"  # Localhost only for security
     volumes:
       - ./src/frontend:/app
-      - /app/node_modules  # Anonymous volume to prevent host overwriting node_modules
+      - frontend_node_modules:/app/node_modules  # Named volume to persist node_modules with correct permissions
     environment:
       - VITE_API_URL=http://localhost:8000
-    # Run container as non-root user (uid=1002 matches Dockerfile)
-    user: "1002:1002"
-    command: bash -c "npm install && npm run dev -- --host 0.0.0.0"
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+    # DEV MODE: Run as root to avoid node_modules permission issues with volumes
+    # Production uses non-root user in Dockerfile (viteuser uid=1002)
+    user: "root"
+    command: bash -c "[ -d node_modules ] || npm install && npm run dev -- --host 0.0.0.0"
     depends_on:
       - backend
     healthcheck:
@@ -105,8 +77,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'
+          memory: 2G
     restart: "no"  # Dev mode: don't auto-restart
     labels:
       - "com.sagradafamilia.environment=development"
@@ -154,8 +126,7 @@ services:
     tmpfs:
       - /tmp:size=2G,mode=1777
     environment:
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # Used by config.py to build CELERY_BROKER_URL with URL encoding
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - DATABASE_URL=${SUPABASE_DATABASE_URL}
@@ -164,8 +135,6 @@ services:
     user: "1001:1001"
     depends_on:
       redis:
-        condition: service_healthy
-      db:
         condition: service_healthy
     networks:
       - sf-network
@@ -190,8 +159,8 @@ services:
           memory: 2G
 
 volumes:
-  postgres_data:
   redis_data:
+  frontend_node_modules:  # Named volume for frontend dependencies (preserves permissions)
 
 
 networks:

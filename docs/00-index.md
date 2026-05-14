@@ -36,9 +36,31 @@ La documentacion esta organizada en **7 fases** de desarrollo de producto:
 | 6. Arquitectura | [06-architecture.md](06-architecture.md) | C4 Container, 4 patrones, deployment |
 | 7. Agente | [07-agent-design.md](07-agent-design.md) | The Librarian: Celery worker, rhino3dm, trimesh |
 
-### Backlog
+### Roadmap & Backlog
 - [08-roadmap.md](08-roadmap.md) — Roadmap de 4 sprints
 - [09-mvp-backlog.md](09-mvp-backlog.md) — Tickets con specs y acceptance criteria
+- [BACKLOG-STATUS.md](BACKLOG-STATUS.md) — 📊 **Estado actual del backlog** (5 US done, 2 AI pending, progreso 45.8%)
+
+### Arquitectura de IA (Nuevo — Mayo 2026)
+
+**Suite Completa de Documentación para Propuesta Comercial a Sagrada Família**
+
+📁 **Ubicación:** [meetings/sagrada-familia/](meetings/sagrada-familia/)
+
+| Documento | Páginas | Audiencia | Propósito |
+|-----------|---------|-----------|-----------|
+| [README-AI-DOCS.md](meetings/sagrada-familia/README-AI-DOCS.md) | — | Todos | 📍 **START HERE** — Guía de navegación de documentación IA |
+| [ONE-PAGER-AI.md](meetings/sagrada-familia/ONE-PAGER-AI.md) | 1 | Stakeholders | Resumen visual (handout reunión) |
+| [EXECUTIVE-SUMMARY-AI.md](meetings/sagrada-familia/EXECUTIVE-SUMMARY-AI.md) | 15 | Dirección/BIM | Propuesta de valor + ROI + Timeline |
+| [12-ai-architecture.md](meetings/sagrada-familia/12-ai-architecture.md) | 60 | Equipo técnico | Especificación completa LangGraph + RAG |
+| [MEETING-CHECKLIST-SF.md](meetings/sagrada-familia/MEETING-CHECKLIST-SF.md) | 12 | Presentador | Checklist preparación + FAQs |
+| [BACKLOG-AI-REVIEW.md](meetings/sagrada-familia/BACKLOG-AI-REVIEW.md) | — | Dev Team | Análisis de consistencia backlog (interno) |
+
+**Resumen Técnico:**
+- **Capa 1 (The Librarian):** LangGraph State Machine (8 nodos) para validación pre-ingesta (accuracy >98%, 10s)
+- **Capa 2 (The Archivist):** RAG System (pgvector + GPT-4) para Q&A semántica (97% reducción tiempo búsqueda)
+- **ROI:** €248,000/año ahorros vs. €1,500/año inversión operativa (16,533% ROI, recuperación <3 días)
+- **Implementación:** 8 días laborables (2 sprints, 53 horas total)
 
 ### DevSecOps & Auditorias
 - [DevSecOps/DEVSECOPS-AUDIT-REPORT-2026-02-18.md](DevSecOps/DEVSECOPS-AUDIT-REPORT-2026-02-18.md) — Auditoria inicial P0 credenciales
@@ -57,6 +79,9 @@ La documentacion esta organizada en **7 fases** de desarrollo de producto:
 | US-002 | The Librarian (Agent Validation) | ✅ COMPLETED (2026-02-17) | [US-002/](US-002/) |
 | US-005 | Dashboard 3D Interactivo | ✅ COMPLETED (2026-02-23) — 268/268 tests | [US-005/](US-005/) |
 | US-010 | Visor 3D Web de Piezas | ✅ COMPLETED (2026-02-26) — 390/396 tests | [US-010/](US-010/) |
+| US-015 | Element Model Refactoring | ✅ COMPLETED (2026-03-15) — 454/473 tests (96%) | [US-015/](US-015/) |
+
+**MVP Progress:** 5/11 US completadas — **81/177 SP (45.8%)**
 
 ---
 

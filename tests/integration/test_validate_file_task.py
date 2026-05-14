@@ -20,7 +20,7 @@ class TestValidateFileTaskHappyPath:
     """Test successful end-to-end validation workflows."""
 
     @pytest.mark.integration
-    def test_validate_file_task_completes_successfully(self):
+    def test_validate_file_task_completes_successfully(self, test_3dm_file_in_storage):
         """
         SCENARIO: Complete validation workflow for valid .3dm file.
         GIVEN: A .3dm file exists in S3 raw-uploads bucket
@@ -31,14 +31,14 @@ class TestValidateFileTaskHappyPath:
         # Setup: Create test block in DB
         supabase = get_supabase_client()
         test_block_id = str(uuid.uuid4())
-        s3_key = "test-fixtures/test-model.3dm"
+        s3_key = test_3dm_file_in_storage  # Use uploaded fixture
         unique_suffix = str(uuid.uuid4())[:8]  # Short unique ID
 
         test_block = {
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",  # Unique code per test run
             "tipologia": "stone",  # Required field (stone/concrete/metal)
-            "url_original": f"s3://raw-uploads/{s3_key}",  # S3 URL of original file
+            "url_original": s3_key,  # S3 URL of original file
             "status": "uploaded"
         }
 
@@ -66,7 +66,7 @@ class TestValidateFileTaskHappyPath:
         supabase.table("blocks").delete().eq("id", test_block_id).execute()
 
     @pytest.mark.integration
-    def test_validate_file_extracts_layer_metadata(self):
+    def test_validate_file_extracts_layer_metadata(self, test_3dm_file_in_storage):
         """
         SCENARIO: Validation extracts and stores layer information.
         GIVEN: A .3dm file with layers named SF-C12-M-001, SF-C12-M-002
@@ -75,14 +75,14 @@ class TestValidateFileTaskHappyPath:
         """
         supabase = get_supabase_client()
         test_block_id = str(uuid.uuid4())
-        s3_key = "test-fixtures/test-model.3dm"
+        s3_key = test_3dm_file_in_storage  # Use uploaded fixture
         unique_suffix = str(uuid.uuid4())[:8]
 
         test_block = {
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -108,7 +108,7 @@ class TestValidateFileTaskHappyPath:
         supabase.table("blocks").delete().eq("id", test_block_id).execute()
 
     @pytest.mark.integration
-    def test_validate_file_updates_timestamps(self):
+    def test_validate_file_updates_timestamps(self, test_3dm_file_in_storage):
         """
         SCENARIO: Task records processing timestamps.
         GIVEN: validate_file task starts
@@ -118,14 +118,14 @@ class TestValidateFileTaskHappyPath:
         """
         supabase = get_supabase_client()
         test_block_id = str(uuid.uuid4())
-        s3_key = "test-fixtures/test-model.3dm"
+        s3_key = test_3dm_file_in_storage  # Use uploaded fixture
         unique_suffix = str(uuid.uuid4())[:8]
 
         test_block = {
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -157,7 +157,6 @@ class TestValidateFileTaskHappyPath:
 
 class TestValidateFileTaskErrorHandling:
     """Test error scenarios and failure modes."""
-
     @pytest.mark.integration
     def test_validate_file_s3_key_not_found(self):
         """
@@ -176,7 +175,7 @@ class TestValidateFileTaskErrorHandling:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -221,7 +220,7 @@ class TestValidateFileTaskErrorHandling:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 
@@ -310,7 +309,7 @@ class TestValidateFileTaskCeleryIntegration:
             "id": test_block_id,
             "iso_code": f"SF-TEST-{unique_suffix}",
             "tipologia": "stone",
-            "url_original": f"s3://raw-uploads/{s3_key}",
+            "url_original": s3_key,
             "status": "uploaded"
         }
 

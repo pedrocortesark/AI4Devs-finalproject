@@ -5,20 +5,8 @@ This module contains all async tasks executed by the Celery worker,
 including health checks and file validation workflows.
 """
 
-
-# Import from parent package
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
 try:
-    from ..celery_app import celery_app
-    from ..constants import (
-        TASK_HEALTH_CHECK,
-        TASK_VALIDATE_FILE,
-        TASK_REGISTER_3DM_BLOCKS,
-        TASK_GENERATE_LOW_POLY_GLB,
-        TASK_MAX_RETRIES,
-        TASK_RETRY_DELAY_SECONDS,
-    )
-except ImportError:
-    # Fallback for direct execution
     from src.agent.celery_app import celery_app
     from src.agent.constants import (
         TASK_HEALTH_CHECK,
@@ -28,11 +16,49 @@ except ImportError:
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
     )
+    from src.agent.services.file_download_service import FileDownloadService
+    from src.agent.services.db_service import DBService
+    from src.agent.services.rhino_parser_service import RhinoParserService
+except ImportError:
+    from celery_app import celery_app
+    from constants import (
+        TASK_HEALTH_CHECK,
+        TASK_VALIDATE_FILE,
+        TASK_REGISTER_3DM_BLOCKS,
+        TASK_GENERATE_LOW_POLY_GLB,
+        TASK_MAX_RETRIES,
+        TASK_RETRY_DELAY_SECONDS,
+    )
+    from services.file_download_service import FileDownloadService
+    from services.db_service import DBService
+    from services.rhino_parser_service import RhinoParserService
 
 import structlog
 from datetime import datetime
+import rhino3dm
 
 logger = structlog.get_logger()
+
+
+def _is_transient_error(exc: Exception, error_msg: str = None) -> bool:
+    """Determine if error is transient (should retry) or permanent.
+    
+    Checks both exception type and error message for transient patterns.
+    
+    Args:
+        exc: Exception to classify
+        error_msg: Optional explicit error message (overrides exc message)
+        
+    Returns:
+        bool: True if error is transient (should retry), False if permanent
+    """
+    transient_patterns = [
+        "timeout", "timed out", "connection", "network",
+        "rate limit", "503", "502", "504", "temporary",
+        "unavailable", "redis", "could not connect"
+    ]
+    check_msg = error_msg if error_msg else str(exc)
+    return any(pattern in check_msg.lower() for pattern in transient_patterns)
 
 
 @celery_app.task(
@@ -86,16 +112,6 @@ def validate_file(self, part_id: str, s3_key: str):
     """
     logger.info("validate_file.started", part_id=part_id, s3_key=s3_key)
 
-    # Import services
-    try:
-        from services.file_download_service import FileDownloadService
-        from services.rhino_parser_service import RhinoParserService
-        from services.db_service import DBService
-    except ModuleNotFoundError:
-        from src.agent.services.file_download_service import FileDownloadService
-        from src.agent.services.rhino_parser_service import RhinoParserService
-        from src.agent.services.db_service import DBService
-
     # Initialize services
     file_download = FileDownloadService()
     rhino_parser = RhinoParserService()
@@ -108,13 +124,28 @@ def validate_file(self, part_id: str, s3_key: str):
         # Step 1: Update status to processing
         db_service.update_block_status(part_id, "processing")
 
-        # Step 2: Download file from S3
-        success, local_path, download_error = file_download.download_from_s3(s3_key)
+        # Step 2: Download file from S3 (pass task_id to avoid race conditions)
+        success, local_path, download_error = file_download.download_from_s3(s3_key, task_id=self.request.id)
 
         if not success:
             logger.error("validate_file.download_failed", part_id=part_id, error=download_error)
 
-            # Save error to validation report
+            # Check if error is transient (network/S3 issue) or permanent (not found)
+            if _is_transient_error(Exception(download_error), download_error):
+                # Exponential backoff: 30s → 60s → 120s → 240s → 480s
+                countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+                
+                logger.warning(
+                    "validate_file.download_retry_scheduled",
+                    part_id=part_id,
+                    retry_count=self.request.retries + 1,
+                    countdown_seconds=countdown
+                )
+                
+                # Raise retry exception (Celery will automatically retry)
+                raise self.retry(exc=Exception(download_error), countdown=countdown, max_retries=TASK_MAX_RETRIES)
+            
+            # Permanent error: save report and update status
             db_service.save_validation_report(
                 part_id=part_id,
                 is_valid=False,
@@ -127,11 +158,11 @@ def validate_file(self, part_id: str, s3_key: str):
                 validated_by=worker_id
             )
 
-            # Update status to error
             db_service.update_block_status(part_id, "error_processing")
 
             return {
                 "success": False,
+                "part_id": part_id,
                 "error": download_error
             }
 
@@ -145,7 +176,21 @@ def validate_file(self, part_id: str, s3_key: str):
         if not parse_result.success:
             logger.error("validate_file.parse_failed", part_id=part_id, error=parse_result.error_message)
 
-            # Save error to validation report
+            # Parse errors are typically permanent (corrupted file, invalid format)
+            # But check for transient patterns just in case (memory issues, etc.)
+            if _is_transient_error(Exception(parse_result.error_message), parse_result.error_message):
+                countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+                
+                logger.warning(
+                    "validate_file.parse_retry_scheduled",
+                    part_id=part_id,
+                    retry_count=self.request.retries + 1,
+                    countdown_seconds=countdown
+                )
+                
+                raise self.retry(exc=Exception(parse_result.error_message), countdown=countdown, max_retries=TASK_MAX_RETRIES)
+            
+            # Permanent parse error: save report and update status
             db_service.save_validation_report(
                 part_id=part_id,
                 is_valid=False,
@@ -158,11 +203,11 @@ def validate_file(self, part_id: str, s3_key: str):
                 validated_by=worker_id
             )
 
-            # Update status to error
             db_service.update_block_status(part_id, "error_processing")
 
             return {
                 "success": False,
+                "part_id": part_id,
                 "error": parse_result.error_message
             }
 
@@ -213,9 +258,23 @@ def validate_file(self, part_id: str, s3_key: str):
         }
 
     except Exception as e:
-        logger.exception("validate_file.unexpected_error", part_id=part_id, error=str(e))
+        logger.exception("validate_file.unexpected_error", part_id=part_id, error=str(e), retry_count=self.request.retries)
 
-        # Save error to validation report
+        # Check if error is transient
+        if _is_transient_error(e):
+            countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+            
+            logger.warning(
+                "validate_file.retry_scheduled",
+                part_id=part_id,
+                retry_count=self.request.retries + 1,
+                countdown_seconds=countdown,
+                error_type=type(e).__name__
+            )
+            
+            raise self.retry(exc=e, countdown=countdown, max_retries=TASK_MAX_RETRIES)
+        
+        # Permanent error: save report and update status
         try:
             db_service.save_validation_report(
                 part_id=part_id,
@@ -235,6 +294,7 @@ def validate_file(self, part_id: str, s3_key: str):
 
         return {
             "success": False,
+            "part_id": part_id,
             "error": str(e)
         }
 
@@ -270,16 +330,6 @@ def register_3dm_blocks(self, file_key: str):
         dict: {success, registered, skipped, block_ids}
     """
     logger.info("register_3dm_blocks.started", file_key=file_key)
-
-    # Import services
-    try:
-        from services.file_download_service import FileDownloadService
-        from services.db_service import DBService
-    except ModuleNotFoundError:
-        from src.agent.services.file_download_service import FileDownloadService
-        from src.agent.services.db_service import DBService
-
-    import rhino3dm
 
     file_download = FileDownloadService()
     db_service = DBService()

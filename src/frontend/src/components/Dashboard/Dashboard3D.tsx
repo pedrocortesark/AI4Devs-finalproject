@@ -1,48 +1,61 @@
 /**
  * Dashboard3D Component
- * T-0504-FRONT: Main dashboard with 3D canvas and dockable sidebar
- * T-0508-FRONT: Part selection and modal integration
- * 
+ * T-0504-FRONT: Main dashboard with 3D canvas
+ * T-0508-FRONT: Part selection and details panel integration
+ *
  * Orchestrates:
  * - Canvas3D for 3D visualization
- * - DraggableFiltersSidebar for filters UI
- * - PartDetailModal for selected part details (T-0508)
+ * - FilterBar for persistent bottom filter + selection hints
+ * - DetailsPanel for selected part details (non-blocking side panel)
  * - EmptyState when no parts loaded
  * - LoadingOverlay during data fetch
  */
 
-import React, { useState } from 'react';
-import type { Dashboard3DProps, DockPosition } from './Dashboard3D.types';
-import { CAMERA_CONFIG, STORAGE_KEYS, MESSAGES } from './Dashboard3D.constants';
+import React, { useState, useEffect } from 'react';
+import type { Dashboard3DProps } from './Dashboard3D.types';
+import { CAMERA_CONFIG, MESSAGES } from './Dashboard3D.constants';
 import Canvas3D from './Canvas3D';
-import DraggableFiltersSidebar from './DraggableFiltersSidebar';
-import FiltersSidebar from './FiltersSidebar';
 import EmptyState from './EmptyState';
 import LoadingOverlay from './LoadingOverlay';
-import { PartDetailModal } from './PartDetailModal';
+import { DetailsPanel } from '@/components/details/DetailsPanel';
+import { FilterBar } from './FilterBar';
+import ColorLegend from './ColorLegend';
 import { usePartsStore } from '@/stores/parts.store';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 const Dashboard3D: React.FC<Dashboard3DProps> = ({
   initialCameraPosition = CAMERA_CONFIG.POSITION,
   showStats = false,
   emptyMessage,
-  initialSidebarDock = 'right',
 }) => {
-  const { parts, isLoading, error, selectedId, clearSelection } = usePartsStore();
-  const [sidebarDock, setSidebarDock] = useLocalStorage<DockPosition>(
-    STORAGE_KEYS.SIDEBAR_DOCK,
-    initialSidebarDock
-  );
-  const [floatingPosition, setFloatingPosition] = useState({ x: 100, y: 100 });
+  const parts = usePartsStore((state) => state.parts);
+  const isLoading = usePartsStore((state) => state.isLoading);
+  const error = usePartsStore((state) => state.error);
+  const selectedId = usePartsStore((state) => state.selectedId);
+  const colorMode = usePartsStore((state) => state.colorMode);
+  const setColorMode = usePartsStore((state) => state.setColorMode);
 
-  const handleDockChange = (newDock: DockPosition) => {
-    setSidebarDock(newDock);
-  };
+  // CAD-style panel control: separate from selection state
+  // Click on part → selects visually, Press 'D' → toggles details panel
+  const [showDetailsPanel, setShowDetailsPanel] = useState(false);
 
-  const handlePositionChange = (newPosition: { x: number; y: number }) => {
-    setFloatingPosition(newPosition);
-  };
+  // Toggle details panel with 'D' key (CAD-style)
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'd' || event.key === 'D') {
+        setShowDetailsPanel((prev) => (selectedId ? !prev : false));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [selectedId]);
+
+  // Close panel when selection cleared
+  useEffect(() => {
+    if (!selectedId) {
+      setShowDetailsPanel(false);
+    }
+  }, [selectedId]);
 
   const isEmpty = parts.length === 0 && !isLoading;
 
@@ -123,30 +136,66 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
           </div>
         )}
 
-        {/* Loading Overlay */}
-        {isLoading && <LoadingOverlay message={MESSAGES.LOADING} />}
+        {/* Loading Overlay — only shown on initial load, not on background polls */}
+        {isLoading && parts.length === 0 && <LoadingOverlay message={MESSAGES.LOADING} />}
+        
+        {/* Color mode toggle — top-right pill */}
+        {!isEmpty && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              display: 'flex',
+              background: 'rgba(0,0,0,0.65)',
+              borderRadius: '20px',
+              padding: '3px',
+              gap: '2px',
+              zIndex: 50,
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            {(['material', 'layer'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setColorMode(mode)}
+                title={mode === 'material' ? 'Color por tipo de piedra (tipología)' : 'Color por layer de Rhino'}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  transition: 'background 0.15s, color 0.15s',
+                  background: colorMode === mode ? '#ffffff' : 'transparent',
+                  color: colorMode === mode ? '#111' : 'rgba(255,255,255,0.7)',
+                }}
+              >
+                {mode === 'material' ? 'Material' : 'Textura'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Color legend — contextual meaning for the active color mode */}
+        {!isEmpty && <ColorLegend />}
+
+        {/* Persistent filter + selection hint bar */}
+        <FilterBar
+          selectedId={selectedId}
+          showDetailsPanel={showDetailsPanel}
+          onShowDetails={() => setShowDetailsPanel(true)}
+        />
       </div>
 
-      {/* Part Detail Modal (T-1007-FRONT) */}
-      {selectedId && (
-        <PartDetailModal
-          isOpen={!!selectedId}
-          partId={selectedId}
-          onClose={clearSelection}
-          enableNavigation={true}
-          filters={null}
-        />
-      )}
+      {/* Details Panel - Non-blocking side panel, toggles with 'D' key */}
+      <DetailsPanel
+        partId={selectedId}
+        isOpen={showDetailsPanel}
+        onClose={() => setShowDetailsPanel(false)}
+      />
 
-      {/* Sidebar with Filters */}
-      <DraggableFiltersSidebar
-        dockPosition={sidebarDock}
-        onDockChange={handleDockChange}
-        floatingPosition={floatingPosition}
-        onPositionChange={handlePositionChange}
-      >
-        <FiltersSidebar />
-      </DraggableFiltersSidebar>
     </div>
   );
 };

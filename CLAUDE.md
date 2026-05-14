@@ -8,15 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run Commands
 
+**Note:** This project uses **Supabase exclusively** (no local PostgreSQL database). All data is stored in Supabase cloud.
+
 All development runs through Docker. The Makefile wraps `docker compose` commands:
 
 ```bash
 # Setup
 cp .env.example .env              # Then fill in SUPABASE_URL, SUPABASE_KEY, SUPABASE_DATABASE_URL
 make build                        # Build Docker images
-make up-db                        # Start database only (postgres:15)
 make init-db                      # Initialize Supabase buckets & policies
-make setup-events                 # Create events table (T-004-BACK)
+make setup-events                 # Create events table
+make migrate                      # Apply all SQL migrations to Supabase
 
 # Frontend (React/Vite on :5173)
 make up-frontend                  # Start dev server
@@ -25,8 +27,8 @@ make front-shell                  # Shell into frontend container
 
 # Backend (FastAPI on :8000)
 make shell                        # Shell into backend container
-make up-backend                   # Start backend + dependencies (db + redis)
-make up                           # Start all services (db + redis + backend + frontend)
+make up-backend                   # Start backend + dependencies (redis only)
+make up                           # Start all services (redis + backend + frontend)
 
 # Teardown
 make down                         # Stop services (keep volumes)
@@ -72,7 +74,8 @@ docker compose run --rm frontend bash -c "npm install && npx vitest run src/comp
 - **Service layer separation**: Frontend API calls isolated in `src/services/upload.service.ts`, not in components.
 
 **Infrastructure:**
-- Docker Compose runs three services: `backend` (python:3.11-slim), `db` (postgres:15-alpine), `frontend` (node:20-bookworm).
+- Docker Compose runs three services: `backend` (python:3.11-slim), `redis` (redis:7-alpine), `frontend` (node:20-bookworm).
+- **No local PostgreSQL** - All data stored in Supabase cloud.
 - Frontend uses `node:20-bookworm` (NOT Alpine) because Alpine causes jsdom memory errors in tests.
 - Vite dev server proxies `/api` requests to the backend at `:8000`.
 
@@ -116,8 +119,8 @@ This project uses a **Memory Bank** (`memory-bank/`) for multi-agent coordinatio
 Required in `.env` (see `.env.example`):
 - `SUPABASE_URL` — Supabase project URL
 - `SUPABASE_KEY` — Supabase service role key
-- `SUPABASE_DATABASE_URL` — Direct PostgreSQL connection to Supabase (used by `setup-events`)
-- `DATABASE_URL` — Overridden in Docker to `postgresql://user:password@db:5432/sfpm_db`
+- `SUPABASE_DATABASE_URL` — Direct PostgreSQL connection to Supabase (this is the ONLY database used)
+- `REDIS_PASSWORD` — Redis authentication password
 
 ## Documentation
 

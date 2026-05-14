@@ -55,19 +55,20 @@ describe('usePartsSpatialLayout — bbox center positioning', () => {
   it('calculates position from bbox center (min + max) / 2', () => {
     const part = makePart('001');
     // bbox: { min: [-100, 0, -150], max: [100, 400, 150] }
-    // Expected center: [(−100+100)/2, (0+400)/2, (−150+150)/2] = [0, 200, 0]
+    // Rhino center: [(−100+100)/2, (0+400)/2, (−150+150)/2] = [0, 200, 0]
+    // Three.js transform: [rhinoX, rhinoZ, -rhinoY] = [0, 0, -200]
     const { result } = renderHook(() => usePartsSpatialLayout([part]));
-    expect(result.current[0]).toEqual([0, 200, 0]);
+    expect(result.current[0]).toEqual([0, 0, -200]);
   });
 
   it('handles multiple parts with different bbox positions', () => {
     const part1 = { ...p1, bbox: { min: [-10, -20, -30], max: [10, 20, 30] } };
     const part2 = { ...p2, bbox: { min: [100, 200, 300], max: [120, 220, 320] } };
-    // part1 center: [0, 0, 0]
-    // part2 center: [110, 210, 310]
+    // part1 Rhino center: [0, 0, 0] → Three.js: [0, 0, -0]
+    // part2 Rhino center: [110, 210, 310] → Three.js: [110, 310, -210]
     const { result } = renderHook(() => usePartsSpatialLayout([part1, part2]));
-    expect(result.current[0]).toEqual([0, 0, 0]);
-    expect(result.current[1]).toEqual([110, 210, 310]);
+    expect(result.current[0]).toEqual([0, 0, -0]);
+    expect(result.current[1]).toEqual([110, 310, -210]);
   });
 
   it('uses real building coordinates (digital twin mode)', () => {
@@ -76,11 +77,12 @@ describe('usePartsSpatialLayout — bbox center positioning', () => {
       ...p1,
       bbox: { min: [-8.61, -53.53, 73.92], max: [-8.45, -53.30, 74.22] },
     };
-    // Expected center: [-8.53, -53.415, 74.07]
+    // Rhino center: [-8.53, -53.415, 74.07]
+    // Three.js transform: [rhinoX, rhinoZ, -rhinoY] = [-8.53, 74.07, 53.415]
     const { result } = renderHook(() => usePartsSpatialLayout([sfPart]));
     expect(result.current[0][0]).toBeCloseTo(-8.53, 2);
-    expect(result.current[0][1]).toBeCloseTo(-53.415, 2);
-    expect(result.current[0][2]).toBeCloseTo(74.07, 2);
+    expect(result.current[0][1]).toBeCloseTo(74.07, 2);
+    expect(result.current[0][2]).toBeCloseTo(53.415, 2);
   });
 
   it('positions array length matches parts array length', () => {

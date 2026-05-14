@@ -17,8 +17,8 @@ describe('UploadZone Component - GREEN Phase Tests', () => {
       
       render(<UploadZone onFilesAccepted={onFilesAccepted} />);
       
-      // Verify instructional text is visible
-      expect(screen.getByText(/drag.*drop/i)).toBeDefined();
+      // Verify instructional text is visible (Spanish UI)
+      expect(screen.getByText(/arrastra/i)).toBeDefined();
       expect(screen.getByText(/\.3dm/i)).toBeDefined();
     });
 

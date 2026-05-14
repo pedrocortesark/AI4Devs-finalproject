@@ -165,10 +165,13 @@ def test_rls02_bim_manager_bypasses_rls(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="workshop_id column removed in T-1501-DB (workshops not used in MVP)")
 def test_rls03_service_role_bypasses_rls(supabase_client: Client):
     """
     RLS-03: Service role key bypasses ALL RLS policies (system access).
 
+    OBSOLETE: Test creates blocks with workshop_id field (removed in T-1501-DB).
+    
     ⚠️ NEW TEST - Should PASS if supabase_client uses service_role key
 
     Given:

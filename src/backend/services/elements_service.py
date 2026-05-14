@@ -102,16 +102,29 @@ class ElementsService:
                 max=bbox_data["max"]
             )
 
-        # T-1001-INFRA: Apply CDN transformation if enabled (extracted method)
+        # T-1001-INFRA + US-015: Apply CDN transformation to all LOD URLs
+        high_poly_url = self._apply_cdn_transformation(row.get("high_poly_url"))
+        mid_poly_url = self._apply_cdn_transformation(row.get("mid_poly_url"))
         low_poly_url = self._apply_cdn_transformation(row.get("low_poly_url"))
+        mtl_url = row.get("mtl_url") or None
+
+        # Extract SF_ARC_Agrupacio1 from rhino_metadata JSONB
+        rhino_metadata = row.get("rhino_metadata") or {}
+        agrupacio_raw = rhino_metadata.get("SF_ARC_Agrupacio1") if isinstance(rhino_metadata, dict) else None
+        agrupacio = str(agrupacio_raw) if agrupacio_raw is not None else None
 
         return Element(
             id=row["id"],
             iso_code=row["iso_code"],
             status=ElementStatus(row["status"]),
             material_type=row["material_type"],
-            low_poly_url=low_poly_url,  # CDN-transformed or original
-            bbox=bbox
+            high_poly_url=high_poly_url,  # CDN-transformed or None
+            mid_poly_url=mid_poly_url,    # CDN-transformed or None
+            low_poly_url=low_poly_url,    # CDN-transformed or None
+            mtl_url=mtl_url,
+            bbox=bbox,
+            agrupacio=agrupacio,
+            rhino_metadata=rhino_metadata if isinstance(rhino_metadata, dict) else None,
         )
 
     def _build_filters_applied(self, status: Optional[str], material_type: Optional[str]) -> Dict[str, str]:
@@ -142,13 +155,13 @@ class ElementsService:
         Raises:
             ValueError: If material not in VALID_MATERIALS list
         """
-        from agent.constants import VALID_MATERIALS
+        from constants import VALID_MATERIALS
 
         if material_type not in VALID_MATERIALS:
             raise ValueError(
                 f"Invalid material_type: '{material_type}'. Must be one of {len(VALID_MATERIALS)} "
                 f"valid materials (e.g., Montjuïc, Ulldecona, Floresta). "
-                f"See agent.constants.MATERIAL_COLORS for full list."
+                f"See constants.MATERIAL_COLORS for full list."
             )
 
     def list_elements(

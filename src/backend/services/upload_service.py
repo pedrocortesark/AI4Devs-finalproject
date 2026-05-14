@@ -196,13 +196,20 @@ class UploadService:
             Tuple of (success, event_id, task_id, error_message)
         """
         # Step 1: Verify file exists
+        logger.info("confirm_upload.started", file_id=file_id, file_key=file_key)
+
         if not self.verify_file_exists_in_storage(file_key):
+            logger.error("confirm_upload.file_not_found", file_key=file_key)
             return False, None, None, f"File not found in storage: {file_key}"
+
+        logger.info("confirm_upload.file_verified", file_key=file_key)
 
         # Step 2: Validate file content (magic bytes) - SECURITY CRITICAL
         # Download file to check file signature (Supabase returns full file)
+        logger.info("confirm_upload.downloading_file", file_key=file_key)
         try:
             file_content = self.supabase.storage.from_(STORAGE_BUCKET_RAW_UPLOADS).download(file_key)
+            logger.info("confirm_upload.file_downloaded", file_key=file_key, size_bytes=len(file_content))
 
             # Check if file has valid Rhino 3DM signature (first 512 bytes)
             if not self._validate_3dm_magic_bytes(file_content[:512]):
@@ -221,20 +228,29 @@ class UploadService:
 
                 return False, None, None, "Invalid .3dm file format - content validation failed"
 
+            logger.info("confirm_upload.magic_bytes_validated", file_key=file_key)
+
         except Exception as e:
             logger.error("magic_bytes_validation.error", file_key=file_key, error=str(e))
             return False, None, None, f"File content validation error: {str(e)}"
 
         # Step 3: Create event record
+        logger.info("confirm_upload.creating_event", file_id=file_id)
         try:
             event_id = self.create_upload_event(file_id, file_key)
+            logger.info("confirm_upload.event_created", event_id=event_id)
         except Exception as e:
+            logger.error("confirm_upload.event_creation_failed", error=str(e))
             return False, None, None, f"Database error: {str(e)}"
 
         # Step 4: Enqueue register_3dm_blocks (parses .3dm → N blocks, one per InstanceDefinition)
+        logger.info("confirm_upload.enqueuing_task", file_key=file_key, celery_configured=self.celery is not None)
         try:
             task_id = self.enqueue_register_blocks(file_key)
+            logger.info("confirm_upload.task_enqueued", task_id=task_id, file_key=file_key)
         except Exception as e:
+            logger.error("confirm_upload.enqueue_failed", error=str(e), error_type=type(e).__name__)
             return True, event_id, None, f"Enqueue error: {str(e)}"
 
+        logger.info("confirm_upload.completed", event_id=event_id, task_id=task_id)
         return True, event_id, task_id, None

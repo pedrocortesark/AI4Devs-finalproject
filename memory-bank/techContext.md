@@ -50,8 +50,12 @@
 
 ### File Processing
 - **rhino3dm** 8.4.0 - Rhino .3dm file parsing and geometry validation (T-024/T-025/T-026/T-027)
-- **trimesh** 4.0.5 - Mesh decimation (`simplify_quadric_decimation`) for low-poly GLB generation (T-0502-AGENT)
+- **trimesh** 4.11.3 - Mesh decimation (`simplify_quadric_decimation`) for LOD generation + OBJ export (T-0502-AGENT)
+  - **Format**: OBJ with absolute Rhino Z-up coordinates (2026-03-13: migrated from GLB due to export bugs)
+  - **Known Issues**: trimesh v4.0.5 and v4.11.3 GLB export collapses geometry to origin [0,0,0]
+  - **Solution**: Use `mesh.export(path, file_type='obj')` to preserve absolute coordinates
 - **open3d** 0.18.0 - Backend engine for trimesh decimation algorithm (required dependency)
+- **scipy** >=1.11.0 - Scientific computing (required for normal vector validation and geometry operations)
 - **numpy** <2.0 - Pinned to 1.x for trimesh 4.0.5 compatibility (`ptp()` removed in numpy 2.0)
 - **rtree** 1.1.0 - Spatial index for trimesh (required dependency)
 
@@ -77,10 +81,13 @@
   - **Limitation**: DataTransfer API incomplete, no drag & drop event simulation
   - **Workaround**: Tests focus on DOM structure, not interaction (see T-001-FRONT)
 
-### 3D Visualization (NEW — T-0500-INFRA)
+### 3D Visualization (T-0500-INFRA, updated 2026-03-13)
 - **@react-three/fiber** ^8.15.0 - React renderer for Three.js
-- **@react-three/drei** ^9.92.0 - Three.js helpers (useGLTF, OrbitControls, Html, etc.)
+- **@react-three/drei** ^9.92.0 - Three.js helpers (OrbitControls, Html, Environment, etc.)
+  - **Note**: drei's `useGLTF` and `<Detailed>` NOT used due to incompatibility with OBJLoader
+  - **Custom LOD**: `src/frontend/src/hooks/useLOD.ts` replaces drei's `<Detailed>` component
 - **three** ^0.160.0 - 3D graphics engine (bundled as `three-vendor` chunk ~600KB)
+  - **OBJLoader**: Used for loading .obj files with absolute Rhino coordinates (Z-up → Y-up rotation)
 - **zustand** ^4.4.7 - Lightweight global state management (parts store, filters)
 - **@types/three** ^0.160.0 (devDep) - TypeScript types for Three.js
 - **jsdom mock strategy**: `vi.mock('@react-three/fiber')` + `vi.mock('@react-three/drei')` in setup.ts replaces WebGL with testable DOM elements (see systemPatterns.md)
@@ -96,9 +103,10 @@
 ### Container Images
 - **Backend**: `python:3.11-slim` (multi-stage: base/dev/prod)
 - **Frontend**: `node:20-bookworm` (multi-stage: dev/build/prod-nginx)
-- **Database**: `postgres:15-alpine` (local development only)
-- **Agent Worker**: `python:3.11-slim` (multi-stage: base/dev/prod) - NEW (T-022-INFRA)
-- **Redis**: `redis:7-alpine` (message broker + result backend) - NEW (T-022-INFRA)
+- **Redis**: `redis:7-alpine` (message broker + result backend)
+- **Agent Worker**: `python:3.11-slim` (multi-stage: base/dev/prod)
+
+**Note:** This project uses **Supabase exclusively** for PostgreSQL (no local database container).
 
 ### Build Tools
 - **GNU Make** - Task automation (Makefile for common commands)
@@ -128,6 +136,13 @@
 ## Development Tools
 - **Standard shell commands** - bash/zsh for automation
 - **Environment management** - `.env` files with `.env.example` templates
+- **Database Migrations** - SQL files in `supabase/migrations/` (applied with `make migrate`)
+
+**Migration Strategy:**
+- All migrations stored in `supabase/migrations/*.sql` (chronologically ordered)
+- Rollback scripts stored in `supabase/rollbacks/` (never in migrations folder)
+- Apply to Supabase with `make migrate` (sources .env automatically)
+- Uses Docker postgres:15-alpine client (no local psql installation required)
 - **Dependency locking** - `requirements-lock.txt` for reproducible builds
 
 ## CI/CD Pipeline

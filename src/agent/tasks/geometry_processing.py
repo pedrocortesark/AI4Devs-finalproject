@@ -14,12 +14,15 @@ from contextlib import contextmanager
 import structlog
 import requests
 
-# Import from parent package
+# Conditional imports: src.agent.* preferred (tests + dev), fallback to direct (production)
 try:
-    from ..celery_app import celery_app
-    from ..constants import (
+    from src.agent.celery_app import celery_app
+    from src.agent.constants import (
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
+        LOD_DECIMATION_TARGETS,
+        LOD_PREFIXES,
+        MATERIALS_PREFIX,
         PROCESSED_GEOMETRY_BUCKET,
         RAW_UPLOADS_BUCKET,
         LOW_POLY_PREFIX,
@@ -39,11 +42,13 @@ try:
         MATERIAL_USERSTRING_KEY,
     )
 except ImportError:
-    # Fallback for test environment
-    from src.agent.celery_app import celery_app
-    from src.agent.constants import (
+    from celery_app import celery_app
+    from constants import (
         TASK_GENERATE_LOW_POLY_GLB,
         DECIMATION_TARGET_FACES,
+        LOD_DECIMATION_TARGETS,
+        LOD_PREFIXES,
+        MATERIALS_PREFIX,
         PROCESSED_GEOMETRY_BUCKET,
         RAW_UPLOADS_BUCKET,
         LOW_POLY_PREFIX,
@@ -74,6 +79,66 @@ except ModuleNotFoundError:
     from src.agent.infra.supabase_client import get_supabase_client
 
 logger = structlog.get_logger()
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """Determine if error is transient (should retry) or permanent.
+    
+    Transient errors include:
+    - Network timeouts and connection issues
+    - Supabase/S3 rate limiting (503, 502, 504)
+    - Temporary service unavailability
+    - Redis connection issues
+    
+    Permanent errors include:
+    - File not found (404)
+    - Invalid geometry (ValueError)
+    - Malformed .3dm files
+    - Missing InstanceDefinitions
+    
+    Args:
+        exc: Exception to classify
+        
+    Returns:
+        bool: True if error is transient (should retry), False if permanent
+    """
+    transient_patterns = [
+        "timeout", "timed out", "connection", "network",
+        "rate limit", "503", "502", "504", "temporary",
+        "unavailable", "redis", "could not connect"
+    ]
+    error_msg = str(exc).lower()
+    return any(pattern in error_msg for pattern in transient_patterns)
+
+
+def _update_block_status_error(block_id: str, error_message: str) -> None:
+    """Update block status to error_processing (only for permanent errors).
+    
+    This function should only be called after all retries are exhausted
+    or when a permanent error is detected.
+    
+    Args:
+        block_id: UUID of the block
+        error_message: Error description to log
+    """
+    try:
+        supabase = get_supabase_client()
+        supabase.table('blocks').update({
+            'status': 'error_processing'
+        }).eq('id', block_id).execute()
+        
+        logger.error(
+            "block_status_updated_to_error",
+            block_id=block_id,
+            error_message=error_message
+        )
+    except Exception as db_error:
+        logger.exception(
+            "failed_to_update_block_status",
+            block_id=block_id,
+            original_error=error_message,
+            db_error=str(db_error)
+        )
 
 
 @contextmanager
@@ -369,6 +434,106 @@ def _extract_material_type(rhino_file: rhino3dm.File3dm, block_id: str, iso_code
     return DEFAULT_MATERIAL
 
 
+def _extract_all_user_strings(rhino_file: rhino3dm.File3dm, block_id: str, iso_code: str) -> dict:
+    """Extract ALL UserStrings from Rhino file for metadata storage.
+    
+    Extracts complete metadata from InstanceReference-level UserStrings including:
+    - GrauEstructural (structural grade)
+    - Codi (part code)
+    - Material (stone type)
+    - Tipologia (typology)
+    - Zona (zone)
+    - FechaFabricacion (fabrication date)
+    - Any other custom UserStrings
+    
+    UserStrings are stored in the InstanceReference.Attributes (the block instance
+    in the scene), NOT in the objects inside the InstanceDefinition.
+    
+    Args:
+        rhino_file: Parsed rhino3dm.File3dm object
+        block_id: UUID of the block (for logging)
+        iso_code: ISO code of the block (for logging)
+    
+    Returns:
+        Dictionary with all UserStrings found (empty dict if none found)
+    
+    Examples:
+        >>> rhino_file = rhino3dm.File3dm.Read("GLPER.B-PAE0720.0701.3dm")
+        >>> metadata = _extract_all_user_strings(rhino_file, "uuid-123", "GLPER.B-PAE0720.0701")
+        >>> print(metadata)
+        {
+            "Codi": "GLPER.B-PAE0720.0701",
+            "Material": "Montjuïc",
+            "GrauEstructural": "E2",
+            "Tipologia": "Capitel",
+            "Zona": "Façana Nord"
+        }
+    """
+    all_user_strings = {}
+    
+    # Find the InstanceDefinition matching this ISO code
+    matched_idef = None
+    if hasattr(rhino_file, 'InstanceDefinitions') and rhino_file.InstanceDefinitions is not None:
+        for idef in rhino_file.InstanceDefinitions:
+            if idef.Name == iso_code:
+                matched_idef = idef
+                break
+    
+    # Extract UserStrings from InstanceReferences that point to this InstanceDefinition
+    instance_refs_checked = 0
+    if hasattr(rhino_file, 'Objects') and rhino_file.Objects is not None:
+        for obj in rhino_file.Objects:
+            try:
+                # Check if this is an InstanceReference
+                obj_type = getattr(obj.Geometry, 'ObjectType', None)
+                if obj_type != rhino3dm.ObjectType.InstanceReference:
+                    continue
+                
+                instance_refs_checked += 1
+                
+                # Check if this InstanceReference points to our InstanceDefinition
+                if matched_idef is not None:
+                    iref_geom = obj.Geometry
+                    # ParentIdefId is the UUID of the InstanceDefinition this instance references
+                    if hasattr(iref_geom, 'ParentIdefId'):
+                        if str(iref_geom.ParentIdefId).lower() != str(matched_idef.Id).lower():
+                            continue  # This instance belongs to a different block
+                
+                # Extract UserStrings from the InstanceReference's Attributes
+                if hasattr(obj, 'Attributes') and hasattr(obj.Attributes, 'GetUserStrings'):
+                    obj_strings = obj.Attributes.GetUserStrings()
+                    
+                    # rhino3dm.GetUserStrings() returns a tuple of (key, value) pairs
+                    if obj_strings is not None and isinstance(obj_strings, (tuple, list)):
+                        for key, value in obj_strings:
+                            # Store first occurrence of each key (skip duplicates)
+                            if key not in all_user_strings:
+                                all_user_strings[key] = value
+                                
+            except Exception as e:
+                logger.warning("extract_all_user_strings.instance_error",
+                             block_id=block_id,
+                             error=str(e))
+                continue
+    
+    # Log results
+    if all_user_strings:
+        logger.info("extract_all_user_strings.success",
+                   block_id=block_id,
+                   iso_code=iso_code,
+                   keys_found=list(all_user_strings.keys()),
+                   total_keys=len(all_user_strings),
+                   instance_refs_checked=instance_refs_checked)
+    else:
+        logger.warning("extract_all_user_strings.empty",
+                      block_id=block_id,
+                      iso_code=iso_code,
+                      instance_refs_checked=instance_refs_checked,
+                      reason="No UserStrings found in InstanceReference.Attributes")
+    
+    return all_user_strings
+
+
 def _extract_and_merge_meshes(
     rhino_file: rhino3dm.File3dm,
     block_id: str,
@@ -391,13 +556,13 @@ def _extract_and_merge_meshes(
         iso_code: ISO code of the block — must match InstanceDefinition.Name (Codi)
 
     Returns:
-        Tuple of (merged_mesh, original_faces_count)
+        Tuple of (merged_mesh, original_faces_count, bbox, matched_idef, idef_object_ids)
 
     Raises:
         ValueError: If no valid meshes found (file not preprocessed or wrong file)
 
     Example:
-        mesh, face_count = _extract_and_merge_meshes(rhino_file, block_id, "GLPER.B-PAE0720.0102")
+        mesh, face_count, bbox, idef, ids = _extract_and_merge_meshes(rhino_file, block_id, "GLPER.B-PAE0720.0102")
     """
     # Phase 1: InstanceDefinition structure validation (ADR-001 API usage)
     idef_count = len(rhino_file.InstanceDefinitions)
@@ -537,7 +702,7 @@ def _extract_and_merge_meshes(
     # Keep geometry in Rhino world-space coordinates (absolute building position).
     # This creates a true digital twin where parts maintain their real spatial relationships.
     # The frontend will render them at their actual building positions.
-    # Z-up → Y-up rotation is applied during GLB export (see _export_and_upload_glb).
+    # Z-up → Y-up rotation is applied on frontend during OBJ rendering (see _export_and_upload_obj).
     centroid = merged_mesh.centroid.copy()
     logger.info("extract_meshes.absolute_coords",
                 block_id=block_id, iso_code=iso_code,
@@ -565,7 +730,7 @@ def _extract_and_merge_meshes(
                 actual_faces=len(merged_mesh.faces),
                 vertices=len(merged_mesh.vertices))
 
-    return merged_mesh, original_faces_count, bbox
+    return merged_mesh, original_faces_count, bbox, matched_idef, idef_object_ids
 
 
 def _apply_decimation(
@@ -670,104 +835,538 @@ def _apply_draco_compression(input_path: str, output_path: str) -> bool:
         return False
 
 
-def _export_and_upload_glb(
-    mesh: trimesh.Trimesh,
-    block_id: str
-) -> tuple[str, int]:
-    """Export mesh to GLB format, apply Draco compression, and upload to S3.
-
-    Pipeline:
-    1. Apply Z-up → Y-up rotation (Rhino → Three.js coordinate system)
-    2. Export uncompressed GLB to /tmp/{block_id}_raw.glb
-    3. Apply Draco compression → /tmp/{block_id}.glb (falls back if unavailable)
-    4. Upload compressed GLB to Supabase Storage
-    5. Clean up both temp files
+def _extract_layer_colors(rhino_file: rhino3dm.File3dm) -> dict[int, tuple[int, int, int]]:
+    """Extract RGB color for each layer index from a Rhino file.
 
     Args:
-        mesh: Trimesh mesh to export (in Rhino Z-up coordinates)
-        block_id: UUID of the block (used in S3 key)
+        rhino_file: Parsed rhino3dm.File3dm object
+
+    Returns:
+        Dict mapping layer_index (int) → (R, G, B) tuple (0-255 each)
+    """
+    layer_colors: dict[int, tuple[int, int, int]] = {}
+    if not hasattr(rhino_file, 'Layers') or rhino_file.Layers is None:
+        return layer_colors
+    for i, layer in enumerate(rhino_file.Layers):
+        try:
+            # rhino3dm Color is RGBA tuple: (R, G, B, A)
+            c = layer.Color
+            if isinstance(c, (list, tuple)) and len(c) >= 3:
+                layer_colors[i] = (int(c[0]), int(c[1]), int(c[2]))
+            else:
+                layer_colors[i] = (200, 200, 200)  # Default gray
+        except Exception:
+            layer_colors[i] = (200, 200, 200)
+    return layer_colors
+
+
+def _extract_layer_names(rhino_file: rhino3dm.File3dm) -> dict[int, str]:
+    """Extract the Rhino layer name for each layer index.
+
+    Returns:
+        Dict mapping layer_index (int) → layer name string (leaf name, spaces→_).
+    """
+    names: dict[int, str] = {}
+    if not hasattr(rhino_file, 'Layers') or rhino_file.Layers is None:
+        return names
+    for i, layer in enumerate(rhino_file.Layers):
+        try:
+            names[i] = layer.Name.replace(' ', '_') if layer.Name else f"layer_{i}"
+        except Exception:
+            names[i] = f"layer_{i}"
+    return names
+
+
+def _validate_layer_colors(
+    layer_colors: dict[int, tuple[int, int, int]],
+    block_id: str,
+    iso_code: str,
+) -> bool:
+    """Check that at least one layer has a non-trivial color.
+
+    A color is considered trivial when it is pure black (0,0,0) — the Rhino
+    default when no color is assigned.  If ALL layers are black, the MTL file
+    would be useless and we skip generation.
+
+    Args:
+        layer_colors: Dict of layer_index → (R, G, B)
+        block_id: UUID for logging
+        iso_code: ISO code for logging
+
+    Returns:
+        True when layer colors are valid (at least one non-black layer), False otherwise.
+    """
+    if not layer_colors:
+        logger.warning(
+            "layer_colors.empty",
+            block_id=block_id,
+            iso_code=iso_code,
+            reason="No layers found in Rhino file",
+        )
+        return False
+
+    non_trivial = [c for c in layer_colors.values() if c != (0, 0, 0)]
+    if not non_trivial:
+        logger.warning(
+            "layer_colors.all_black",
+            block_id=block_id,
+            iso_code=iso_code,
+            layer_count=len(layer_colors),
+            reason="All layers have default black color — skipping MTL generation",
+        )
+        return False
+
+    logger.info(
+        "layer_colors.valid",
+        block_id=block_id,
+        iso_code=iso_code,
+        total_layers=len(layer_colors),
+        colored_layers=len(non_trivial),
+    )
+    return True
+
+
+def _build_layer_face_groups(
+    rhino_file: rhino3dm.File3dm,
+    matched_idef,
+    idef_object_ids,
+) -> list[tuple[int, list]]:
+    """Collect (layer_index, mesh_geometry) pairs for a matched InstanceDefinition.
+
+    Iterates the same objects as _extract_and_merge_meshes but records the
+    LayerIndex of each mesh so we can later group faces per layer.
+
+    Args:
+        rhino_file: Parsed rhino3dm File3dm
+        matched_idef: The InstanceDefinition object matched to this block
+        idef_object_ids: Set of lowercase object ID strings (filter), or None for all
+
+    Returns:
+        List of (layer_index, rhino_mesh_geometry) pairs in mesh order.
+    """
+    pairs = []
+    for obj in rhino_file.Objects:
+        if idef_object_ids is not None:
+            if str(obj.Attributes.Id).lower() not in idef_object_ids:
+                continue
+        geom = obj.Geometry
+        obj_type = getattr(geom, 'ObjectType', None)
+        if obj_type == rhino3dm.ObjectType.InstanceReference:
+            continue
+        layer_idx = getattr(obj.Attributes, 'LayerIndex', 0)
+        is_mesh = isinstance(geom, rhino3dm.Mesh) or obj_type == rhino3dm.ObjectType.Mesh
+        if is_mesh:
+            pairs.append((layer_idx, geom))
+        elif obj_type == rhino3dm.ObjectType.Brep:
+            for brep_face in geom.Faces:
+                mesh = brep_face.GetMesh(rhino3dm.MeshType.Render)
+                if mesh is not None:
+                    pairs.append((layer_idx, mesh))
+    return pairs
+
+
+def _generate_obj_mtl_with_layers(
+    mesh_pairs: list[tuple[int, object]],
+    layer_colors: dict[int, tuple[int, int, int]],
+    block_id: str,
+    layer_names: dict[int, str] | None = None,
+) -> tuple[str, str]:
+    """Serialise per-layer OBJ + MTL content strings.
+
+    Creates an OBJ file with `usemtl <layer_name>` groups and a companion MTL
+    file that assigns the Rhino layer color (`Kd R G B`) to each material.
+    Material names use the actual Rhino layer name (spaces → _) when
+    layer_names is provided, falling back to `layer_N` otherwise.
+
+    The OBJ keeps all vertices in world-space (Rhino Z-up absolute coords).
+    The frontend applies Z→Y rotation just as it does for the monolithic OBJ.
+
+    Args:
+        mesh_pairs: List of (layer_index, rhino_mesh_geometry) as returned by
+                    _build_layer_face_groups.
+        layer_colors: Dict of layer_index → (R, G, B) 0-255 tuples.
+        block_id: UUID for MTL material name disambiguation.
+        layer_names: Optional dict of layer_index → sanitised layer name string.
+
+    Returns:
+        Tuple of (obj_content_str, mtl_content_str)
+    """
+    mtl_filename = f"{block_id}.mtl"
+
+    obj_lines = [f"mtllib {mtl_filename}"]
+    mtl_lines = ["# Rhino layer colors — generated by SF-PM geometry pipeline"]
+
+    seen_layers: set[int] = set()
+    global_vertex_offset = 0
+
+    for layer_idx, geom in mesh_pairs:
+        mat_name = (layer_names or {}).get(layer_idx) or f"layer_{layer_idx}"
+
+        # Register material in MTL (once per unique layer)
+        if layer_idx not in seen_layers:
+            seen_layers.add(layer_idx)
+            r, g, b = layer_colors.get(layer_idx, (200, 200, 200))
+            kd_r, kd_g, kd_b = r / 255.0, g / 255.0, b / 255.0
+            mtl_lines += [
+                f"newmtl {mat_name}",
+                "illum 2",
+                f"Kd {kd_r:.4f} {kd_g:.4f} {kd_b:.4f}",
+                "Ka 0.0000 0.0000 0.0000",
+                "Ks 0.1000 0.1000 0.1000",
+                "Ns 10.0000",
+                "",
+            ]
+
+        # Write vertices for this mesh chunk
+        vertices = [[v.X, v.Y, v.Z] for v in geom.Vertices]
+        if not vertices:
+            continue
+        for vx, vy, vz in vertices:
+            obj_lines.append(f"v {vx:.6f} {vy:.6f} {vz:.6f}")
+
+        # Switch material group
+        obj_lines += [f"usemtl {mat_name}", "g"]
+
+        # Write faces (OBJ is 1-indexed)
+        for face in geom.Faces:
+            if isinstance(face, tuple):
+                a, b, c, d = face
+                a1 = a + global_vertex_offset + 1
+                b1 = b + global_vertex_offset + 1
+                c1 = c + global_vertex_offset + 1
+                d1 = d + global_vertex_offset + 1
+                if c == d:
+                    obj_lines.append(f"f {a1} {b1} {c1}")
+                else:
+                    obj_lines.append(f"f {a1} {b1} {c1}")
+                    obj_lines.append(f"f {a1} {c1} {d1}")
+            else:
+                # Mock format (unit tests)
+                a1 = face.A + global_vertex_offset + 1
+                b1 = face.B + global_vertex_offset + 1
+                c1 = face.C + global_vertex_offset + 1
+                if face.IsQuad:
+                    d1 = face.D + global_vertex_offset + 1
+                    obj_lines.append(f"f {a1} {b1} {c1}")
+                    obj_lines.append(f"f {a1} {c1} {d1}")
+                else:
+                    obj_lines.append(f"f {a1} {b1} {c1}")
+
+        global_vertex_offset += len(vertices)
+
+    return "\n".join(obj_lines), "\n".join(mtl_lines)
+
+
+def _upload_mtl_file(mtl_content: str, block_id: str) -> str:
+    """Upload MTL companion file to Supabase Storage.
+
+    Args:
+        mtl_content: String content of the .mtl file
+        block_id: UUID used as the storage key
+
+    Returns:
+        Public URL of the uploaded MTL file (trailing '?' stripped)
+    """
+    supabase = get_supabase_client()
+    mtl_key = f"{MATERIALS_PREFIX}{block_id}.mtl"
+    supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).upload(
+        mtl_key,
+        mtl_content.encode('utf-8'),
+        {'content-type': 'model/mtl', 'upsert': 'true'}
+    )
+    public_url = supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).get_public_url(mtl_key)
+    return public_url.rstrip('?')
+
+
+def _export_and_upload_obj(
+    mesh: trimesh.Trimesh,
+    block_id: str,
+    lod_level: str = 'low'
+) -> tuple[str, int]:
+    """Export mesh to OBJ format and upload to Supabase storage.
+
+    OBJ format chosen because trimesh GLB export has persistent bugs (collapses geometry).
+    Tested versions: 4.0.5, 4.11.3 - both fail to export valid GLBs.
+
+    Pipeline:
+    1. Export to OBJ format (preserves Rhino Z-up absolute coordinates)
+    2. Upload to Supabase Storage (high-poly/, mid-poly/, or low-poly/ prefix)
+    3. Return public URL and file size
+
+    Args:
+        mesh: Trimesh mesh to export (in Rhino Z-up coordinates with absolute position)
+        block_id: UUID of the block (used in storage key)
+        lod_level: LOD level ('high', 'mid', or 'low') for storage path/naming
 
     Returns:
         Tuple of (public_url, file_size_kb)
 
     Example:
-        url, size = _export_and_upload_glb(mesh, "123e4567-e89b-12d3-a456-426614174000")
+        url, size = _export_and_upload_obj(mesh, "123e4567-e89b-12d3-a456-426614174000", "high")
     """
-    # Step 1: Apply Z-up → Y-up rotation for Three.js compatibility
-    # Rhino: Z-up (architectural standard)
-    # Three.js: Y-up (WebGL standard)
-    # Rotation: -90° around X-axis converts Z-up to Y-up
-    rotation_matrix = trimesh.transformations.rotation_matrix(
-        -np.pi / 2,  # -90 degrees
-        [1, 0, 0],   # Around X-axis
-        [0, 0, 0]    # At origin
+    # Export OBJ with ABSOLUTE RHINO COORDINATES in Z-up coordinate system
+    # OBJ format chosen because trimesh GLB export has persistent bugs (collapses geometry)
+    # Tested: trimesh 4.0.5, 4.11.3 - both fail to export valid GLBs
+    # Frontend applies Z→Y rotation via Three.js
+    
+    centroid = mesh.centroid.copy()
+    bounds = {"min": mesh.bounds[0].tolist(), "max": mesh.bounds[1].tolist()}
+    logger.info(
+        "export_obj.rhino_zup_absolute",
+        block_id=block_id,
+        lod_level=lod_level,
+        centroid_mm=centroid.tolist(),
+        bounds=bounds,
+        vertices=len(mesh.vertices),
+        message="Exporting OBJ in Rhino Z-up with absolute coordinates (no backend transforms)",
     )
-    mesh.apply_transform(rotation_matrix)
-    logger.info("export_glb.rotation_applied",
-                block_id=block_id,
-                message="Applied Z-up → Y-up rotation for Three.js")
+    logger.info(
+        "export_obj.frontend_rotation_required",
+        block_id=block_id,
+        message="Frontend must apply Z→Y rotation via Three.js rotation prop",
+    )
 
-    # Step 2: Export raw (uncompressed) GLB
-    raw_glb_path = os.path.join(TEMP_DIR, f"{block_id}_raw.glb")
-    temp_glb_path = os.path.join(TEMP_DIR, f"{block_id}.glb")
-    mesh.export(raw_glb_path, file_type='glb')
+    # Export OBJ (simpler format than GLB, more robust with trimesh)
+    temp_obj_path = os.path.join(TEMP_DIR, f"{block_id}_{lod_level}.obj")
+    mesh.export(temp_obj_path, file_type='obj')
 
-    raw_size_kb = os.path.getsize(raw_glb_path) // 1024
-    logger.info("export_glb.raw",
-               block_id=block_id,
-               file_size_kb=raw_size_kb,
-               path=raw_glb_path)
-
-    # Step 2: Apply Draco compression (mirrors POC export_gltf_draco.py:166-207)
-    _apply_draco_compression(raw_glb_path, temp_glb_path)
-
-    # Clean up raw file immediately after compression
-    try:
-        os.remove(raw_glb_path)
-    except Exception as e:
-        logger.warning("cleanup.raw_glb_failed", block_id=block_id, error=str(e))
-
-    # Get final compressed file size
-    file_size_bytes = os.path.getsize(temp_glb_path)
+    file_size_bytes = os.path.getsize(temp_obj_path)
     file_size_kb = file_size_bytes // 1024
-
-    logger.info("export_glb.success",
+    logger.info("export_obj.success",
                block_id=block_id,
+               lod_level=lod_level,
                file_size_kb=file_size_kb,
-               path=temp_glb_path)
+               path=temp_obj_path)
 
-    # Step 3: Upload to Supabase Storage
+    # Upload to Supabase Storage with LOD-specific path
     supabase = get_supabase_client()
-    glb_key = f"{LOW_POLY_PREFIX}{block_id}.glb"
+    obj_key = f"{LOD_PREFIXES[lod_level]}{block_id}.obj"
 
-    with open(temp_glb_path, 'rb') as f:
-        glb_data = f.read()
+    with open(temp_obj_path, 'rb') as f:
+        obj_data = f.read()
 
     supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).upload(
-        glb_key,
-        glb_data,
-        {'content-type': 'model/gltf-binary', 'upsert': 'true'}
+        obj_key,
+        obj_data,
+        {'content-type': 'model/obj', 'upsert': 'true'}
     )
 
     # Get public URL
-    low_poly_url = supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).get_public_url(glb_key)
+    public_url = supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).get_public_url(obj_key)
+    
+    # BUG FIX: Remove trailing '?' from Supabase URLs (causes issues with OBJLoader)
+    # Supabase client appends '?' for cache busting, but some loaders don't handle it well
+    public_url = public_url.rstrip('?')
 
-    logger.info("upload_glb.success",
+    logger.info("upload_obj.success",
                block_id=block_id,
-               url=low_poly_url,
-               key=glb_key)
+               lod_level=lod_level,
+               url=public_url,
+               key=obj_key)
 
-    # Step 4: Cleanup compressed temp file
+    # Cleanup temp file
     try:
-        os.remove(temp_glb_path)
+        os.remove(temp_obj_path)
     except Exception as e:
-        logger.warning("cleanup.temp_glb_failed", block_id=block_id, error=str(e))
+        logger.warning("cleanup.temp_obj_failed", block_id=block_id, lod_level=lod_level, error=str(e))
 
-    return low_poly_url, file_size_kb
+    return public_url, file_size_kb
 
 
+def _generate_lod_objs(
+    merged_mesh: trimesh.Trimesh,
+    block_id: str,
+    rhino_file: rhino3dm.File3dm | None = None,
+    matched_idef=None,
+    idef_object_ids=None,
+) -> dict:
+    """Generate 3-level LOD OBJ files (high/mid/low) from merged mesh.
+
+    US-015: Real LOD System Implementation
+    
+    Pipeline for each LOD level:
+    1. High-poly: No decimation (original quality, ~5000-8000 faces)
+    2. Mid-poly: Moderate decimation to ~2000 faces (~70-80% reduction)
+    3. Low-poly: Aggressive decimation to ~500 faces (~90-95% reduction)
+    
+    Each mesh is:
+    - Exported to OBJ format (Z-up coordinates preserved)
+    - Frontend applies Z-up → Y-up rotation during rendering
+    - Uploaded to Supabase Storage (separate folders: high-poly/, mid-poly/, low-poly/)
+    
+    Args:
+        merged_mesh: Original merged mesh from Rhino .3dm (in world coordinates)
+        block_id: UUID of the block
+        
+    Returns:
+        Dictionary with LOD URLs and metadata:
+        {
+            'high_poly_url': str,
+            'mid_poly_url': str,
+            'low_poly_url': str,
+            'file_sizes_kb': {'high': int, 'mid': int, 'low': int},
+            'face_counts': {'original': int, 'high': int, 'mid': int, 'low': int}
+        }
+        
+    Example:
+        lod_data = _generate_lod_objs(mesh, "123e4567-e89b-12d3-a456-426614174000")
+        # Returns URLs for all 3 LOD levels + metadata
+    """
+    original_faces = len(merged_mesh.faces)
+    logger.info("lod_generation.start",
+                block_id=block_id,
+                original_faces=original_faces)
+    
+    results = {
+        'file_sizes_kb': {},
+        'face_counts': {'original': original_faces}
+    }
+    
+    # Level 1: High-Poly (no decimation)
+    logger.info("lod_generation.high_poly",
+                block_id=block_id,
+                target_faces="no decimation (original)")
+    
+    high_poly_mesh = merged_mesh.copy()  # Work with copy to preserve original
+    high_url, high_size = _export_and_upload_obj(high_poly_mesh, block_id, 'high')
+    results['high_poly_url'] = high_url
+    results['file_sizes_kb']['high'] = high_size
+    results['face_counts']['high'] = len(high_poly_mesh.faces)
+
+    # MTL companion for high-poly: per-face Rhino layer colors
+    # Generated ONLY for high-poly (decimation destroys face-to-layer mapping)
+    results['mtl_url'] = None
+    if rhino_file is not None and matched_idef is not None:
+        try:
+            layer_colors = _extract_layer_colors(rhino_file)
+            iso_code = matched_idef.Name if matched_idef else block_id
+            if _validate_layer_colors(layer_colors, block_id, iso_code):
+                mesh_pairs = _build_layer_face_groups(
+                    rhino_file, matched_idef, idef_object_ids
+                )
+                if mesh_pairs:
+                    layer_names = _extract_layer_names(rhino_file)
+                    obj_content, mtl_content = _generate_obj_mtl_with_layers(
+                        mesh_pairs, layer_colors, block_id, layer_names
+                    )
+                    # Upload the per-layer OBJ as the high-poly (overrides monolithic)
+                    supabase = get_supabase_client()
+                    obj_key = f"{LOD_PREFIXES['high']}{block_id}.obj"
+                    supabase.storage.from_(PROCESSED_GEOMETRY_BUCKET).upload(
+                        obj_key,
+                        obj_content.encode('utf-8'),
+                        {'content-type': 'model/obj', 'upsert': 'true'},
+                    )
+                    mtl_url = _upload_mtl_file(mtl_content, block_id)
+                    results['mtl_url'] = mtl_url
+                    logger.info(
+                        "lod_generation.mtl_generated",
+                        block_id=block_id,
+                        mtl_url=mtl_url,
+                        layer_count=len(set(li for li, _ in mesh_pairs)),
+                    )
+        except Exception as exc:
+            logger.warning(
+                "lod_generation.mtl_skipped",
+                block_id=block_id,
+                error=str(exc),
+                reason="MTL generation failed — fallback to material color in frontend",
+            )
+
+    # Level 2: Mid-Poly (moderate decimation)
+    target_mid = LOD_DECIMATION_TARGETS['mid']
+    logger.info("lod_generation.mid_poly",
+                block_id=block_id,
+                target_faces=target_mid)
+    
+    mid_poly_mesh, mid_faces = _apply_decimation(merged_mesh.copy(), target_mid, block_id)
+    mid_url, mid_size = _export_and_upload_obj(mid_poly_mesh, block_id, 'mid')
+    results['mid_poly_url'] = mid_url
+    results['file_sizes_kb']['mid'] = mid_size
+    results['face_counts']['mid'] = mid_faces
+    
+    # Level 3: Low-Poly (aggressive decimation)
+    target_low = LOD_DECIMATION_TARGETS['low']
+    logger.info("lod_generation.low_poly",
+                block_id=block_id,
+                target_faces=target_low)
+    
+    low_poly_mesh, low_faces = _apply_decimation(merged_mesh.copy(), target_low, block_id)
+    low_url, low_size = _export_and_upload_obj(low_poly_mesh, block_id, 'low')
+    results['low_poly_url'] = low_url
+    results['file_sizes_kb']['low'] = low_size
+    results['face_counts']['low'] = low_faces
+    
+    logger.info("lod_generation.complete",
+                block_id=block_id,
+                face_counts=results['face_counts'],
+                total_size_kb=sum(results['file_sizes_kb'].values()),
+                reduction_pct=round((1 - low_faces / max(original_faces, 1)) * 100, 1))
+    
+    return results
+
+
+def _update_block_lod_urls(
+    block_id: str,
+    high_poly_url: str,
+    mid_poly_url: str,
+    low_poly_url: str,
+    bbox: dict,
+    material_type: str,
+    rhino_metadata: dict | None = None,
+    mtl_url: str | None = None,
+) -> None:
+    """Update database with all LOD URLs, bbox, material_type, rhino_metadata, and mtl_url.
+    
+    US-015: Real LOD System Implementation
+    
+    Updated to include rhino_metadata (complete UserStrings extraction) for storing
+    all metadata fields like GrauEstructural, Tipologia, Zona, etc.
+    Also stores mtl_url for per-face Rhino layer colors (companion to high-poly OBJ).
+
+    Args:
+        block_id: UUID of the block to update
+        high_poly_url: Public URL of high-poly GLB (~5000-8000 faces)
+        mid_poly_url: Public URL of mid-poly GLB (~1500-2000 faces)
+        low_poly_url: Public URL of low-poly GLB (~400-600 faces)
+        bbox: Bounding box in absolute Rhino coordinates: {"min": [x,y,z], "max": [x,y,z]}
+        material_type: Validated material type (e.g., "Montjuïc", "Ceramic")
+        rhino_metadata: Complete UserStrings dictionary (all metadata from 3DM file)
+        mtl_url: Public URL of companion .mtl file for per-face layer colors (or None)
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE blocks 
+            SET high_poly_url = %s,
+                mid_poly_url = %s,
+                low_poly_url = %s,
+                bbox = %s,
+                material_type = %s,
+                rhino_metadata = %s,
+                mtl_url = %s
+            WHERE id = %s
+            """,
+            (high_poly_url, mid_poly_url, low_poly_url, json.dumps(bbox), material_type,
+             json.dumps(rhino_metadata or {}), mtl_url, block_id)
+        )
+        conn.commit()
+        logger.info("database.lod_urls_updated",
+                    block_id=block_id,
+                    high_poly_url=high_poly_url,
+                    mid_poly_url=mid_poly_url,
+                    low_poly_url=low_poly_url,
+                    mtl_url=mtl_url,
+                    metadata_keys=list(rhino_metadata.keys()) if rhino_metadata else [])
+
+
+# Legacy function for backward compatibility (deprecated)
 def _update_block_low_poly_url(block_id: str, url: str, bbox: dict, material_type: str) -> None:
-    """Update database with low_poly_url, bbox, and material_type for processed block.
+    """[DEPRECATED] Use _update_block_lod_urls instead.
+    
+    Update database with low_poly_url, bbox, and material_type for processed block.
+    Maintained for backward compatibility with existing scripts.
 
     Args:
         block_id: UUID of the block to update
@@ -862,23 +1461,37 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 3b: Extract material type from UserStrings (T-1503-AGENT)
         material_type = _extract_material_type(rhino_file, block_id, iso_code)
 
-        # Step 4-5: Extract and merge meshes (returns bbox in centred coords)
-        merged_mesh, original_faces_count, bbox = _extract_and_merge_meshes(
+        # Step 3c: Extract ALL UserStrings for metadata storage (includes GrauEstructural, etc.)
+        rhino_metadata = _extract_all_user_strings(rhino_file, block_id, iso_code)
+
+        # Step 4-5: Extract and merge meshes (returns bbox in absolute Rhino coords)
+        merged_mesh, original_faces_count, bbox, matched_idef, idef_object_ids = _extract_and_merge_meshes(
             rhino_file, block_id, iso_code
         )
 
-        # Step 6: Apply decimation
-        decimated_mesh, decimated_faces_count = _apply_decimation(
-            merged_mesh, DECIMATION_TARGET_FACES, block_id
+        # Step 6: Generate 3-level LOD GLBs (US-015: Real LOD System)
+        # Creates high-poly (~5000-8000 faces), mid-poly (~2000 faces), low-poly (~500 faces)
+        lod_data = _generate_lod_objs(
+            merged_mesh,
+            block_id,
+            rhino_file=rhino_file,
+            matched_idef=matched_idef,
+            idef_object_ids=idef_object_ids,
         )
 
-        # Step 7-8: Export and upload GLB
-        low_poly_url, file_size_kb = _export_and_upload_glb(decimated_mesh, block_id)
+        # Step 7: Update database with all LOD URLs + bbox + material_type + rhino_metadata
+        _update_block_lod_urls(
+            block_id,
+            lod_data['high_poly_url'],
+            lod_data['mid_poly_url'],
+            lod_data['low_poly_url'],
+            bbox,
+            material_type,
+            rhino_metadata,
+            mtl_url=lod_data.get('mtl_url'),
+        )
 
-        # Step 9: Update database (low_poly_url + bbox + material_type)
-        _update_block_low_poly_url(block_id, low_poly_url, bbox, material_type)
-
-        # Step 10: Cleanup temp .3dm file
+        # Step 8: Cleanup temp .3dm file
         if temp_3dm_path and os.path.exists(temp_3dm_path):
             try:
                 os.remove(temp_3dm_path)
@@ -888,20 +1501,60 @@ def generate_low_poly_glb(self, block_id: str):
 
         logger.info("generate_low_poly_glb.completed",
                    block_id=block_id,
-                   low_poly_url=low_poly_url,
+                   high_poly_url=lod_data['high_poly_url'],
+                   mid_poly_url=lod_data['mid_poly_url'],
+                   low_poly_url=lod_data['low_poly_url'],
                    original_faces=original_faces_count,
-                   decimated_faces=decimated_faces_count,
-                   file_size_kb=file_size_kb)
+                   face_counts=lod_data['face_counts'],
+                   total_size_kb=sum(lod_data['file_sizes_kb'].values()))
 
         return {
             'status': 'success',
-            'low_poly_url': low_poly_url,
+            'high_poly_url': lod_data['high_poly_url'],
+            'mid_poly_url': lod_data['mid_poly_url'],
+            'low_poly_url': lod_data['low_poly_url'],
             'original_faces': original_faces_count,
-            'decimated_faces': decimated_faces_count,
-            'file_size_kb': file_size_kb,
+            'face_counts': lod_data['face_counts'],
+            'file_sizes_kb': lod_data['file_sizes_kb'],
             'error_message': None
         }
 
     except Exception as e:
-        logger.exception("generate_low_poly_glb.error", block_id=block_id, error=str(e))
-        raise
+        # Log error with retry context
+        logger.exception(
+            "generate_low_poly_glb.error",
+            block_id=block_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            retry_count=self.request.retries,
+            max_retries=TASK_MAX_RETRIES
+        )
+        
+        # Classify error: transient (retry) or permanent (fail immediately)
+        if _is_transient_error(e):
+            # Exponential backoff: 30s → 60s → 120s → 240s → 480s
+            countdown = TASK_RETRY_DELAY_SECONDS * (2 ** self.request.retries)
+            
+            logger.warning(
+                "generate_low_poly_glb.retry_scheduled",
+                block_id=block_id,
+                retry_count=self.request.retries + 1,
+                max_retries=TASK_MAX_RETRIES,
+                countdown_seconds=countdown,
+                error_type=type(e).__name__
+            )
+            
+            # Raise retry exception (Celery will automatically retry)
+            raise self.retry(exc=e, countdown=countdown, max_retries=TASK_MAX_RETRIES)
+        else:
+            # Permanent error: update status to error_processing and fail
+            logger.error(
+                "generate_low_poly_glb.permanent_error",
+                block_id=block_id,
+                error=str(e),
+                error_type=type(e).__name__,
+                message="Permanent error detected, no retry will be attempted"
+            )
+            
+            _update_block_status_error(block_id, str(e))
+            raise  # Propagate exception without retry

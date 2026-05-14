@@ -9,15 +9,25 @@ requests==2.32.4  # CVE-2024-35195, CVE-2024-47081 fix
 # Database access
 psycopg2-binary==2.9.9
 supabase==2.10.0
+PyJWT>=2.12.0  # CVE-2026-32597: Fix critical 'crit' header validation bypass
 
 # .3dm file parsing (T-024-AGENT+)
 rhino3dm==8.4.0
 
 # Geometry processing (T-0502-AGENT)
-numpy<2.0             # Pin to 1.x for trimesh 4.0.5 compatibility (ptp() removed in numpy 2.0)
-trimesh==4.0.5        # Mesh decimation library (simplify_quadric_decimation)
+numpy>=1.24.0         # Updated for trimesh 4.11.3 compatibility
+scipy>=1.11.0         # Scientific computing (required for normal vector validation)
+trimesh==4.11.3       # Mesh decimation library (simplify_quadric_decimation) - UPDATED to fix GLB export bug
 rtree==1.1.0          # Spatial index for trimesh (required dependency)
 open3d==0.18.0        # Required backend for trimesh decimation algorithm
+
+# LangGraph Agent (US-018)
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+openai>=1.0
+tenacity>=8.2.3
+jinja2>=3.1.0
 
 # Testing (for integration tests in agent container)
 pytest==7.4.4

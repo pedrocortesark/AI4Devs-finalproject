@@ -2,6 +2,7 @@
  * LOD (Level of Detail) System Configuration
  *
  * T-0507-FRONT: 3-level LOD system for performance optimization
+ * US-015: Real LOD System with high/mid/low-poly GLBs (March 2026)
  *
  * Based on POC validation (docs/US-005/PERFORMANCE-ANALYSIS-3D-FORMATS.md):
  * - 60 FPS achieved with 1197 meshes (39,360 triangles)
@@ -15,16 +16,20 @@
 
 /**
  * LOD level distances in metres (scene units).
+ * 
+ * US-015: Updated to 4 levels (high/mid/low + bbox) based on architectural CAD best practices
+ * Updated 2026-05-01: Increased distances for better material visibility at distance
  *
  * Arrays are passed to drei <Detailed distances={LOD_DISTANCES}>:
- * - Index 0 (Level 0): 0 to LOD_DISTANCES[1] m  → mid-poly  (<20 m)
- * - Index 1 (Level 1): LOD_DISTANCES[1] to LOD_DISTANCES[2] m → low-poly (20–50 m)
- * - Index 2 (Level 2): LOD_DISTANCES[2]+ m → BBox proxy (>50 m)
+ * - Level 0: 0 to 15m    → high-poly (5000-8000 tris, detailed inspection with material)
+ * - Level 1: 15 to 40m   → mid-poly (1500-2000 tris, normal working distance)
+ * - Level 2: 40 to 100m  → low-poly (400-600 tris, overview)
+ * - Level 3: 100m+       → BBox proxy (12 tris, distant view)
  *
  * @constant
  * @readonly
  */
-export const LOD_DISTANCES = [0, 20, 50] as const;
+export const LOD_DISTANCES = [0, 15, 40, 100] as const;
 
 /**
  * LOD level identifiers
@@ -34,14 +39,17 @@ export const LOD_DISTANCES = [0, 20, 50] as const;
  * @readonly
  */
 export const LOD_LEVELS = {
-  /** Level 0: Mid-poly geometry (<20 m) - 1000 triangles */
-  MID_POLY: 0,
+  /** Level 0: High-poly geometry (<15 m) - 5000-8000 triangles */
+  HIGH_POLY: 0,
 
-  /** Level 1: Low-poly geometry (20–50 m) - 500 triangles */
-  LOW_POLY: 1,
+  /** Level 1: Mid-poly geometry (15-40 m) - 1500-2000 triangles */
+  MID_POLY: 1,
 
-  /** Level 2: BBox wireframe proxy (>50 m) - 12 triangles */
-  BBOX_PROXY: 2,
+  /** Level 2: Low-poly geometry (40-100 m) - 400-600 triangles */
+  LOW_POLY: 2,
+
+  /** Level 3: BBox wireframe proxy (>100 m) - 12 triangles */
+  BBOX_PROXY: 3,
 } as const;
 
 /**
@@ -65,12 +73,12 @@ export const LOD_CONFIG = {
     BBOX: 12,
   },
 
-  /** Distance thresholds in metres */
+  /** Distance thresholds in metres (updated 2026-05-01) */
   DISTANCE_THRESHOLDS: {
-    MID_POLY_MAX: 20,    // Level 0 active from 0 to 20 m
-    LOW_POLY_MIN: 20,    // Level 1 active from 20 m to 50 m
-    LOW_POLY_MAX: 50,
-    BBOX_MIN: 50,        // Level 2 active from 50 m onwards
+    MID_POLY_MAX: 40,    // Level 0 active from 0 to 40 m
+    LOW_POLY_MIN: 40,    // Level 1 active from 40 m to 100 m
+    LOW_POLY_MAX: 100,
+    BBOX_MIN: 100,       // Level 2 active from 100 m onwards
   },
 } as const;
 

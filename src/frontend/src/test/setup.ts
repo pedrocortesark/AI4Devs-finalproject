@@ -21,20 +21,117 @@ HTMLCanvasElement.prototype.getContext = vi.fn((contextId: string) => {
 // Replace with a plain <div data-testid="three-canvas"> that can handle click events.
 // Also mock three.js primitive elements (group, mesh, etc.) as simple divs.
 // ---------------------------------------------------------------------------
-vi.mock('@react-three/fiber', () => ({
-  Canvas: ({ children, onPointerMissed, ...props }: any) =>
-    React.createElement(
-      'div',
-      {
-        'data-testid': 'three-canvas',
-        onClick: onPointerMissed, // Simulate onPointerMissed with click for testing
-        ...props
-      },
-      children
-    ),
-  useFrame: vi.fn(),
-  useThree: vi.fn(() => ({ camera: {}, scene: {}, gl: {} })),
-}));
+vi.mock('@react-three/fiber', () => {
+  // Mock Vector3-like object with methods used by CameraController
+  const createMockVector3 = (x = 0, y = 0, z = 0) => ({
+    x, y, z,
+    clone: vi.fn(function(this: any) { return createMockVector3(this.x, this.y, this.z); }),
+    sub: vi.fn(function(this: any, v: any) { 
+      this.x -= v.x; this.y -= v.y; this.z -= v.z; 
+      return this; 
+    }),
+    add: vi.fn(function(this: any, v: any) { 
+      this.x += v.x; this.y += v.y; this.z += v.z; 
+      return this; 
+    }),
+    normalize: vi.fn(function(this: any) { 
+      const len = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+      if (len > 0) { this.x /= len; this.y /= len; this.z /= len; }
+      return this; 
+    }),
+    multiplyScalar: vi.fn(function(this: any, s: number) { 
+      this.x *= s; this.y *= s; this.z *= s; 
+      return this; 
+    }),
+    length: vi.fn(function(this: any) { 
+      return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z); 
+    }),
+    toArray: vi.fn(function(this: any) { return [this.x, this.y, this.z]; }),
+  });
+
+  // Mock OrbitControls-like object
+  const mockControls = {
+    target: createMockVector3(0, 0, 0),
+    update: vi.fn(),
+  };
+
+  // Mock useThree state
+  const mockState = {
+    camera: { 
+      position: createMockVector3(5, 8, 12),
+      fov: 50,
+      aspect: 16/9,
+      updateProjectionMatrix: vi.fn(),
+    }, 
+    scene: {}, 
+    gl: {},
+    controls: mockControls,
+  };
+
+  return {
+    Canvas: ({ children, onPointerMissed, ...props }: any) =>
+      React.createElement(
+        'div',
+        {
+          'data-testid': 'three-canvas',
+          onClick: onPointerMissed, // Simulate onPointerMissed with click for testing
+          ...props
+        },
+        children
+      ),
+    useFrame: vi.fn(),
+    useThree: vi.fn((selector?: (state: any) => any) => {
+      // If selector provided, apply it to mock state
+      if (selector) {
+        return selector(mockState);
+      }
+      // Otherwise return full state
+      return mockState;
+    }),
+    // Mock useLoader for OBJ/GLB file loading
+    // IMPORTANT: useLoader returns the loaded asset directly (scene object for OBJ/GLB)
+    // NOT an object with {scene, nodes, materials} - that's useGLTF specific
+    useLoader: vi.fn((loader: any, url: string) => {
+      // Return mock scene directly (as OBJLoader would)
+      const mockScene = {
+        isObject3D: true,
+        clone: vi.fn((recursive: boolean = false) => ({
+          isObject3D: true,
+          traverse: vi.fn((callback: (child: any) => void) => {
+            // Simulate traversing a mesh with material
+            callback({
+              isMesh: true,
+              material: {
+                color: { set: vi.fn() },
+                emissive: { set: vi.fn() },
+                emissiveIntensity: 0,
+                opacity: 1.0,
+                transparent: false,
+                needsUpdate: false,
+              },
+            });
+          }),
+          clone: vi.fn(() => mockScene),
+        })),
+        traverse: vi.fn((callback: (child: any) => void) => {
+          callback({
+            isMesh: true,
+            material: {
+              color: { set: vi.fn() },
+              emissive: { set: vi.fn() },
+              emissiveIntensity: 0,
+              opacity: 1.0,
+              transparent: false,
+              needsUpdate: false,
+            },
+          });
+        }),
+      };
+      // Return scene directly, not wrapped in an object
+      return mockScene;
+    }),
+  };
+});
 
 // Mock global intrinsic elements from three.js used by React Three Fiber
 // These include: group, mesh, primitive, ambientLight, directionalLight, etc.
@@ -73,9 +170,27 @@ vi.mock('@react-three/drei', () => {
         }
         
         // Default: return mock scene for successful loads
+        // Mock scene must support .clone() → object with .traverse() for PartMesh tests
+        // Mock scene must have isObject3D: true for ModelLoader validation
         return {
           scene: {
-            clone: vi.fn(() => ({})),
+            isObject3D: true, // Required by ModelLoader validation (line 198)
+            clone: vi.fn(() => ({
+              traverse: vi.fn((callback: (child: any) => void) => {
+                // Simulate traversing a mesh with material (needed for color/opacity tests)
+                callback({
+                  isMesh: true,
+                  material: {
+                    color: { set: vi.fn() },
+                    emissive: { set: vi.fn() },
+                    emissiveIntensity: 0,
+                    opacity: 1.0,
+                    transparent: false,
+                    needsUpdate: false,
+                  },
+                });
+              }),
+            })),
           },
           nodes: {},
           materials: {},

@@ -67,23 +67,34 @@ export function calculateCameraFit(
   offset: number = 1.2,
   controls?: OrbitControls
 ): CameraFitResult {
-  // Create bounding box
+  // Create bounding box in world space
   const box = new THREE.Box3();
   
   if (Array.isArray(object)) {
     // Multiple objects - expand box for each
-    object.forEach(obj => box.expandByObject(obj));
+    object.forEach(obj => {
+      obj.updateMatrixWorld(true);
+      box.expandByObject(obj);
+    });
   } else {
-    // Single object
+    // Single object - ensure matrix is updated
+    object.updateMatrixWorld(true);
     box.setFromObject(object);
   }
 
-  // Get box center and size
+  // Get box center and size (already in world coordinates)
   const center = new THREE.Vector3();
   box.getCenter(center);
   
   const size = new THREE.Vector3();
   box.getSize(size);
+
+  // Debug logging with explicit string formatting
+  console.log('📦 calculateCameraFit debug:');
+  console.log(`   boxMin: [${box.min.x.toFixed(2)}, ${box.min.y.toFixed(2)}, ${box.min.z.toFixed(2)}]`);
+  console.log(`   boxMax: [${box.max.x.toFixed(2)}, ${box.max.y.toFixed(2)}, ${box.max.z.toFixed(2)}]`);
+  console.log(`   center: [${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}]`);
+  console.log(`   size: [${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)}]`);
 
   // Calculate bounding sphere radius (half of diagonal)
   const radius = size.length() / 2;
