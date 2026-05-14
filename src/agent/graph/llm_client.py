@@ -6,8 +6,11 @@ Configured OpenAI client with:
 - Retry logic (Tenacity exponential backoff)
 - Timeout handling
 - Structured output parsing
+- Rate limiting (Token bucket algorithm, T-1810)
+- Concurrent request limiting (T-1810)
 
 T-1802-AGENT: LLM Classification Node
+T-1810-INFRA: OpenAI Rate Limiting (Client-Side)
 """
 
 import json
@@ -38,6 +41,10 @@ from src.agent.constants import (
     LLM_RETRY_WAIT_EXPONENTIAL_MAX,
     CLASSIFICATION_PROMPTS,
     CLASSIFICATION_PROMPT_VERSION,
+    OPENAI_RATE_LIMIT_PER_MIN,
+    OPENAI_MAX_CONCURRENT,
+    OPENAI_RATE_LIMIT_BUCKET_SIZE,
+    OPENAI_RATE_LIMITER_TIMEOUT,
 )
 
 logger = structlog.get_logger(__name__)
@@ -67,6 +74,8 @@ class LLMClient:
     - Automatic retry with exponential backoff (3 attempts: 2s, 4s, 8s)
     - Timeout protection (10s hard limit)
     - Structured schema validation
+    - Rate limiting (token bucket, 5 req/min default, T-1810)
+    - Concurrent request limiting (max 3 simultaneous, T-1810)
     
     Usage:
         client = LLMClient()
@@ -80,8 +89,14 @@ class LLMClient:
         # Returns: {"tipologia": "dovela", "confidence": 0.85, "reasoning": "..."}
     """
     
-    def __init__(self):
-        """Initialize OpenAI client with configuration from constants."""
+    def __init__(self, rate_limiter=None):
+        """
+        Initialize OpenAI client with configuration from constants.
+        
+        Args:
+            rate_limiter: Optional RateLimiterService instance (defaults to singleton)
+                         Pass None to disable rate limiting (testing only)
+        """
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             logger.warning(
@@ -101,11 +116,33 @@ class LLMClient:
         # JSON output parser
         self.parser = JsonOutputParser()
         
+        # T-1810: Initialize rate limiter
+        if rate_limiter is None:
+            # Use singleton rate limiter (default)
+            from src.backend.services.rate_limiter_service import RateLimiterService
+            try:
+                from infra.redis_client import get_redis_client
+            except ImportError:
+                # Agent context (src/agent/)
+                from src.backend.infra.redis_client import get_redis_client
+            
+            redis_client = get_redis_client()
+            self.rate_limiter = RateLimiterService(
+                redis_client=redis_client,
+                rate_limit_per_min=OPENAI_RATE_LIMIT_PER_MIN,
+                max_concurrent=OPENAI_MAX_CONCURRENT,
+                bucket_size=OPENAI_RATE_LIMIT_BUCKET_SIZE,
+            )
+        else:
+            self.rate_limiter = rate_limiter
+        
         logger.info(
             "llm_client_initialized",
             model=LLM_MODEL,
             temperature=LLM_TEMPERATURE,
             timeout=LLM_TIMEOUT_SECONDS,
+            rate_limit_per_min=OPENAI_RATE_LIMIT_PER_MIN,
+            max_concurrent=OPENAI_MAX_CONCURRENT,
         )
     
     @retry(
@@ -166,6 +203,15 @@ class LLMClient:
         """
         Classify architectural piece using GPT-4 Turbo.
         
+        T-1810: Implements rate limiting and concurrent request limiting to prevent
+        HTTP 429 errors during batch uploads.
+        
+        Rate Limiting Flow:
+        1. Acquire token from bucket (blocks until available or timeout)
+        2. Acquire concurrent slot (max 3 simultaneous requests)
+        3. Call OpenAI API with retry logic
+        4. Release concurrent slot (always, even on error)
+        
         Args:
             volume: Volume in cubic meters
             bbox: Bounding box dict {"min": [x,y,z], "max": [x,y,z]}
@@ -202,8 +248,43 @@ class LLMClient:
             vertices_count=vertices_count,
         )
         
+        # T-1810: Acquire rate limiter token (blocks until available or timeout)
+        if self.rate_limiter and self.rate_limiter.enabled:
+            token_acquired = self.rate_limiter.acquire_token(
+                timeout=OPENAI_RATE_LIMITER_TIMEOUT
+            )
+            
+            if not token_acquired:
+                logger.error(
+                    "rate_limiter_timeout",
+                    iso_code=iso_code,
+                    timeout_sec=OPENAI_RATE_LIMITER_TIMEOUT,
+                    message="Rate limiter timeout, should trigger fallback classification",
+                )
+                raise LLMClassificationError(
+                    f"Rate limiter timeout after {OPENAI_RATE_LIMITER_TIMEOUT}s. "
+                    "Consider using fallback classification or increasing timeout."
+                )
+        
+        # T-1810: Acquire concurrent slot (non-blocking check)
+        concurrent_slot_acquired = False
+        if self.rate_limiter and self.rate_limiter.enabled:
+            concurrent_slot_acquired = self.rate_limiter.acquire_concurrent_slot()
+            
+            if not concurrent_slot_acquired:
+                logger.warning(
+                    "concurrent_limit_reached",
+                    iso_code=iso_code,
+                    max_concurrent=OPENAI_MAX_CONCURRENT,
+                    message="Max concurrent LLM requests reached, should trigger fallback",
+                )
+                raise LLMClassificationError(
+                    f"Max concurrent LLM requests ({OPENAI_MAX_CONCURRENT}) reached. "
+                    "Consider using fallback classification."
+                )
+        
         try:
-            # Call LLM with retry logic
+            # Call LLM with retry logic (Tenacity handles retries)
             raw_response = self._call_llm(prompt)
             
             # Parse JSON response
@@ -285,6 +366,14 @@ class LLMClient:
             raise LLMClassificationError(
                 f"LLM classification failed: {type(e).__name__}"
             ) from e
+        finally:
+            # T-1810: Always release concurrent slot (even on error)
+            if concurrent_slot_acquired and self.rate_limiter:
+                self.rate_limiter.release_concurrent_slot()
+                logger.debug(
+                    "concurrent_slot_released",
+                    iso_code=iso_code,
+                )
 
 
 # Singleton instance (reuse across calls to avoid reinitializing OpenAI client)

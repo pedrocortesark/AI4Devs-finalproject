@@ -18490,3 +18490,129 @@ Voy a implementar T-1809 con enfoque TDD siguiendo el patrón establecido:
 Crear plan detallado de 8 tareas (Prometheus exporter → Grafana dashboard → caching → tests → docs). Estimación: 3-4 horas total.
 
 ---
+
+## 260 - T-1810 OpenAI Rate Limiting (Queue Routing) - Sprint 10 Final Ticket
+**Fecha:** 2026-05-13 16:00
+
+**Prompt Original:**
+> si
+
+**Contexto:**
+- T-1809 COMPLETADO al 100% (core + optional features: Prometheus + Grafana + Redis)
+- Sprint 10: 8/9 tickets (26 SP / 30.5 SP = 85%)
+- Usuario aprueba proceder con T-1810 (último ticket Sprint 10)
+
+**Ticket:** T-1810-INFRA - OpenAI Rate Limiting (Queue Routing) (2 SP, 1 día)
+
+**Objetivo:** 
+Evitar rate limit OpenAI (HTTP 429) con queueing inteligente en batch uploads mediante Celery queue routing y circuit breaker integration.
+
+**Scope:**
+1. Celery Queue Routing:
+   - Queue `classify_llm`: Rate limit 5 tasks/min (env var CELERY_CLASSIFY_LLM_RATE_LIMIT)
+   - Queue `classify_fallback`: Sin rate limit (regex es local, no API)
+
+2. Circuit Breaker Integration:
+   - Si CB activado → enqueue a `classify_fallback` automáticamente (bypass LLM queue)
+
+3. Retry Policy:
+   - Exponential backoff: 2s, 5s, 15s si HTTP 429 detected
+   - Max retries: 3
+
+4. Concurrency Control:
+   - Max concurrent LLM tasks: 3 (env var LANGGRAPH_MAX_CONCURRENT_LLM)
+   - Prevent burst requests
+
+5. Monitoring:
+   - Log WARNING si queue `classify_llm` > 50 pending tasks (bottleneck alert)
+
+6. Celery Config:
+   - File: `src/agent/celery_app.py`
+   - Task routes: classify_tipologia_llm → classify_llm queue, classify_tipologia_fallback → classify_fallback queue
+
+7. Tests (5 total):
+   - HP: Batch 100 archivos procesa sin errores HTTP 429
+   - EC: Rate limit respetado (5 tasks/min)
+   - INT: Max concurrent = 3
+   - EC: Queue > 50 → warning logged
+   - INT: Circuit breaker → fallback queue routing
+
+**DoD:**
+- ✅ Batch 100 archivos procesa sin errores rate limit
+- ✅ Queue routing funcional (2 queues configuradas)
+- ✅ Max retries 3 con exponential backoff
+- ✅ Monitoring queue depth implemented
+- ✅ 5/5 tests PASS
+- ✅ Zero regression
+
+**Resumen de la Respuesta/Acción:**
+Crear plan detallado de implementación con 8 tareas (Celery config, queue routing, retry policy, monitoring, circuit breaker integration, tests, docs). Estimación: ~2 horas, ~800 LOC total.
+
+---
+
+## 261 - T-1810 Decisión de Arquitectura: Client-Side Rate Limiting
+**Fecha:** 2026-05-13 16:15
+
+**Prompt Original:**
+> ok
+
+**Contexto de Decisión:**
+Usuario aprueba Opción C (Client-Side Rate Limiting) sobre Opción A (Celery Queue Routing).
+
+**Análisis Previo:**
+- Opción A (Celery Tasks): 1,200 LOC, 8h, rompe arquitectura StateGraph ❌
+- Opción B (Worker Limits): 200 LOC, 2h, no cumple objetivo ❌
+- Opción C (Client Rate Limit): 600 LOC, 4h, pragmático y compatible ✅
+
+**Decisión Aprobada:**
+Implementar Redis-backed token bucket rate limiter en `llm_client.classify_tipologia()`:
+- Token bucket: 5 tokens/min (configurable)
+- Retry exponential backoff: 2s, 5s, 15s on HTTP 429
+- Max concurrent: 3 (Redis semaphore)
+- Circuit breaker bypass: Si CB activo → skip rate limiter
+
+**Resumen de la Respuesta/Acción:**
+Crear plan detallado de 8 tareas:
+1. RateLimiterService con token bucket Redis
+2. Integration en llm_client.py
+3. Constants config (OPENAI_RATE_LIMIT_PER_MIN=5)
+4. Unit tests (8 tests)
+5. Integration tests (5 tests)
+6. TechnicalSpec docs
+7. Validation batch 100 files
+8. Memory bank update
+
+Estimación: 4 horas, 600 LOC, 13 tests.
+
+---
+
+## 262 - T-1810 Aprobación de Plan - Implementación Client-Side Rate Limiting
+**Fecha:** 2026-05-13 16:20
+
+**Prompt Original:**
+> ssi
+
+**Contexto:**
+Usuario aprueba plan de implementación T-1810 con Opción C (Client-Side Rate Limiting).
+
+**Plan Aprobado:**
+8 tareas, ~840 LOC, 13 tests, 5.2 horas estimadas:
+1. RateLimiterService (token bucket Redis) - 180 LOC
+2. LLMClient integration (retry + concurrent limit) - 40 LOC
+3. Constants config (OPENAI_RATE_LIMIT_PER_MIN=5) - 20 LOC
+4. Unit tests (8 tests) - 200 LOC
+5. Integration tests (5 tests) - 150 LOC
+6. TechnicalSpec docs - 200 LOC
+7. Validation batch 100 files - script
+8. Memory bank update - 50 LOC
+
+**DoD:**
+- 13/13 tests PASS
+- Batch 100 archivos: zero HTTP 429
+- Zero regression (76/76 baseline)
+- TechnicalSpec completo
+
+**Resumen de la Respuesta/Acción:**
+Comenzar implementación secuencial: RateLimiterService → LLMClient → tests → docs → validation → memory bank.
+
+---

@@ -336,3 +336,40 @@ CB_HALF_OPEN_MAX_RETRIES = 3  # In half-open state, allow 3 retry attempts befor
 # Circuit Breaker Fallback (in-memory if Redis unavailable)
 # Warning: In-memory CB is NOT shared across Celery workers (degraded resilience)
 CB_MEMORY_FALLBACK_ENABLED = True
+
+# ===== T-1810-INFRA: OpenAI Rate Limiting (Client-Side Token Bucket) =====
+
+# Rate Limiter Configuration
+# Prevents HTTP 429 errors during batch uploads by limiting OpenAI API request rate
+# Implementation: Token bucket algorithm with Redis backend
+
+import os
+
+# Rate limit (requests per minute)
+# Production: 5 req/min for free tier (3 RPM official + buffer)
+# Can override via environment variable for different OpenAI tiers
+OPENAI_RATE_LIMIT_PER_MIN = int(os.getenv("OPENAI_RATE_LIMIT_PER_MIN", "5"))
+
+# Max concurrent LLM requests
+# Prevents burst requests that could trigger rate limits
+OPENAI_MAX_CONCURRENT = int(os.getenv("OPENAI_MAX_CONCURRENT", "3"))
+
+# Token bucket size (max tokens that can accumulate)
+# Default: same as rate_limit (no burst allowance)
+# Set higher to allow burst processing after idle periods
+OPENAI_RATE_LIMIT_BUCKET_SIZE = int(
+    os.getenv("OPENAI_RATE_LIMIT_BUCKET_SIZE", str(OPENAI_RATE_LIMIT_PER_MIN))
+)
+
+# Rate limiter timeout (seconds)
+# How long acquire_token() should wait before giving up and falling back
+OPENAI_RATE_LIMITER_TIMEOUT = float(os.getenv("OPENAI_RATE_LIMITER_TIMEOUT", "30.0"))
+
+# Retry policy for HTTP 429 (rate limit errors)
+# Exponential backoff: 2s → 5s → 15s (3 attempts total)
+# Note: This is ADDITIONAL to tenacity retry in llm_client.py
+OPENAI_RETRY_BACKOFF_SECONDS = [2, 5, 15]
+OPENAI_MAX_RETRIES_ON_429 = 3
+
+# Redis keys for rate limiter
+RATE_LIMITER_REDIS_KEY_PREFIX = "rate_limiter:openai"
