@@ -43,7 +43,7 @@ except ImportError:
 try:
     from schemas import ValidationErrorItem
 except ModuleNotFoundError:
-    from src.backend.schemas import ValidationErrorItem
+    from schemas import ValidationErrorItem
 
 logger = structlog.get_logger()
 

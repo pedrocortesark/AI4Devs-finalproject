@@ -119,12 +119,8 @@ class LLMClient:
         # T-1810: Initialize rate limiter
         if rate_limiter is None:
             # Use singleton rate limiter (default)
-            from src.backend.services.rate_limiter_service import RateLimiterService
-            try:
-                from infra.redis_client import get_redis_client
-            except ImportError:
-                # Agent context (src/agent/)
-                from src.backend.infra.redis_client import get_redis_client
+            from services.rate_limiter_service import RateLimiterService
+            from infra.redis_client import get_redis_client
             
             redis_client = get_redis_client()
             self.rate_limiter = RateLimiterService(

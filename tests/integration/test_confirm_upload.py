@@ -208,7 +208,7 @@ def test_confirm_upload_creates_event_record(supabase_client: Client):
 
     assert len(events.data) == 1, "Event record should exist in database"
     event_record = events.data[0]
-    assert event_record["file_id"] == file_id, "Event should reference correct file_id"
+    assert event_record["block_id"] == file_id, "Event should reference correct block_id (renamed from file_id)"
     assert event_record["event_type"] == "upload.confirmed", "Event type should be 'upload.confirmed'"
 
     # CLEANUP: Remove test file from storage

@@ -13,7 +13,7 @@ try:
     from config import settings
 except ModuleNotFoundError:
     # Fallback for tests or when backend is not in path
-    from src.backend.config import settings
+    from config import settings
 
 
 _celery_client: Optional[Celery] = None

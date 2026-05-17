@@ -142,8 +142,7 @@ def cleanup_test_blocks(supabase_client: Client):
         # Delete blocks with test iso_codes
         test_patterns = [
             "TEST-%",
-            # TEMPORARY T-1507: Comment to preserve seeded GLPER elements for E2E tests
-            # "GLPER.B-PAE0720%",
+            "GLPER.B-PAE0720%",  # Test fixtures - cleanup re-enabled
             "GLPER.B-TEST%"
         ]
         

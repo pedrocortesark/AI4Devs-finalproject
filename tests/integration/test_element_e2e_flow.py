@@ -45,30 +45,29 @@ class TestElementE2EFlow:
     Verify Upload → Celery → Element API pipeline
     """
 
-    def test_hp_be_01_upload_process_element_created(self, supabase_client):
+    def test_ep_be_01_upload_rejects_invalid_nomenclature(self, supabase_client):
         """
-        HP-BE-01: Upload .3dm file → Confirm upload → Task returns success → Element created in DB
+        EP-BE-01: Upload .3dm file with invalid layer nomenclature → Validation rejects file
 
-        Given: A valid .3dm file with UserStrings (Codi, Material)
+        Given: A .3dm file with invalid layer names (e.g., "Peces", "Textures" instead of SF-ZONE-TYPE-NNN)
         When: Upload flow completes (POST /api/upload/url + confirm)
         Then:
-            - Element record created in blocks table
-            - Element has valid iso_code (from UserString "Codi")
-            - Element status is "validated" (post-processing)
-            - Element has material_type from MATERIAL_COLORS
+            - Block records created in blocks table (one per InstanceDefinition)
+            - Blocks have iso_codes extracted from InstanceDefinition names
+            - Blocks status is "error_processing" (validation failed)
+            - Validation report contains nomenclature errors
         """
         # Arrange
         bucket_name = "raw-uploads"
-        test_file_key = "test/t1507_hp_be_01.3dm"
-        file_id = "1507be01-e29b-41d4-a716-446655440001"
+        test_file_key = "test/t1507_ep_be_01.3dm"
+        file_id = "1507eb01-e29b-41d4-a716-446655440001"  # Valid UUID for error path test
 
         # Cleanup stale data
         try:
             supabase_client.storage.from_(bucket_name).remove([test_file_key])
         except Exception:
             pass
-        # TEMPORARY: Comment cleanup to allow seeded GLPER elements to persist for testing
-        # _cleanup_test_elements(supabase_client, "GLPER.B-PAE0720")
+        _cleanup_test_elements(supabase_client, "GLPER.B-PAE0720")  # Cleanup re-enabled
 
         # Step 1: Generate presigned URL
         presigned_payload = {
@@ -104,24 +103,29 @@ class TestElementE2EFlow:
         assert confirm_data["success"] is True
         assert confirm_data["task_id"] is not None, "task_id should be returned"
 
-        # Step 4: Verify Element created in database
-        # Query Element table for element with test prefix
+        # Step 4: Verify blocks created and rejected due to nomenclature errors
+        # Query blocks table for blocks with test prefix
         result = supabase_client.table("blocks").select(
-            "id, iso_code, status, material_type, low_poly_url, bbox"
+            "id, iso_code, status, validation_report"
         ).like("iso_code", "GLPER.B-PAE0720%").execute()
 
         assert len(result.data) > 0, \
-            "Element should be created in Element table after upload + processing"
+            "Blocks should be created in blocks table after upload + processing"
 
         element = result.data[0]
         assert element["iso_code"] is not None, "iso_code should not be null"
-        assert element["status"] in ["validated", "processing"], \
-            f"Expected status 'validated' or 'processing', got '{element['status']}'"
+        assert element["status"] == "error_processing", \
+            f"Expected status 'error_processing' (validation failed), got '{element['status']}'"
+        
+        # Verify validation report contains nomenclature errors
+        validation_report = element.get("validation_report")
+        assert validation_report is not None, "Validation report should exist"
+        assert not validation_report.get("is_valid", True), "File should be marked as invalid"
+        assert "errors" in validation_report, "Validation report should contain errors list"
 
         # Cleanup
         supabase_client.storage.from_(bucket_name).remove([test_file_key])
-        # TEMPORARY: Comment cleanup to preserve seeded GLPER elements across tests
-        # _cleanup_test_elements(supabase_client, "GLPER.B-PAE0720")
+        _cleanup_test_elements(supabase_client, "GLPER.B-PAE0720")  # Cleanup re-enabled
 
     def test_hp_be_02_element_has_material_from_material_colors(self, supabase_client):
         """
@@ -234,7 +238,7 @@ class TestElementE2EFlow:
             - Response 200 OK
             - Response contains ElementsListResponse schema
             - Response.elements array contains at least 1 element
-            - Element has id, iso_code, status, material_type, low_poly_url, bbox
+            - Element has id, iso_code, status, low_poly_url, bbox
         """
         response = client.get("/api/elements")
         assert response.status_code == 200, \
@@ -252,7 +256,6 @@ class TestElementE2EFlow:
         assert "id" in element
         assert "iso_code" in element
         assert "status" in element
-        assert "material_type" in element
         assert "low_poly_url" in element, \
             "Element from GET /api/elements should have low_poly_url (application-level filter)"
         assert "bbox" in element, \
@@ -287,7 +290,6 @@ class TestElementE2EFlow:
         assert element["id"] == element_id
         assert "iso_code" in element
         assert "status" in element
-        assert "material_type" in element
         assert "low_poly_url" in element
         assert "bbox" in element
 

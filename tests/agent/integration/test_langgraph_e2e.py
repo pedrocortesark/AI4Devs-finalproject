@@ -35,10 +35,7 @@ from src.agent.graph.state import ValidationState, ClassificationMethod
 from src.agent.constants import EventType
 
 # Import ValidationErrorItem for test assertions
-try:
-    from schemas import ValidationErrorItem
-except ModuleNotFoundError:
-    from src.backend.schemas import ValidationErrorItem
+from schemas import ValidationErrorItem
 
 
 class TestLangGraphE2E:

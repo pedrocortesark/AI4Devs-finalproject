@@ -13,6 +13,18 @@ it at its grid position without per-part offset math.
 
 import pytest
 import numpy as np
+
+# Check if fast-simplification is available
+try:
+    import fast_simplification
+    HAS_FAST_SIMPLIFICATION = True
+except ImportError:
+    HAS_FAST_SIMPLIFICATION = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_FAST_SIMPLIFICATION,
+    reason="fast-simplification module not installed (pip install fast-simplification)"
+)
 from unittest.mock import MagicMock, patch
 
 import trimesh

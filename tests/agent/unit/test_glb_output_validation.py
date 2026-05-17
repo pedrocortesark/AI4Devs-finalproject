@@ -23,6 +23,13 @@ import numpy as np
 import pytest
 import trimesh
 
+# Check if fast-simplification is available
+try:
+    import fast_simplification
+    HAS_FAST_SIMPLIFICATION = True
+except ImportError:
+    HAS_FAST_SIMPLIFICATION = False
+
 from src.agent.constants import DECIMATION_TARGET_FACES
 
 # ---------------------------------------------------------------------------
@@ -203,6 +210,7 @@ class TestGLBScale:
 class TestGLBGeometry:
     """Geometric properties of the GLB must satisfy viewer requirements."""
 
+    @pytest.mark.skipif(not HAS_FAST_SIMPLIFICATION, reason="fast-simplification module not installed")
     def test_face_count_at_or_below_target(self, large_mesh_needs_decimation):
         """After decimation, face count must not exceed DECIMATION_TARGET_FACES."""
         processed = _apply_full_pipeline(large_mesh_needs_decimation)
@@ -211,6 +219,7 @@ class TestGLBGeometry:
             "Decimation did not run or failed silently."
         )
 
+    @pytest.mark.skipif(not HAS_FAST_SIMPLIFICATION, reason="fast-simplification module not installed")
     def test_decimation_achieves_reduction_for_high_poly_mesh(self, large_mesh_needs_decimation):
         """High-poly mesh must be reduced by at least 50%."""
         original_faces = len(large_mesh_needs_decimation.faces)
