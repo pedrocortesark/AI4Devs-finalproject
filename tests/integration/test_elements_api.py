@@ -40,9 +40,6 @@ from schemas import (
     ElementStatus
 )
 
-# This import will fail because agent.constants.VALID_MATERIALS is needed
-from agent.constants import VALID_MATERIALS, MATERIAL_COLORS
-
 client = TestClient(app)
 
 
@@ -1156,51 +1153,20 @@ def test_int_02_cdn_url_transformation_applied(supabase_client: Client):
 
 def test_int_03_material_colors_import_succeeds(supabase_client: Client):
     """
-    INT-03: MATERIAL_COLORS import from agent.constants succeeds in backend context.
-
-    Given: Backend schemas import VALID_MATERIALS from agent.constants
-    When: Importing schemas module
-    Then:
-        - No ImportError
-        - VALID_MATERIALS list has 62 items
-        - MATERIAL_COLORS dict has 62 entries with RGB tuples
+    INT-03: REMOVED - MATERIAL_COLORS and VALID_MATERIALS eliminated
+    
+    Reason: material_type column removed from schema. Material data in rhino_metadata.
     """
-    # Import at test time (will fail if cross-module import broken)
-    from agent.constants import VALID_MATERIALS, MATERIAL_COLORS
-    
-    # ASSERT
-    assert len(VALID_MATERIALS) == 63, f"Expected 63 materials, got {len(VALID_MATERIALS)}"
-    assert len(MATERIAL_COLORS) == 63, f"Expected 63 color entries, got {len(MATERIAL_COLORS)}"
-    
-    # Verify RGB tuples structure
-    for material, rgb in MATERIAL_COLORS.items():
-        assert len(rgb) == 3, f"Material '{material}' should have RGB tuple (3 values)"
-        assert all(0 <= v <= 255 for v in rgb), f"Material '{material}' RGB values should be 0-255"
+    pytest.skip("Test obsolete: MATERIAL_COLORS dictionary removed")
 
 
 def test_int_04_validation_errors_reference_62_materials(supabase_client: Client):
     """
-    INT-04: Validation errors reference current 63-material list in error messages.
-
-    Given: Invalid material_type filter
-    When: GET /api/elements?material_type=InvalidMaterial
-    Then:
-        - Error message says "63 valid materials"
-        - Error provides examples (Montjuïc, Ulldecona, Floresta)
-        - Does NOT mention old enum (Stone, Ceramic)
+    INT-04: REMOVED - material_type validation eliminated
+    
+    Reason: material_type column removed from schema.
     """
-    # ACT
-    response = client.get("/api/elements?material_type=InvalidMaterial")
-
-    # ASSERT
-    assert response.status_code == 400
-    error_data = response.json()
-    error_msg = error_data.get("detail", "")
-    
-    # Should reference 63-material list
-    assert "63" in error_msg, "Error should mention 63 valid materials"
-    
-    # Should provide real material examples
+    pytest.skip("Test obsolete: material_type validation removed")
     assert any(mat in error_msg for mat in ["Montjuïc", "Ulldecona", "Floresta"]), \
         "Error should provide examples from real materials"
     

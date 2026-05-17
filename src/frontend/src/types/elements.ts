@@ -23,7 +23,6 @@
 export type {
   Element,
   ElementStatus,
-  MaterialType,
   ElementsListResponse,
   ElementDetail,
   ElementNavigationResponse,

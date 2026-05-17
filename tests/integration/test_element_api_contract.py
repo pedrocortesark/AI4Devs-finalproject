@@ -50,7 +50,7 @@ class TestElementAPIContract:
         # If elements exist, verify schema
         if len(data["elements"]) > 0:
             element = data["elements"][0]
-            required_fields = ["id", "iso_code", "status", "material_type", "low_poly_url", "bbox"]
+            required_fields = ["id", "iso_code", "status", "low_poly_url", "bbox"]
             for field in required_fields:
                 assert field in element, f"Element must have '{field}' field"
 
@@ -75,7 +75,7 @@ class TestElementAPIContract:
 
         element = response.json()
         required_fields = [
-            "id", "iso_code", "status", "material_type", 
+            "id", "iso_code", "status",
             "low_poly_url", "bbox", "created_at", "updated_at"
         ]
         for field in required_fields:
@@ -135,24 +135,6 @@ class TestElementAPIContract:
         element = response.json()["elements"][0]
         assert element["status"] in valid_statuses, \
             f"Element status '{element['status']}' not in valid enum values"
-
-    def test_api_contract_05_material_type_is_string_not_enum(self):
-        """
-        Verify material_type is string (not enum) validated against 62 materials
-
-        Given: Element from API
-        When: Checking material_type field
-        Then:
-            - material_type is string type (not number/object)
-            - material_type is NOT enum value (validated against MATERIAL_COLORS dict)
-        """
-        response = client.get("/api/elements")
-        if response.status_code != 200 or len(response.json().get("elements", [])) == 0:
-            pytest.skip("No elements to test material_type type")
-
-        element = response.json()["elements"][0]
-        assert isinstance(element["material_type"], str), \
-            f"material_type must be string, got {type(element['material_type'])}"
 
     def test_api_contract_06_no_workshop_fields_in_response(self):
         """

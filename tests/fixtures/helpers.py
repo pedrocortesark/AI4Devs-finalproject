@@ -99,7 +99,6 @@ def cleanup_test_elements(supabase_client, test_prefix: str = "test-element-e2e"
 def mock_element_factory(
     iso_code: Optional[str] = None,
     status: str = "validated",
-    material_type: str = "Montjuïc",
     low_poly_url: Optional[str] = None,
     bbox: Optional[dict] = None,
 ) -> dict:
@@ -109,7 +108,6 @@ def mock_element_factory(
     Args:
         iso_code: Element ISO code (generates random if None)
         status: Element status (default: "validated")
-        material_type: Material type (default: "Montjuïc")
         low_poly_url: Low-poly GLB URL (generates placeholder if None)
         bbox: Bounding box (generates default if None)
 
@@ -133,7 +131,6 @@ def mock_element_factory(
         "id": element_id,
         "iso_code": iso_code,
         "status": status,
-        "material_type": material_type,
         "low_poly_url": low_poly_url,
         "bbox": bbox,
         "validation_report": None,

@@ -144,23 +144,6 @@ class BlockStatus(str, Enum):
     ARCHIVED = "archived"
 
 
-# ===== T-1503-AGENT: Material Type Enum =====
-
-class MaterialType(str, Enum):
-    """
-    Material types for architectural elements (T-1503-AGENT).
-
-    Synchronized with PostgreSQL CHECK constraint (T-1501-DB):
-    CHECK (material_type IN ('Stone', 'Ceramic'))
-
-    Valid values:
-        Stone: Natural stone (99% of Sagrada Familia elements)
-        Ceramic: Ceramic materials (decorative elements)
-    """
-    STONE = "Stone"
-    CERAMIC = "Ceramic"
-
-
 class ValidationStatusResponse(BaseModel):
     """
     Response schema for GET /api/parts/{id}/validation endpoint.
@@ -261,7 +244,6 @@ class PartCanvasItem(BaseModel):
     iso_code: str = Field(..., description="Part identifier (e.g., SF-C12-D-001)")
     status: BlockStatus = Field(..., description="Lifecycle state")
     tipologia: str = Field(..., description="Part typology")
-    material_type: Optional[str] = Field(None, description="Material type (Montjuïc, Gaudí, Synthetic)")
     high_poly_url: Optional[str] = Field(None, description="High-detail GLB URL (~7k tris, LOD 0-5m)")
     mid_poly_url: Optional[str] = Field(None, description="Mid-detail GLB URL (~2k tris, LOD 5-20m)")
     low_poly_url: Optional[str] = Field(None, description="Low-detail GLB URL (~500 tris, LOD 20-50m)")
@@ -275,7 +257,6 @@ class PartCanvasItem(BaseModel):
         "iso_code": "SF-C12-D-001",
         "status": "validated",
         "tipologia": "capitel",
-        "material_type": "Montjuïc",
         "high_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/high-poly/550e8400.glb",
         "mid_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/mid-poly/550e8400.glb",
         "low_poly_url": "https://xyz.supabase.co/storage/v1/object/public/processed-geometry/low-poly/550e8400.glb",
@@ -456,10 +437,6 @@ class Element(BaseModel):
     id: UUID = Field(..., description="Element UUID")
     iso_code: str = Field(..., description="ISO-19650 identifier (e.g., GLPER.B-PAE0720.0701)")
     status: ElementStatus = Field(..., description="Lifecycle state")
-    material_type: str = Field(
-        ...,
-        description="Stone material type (one of 62 real materials: Montjuïc, Ulldecona, etc.)"
-    )
     high_poly_url: Optional[str] = Field(
         None,
         description="CDN URL to high-detail GLB (~7k tris, LOD Level 0: 0-5m viewing distance)"
@@ -489,38 +466,12 @@ class Element(BaseModel):
         description="Raw Rhino 3DM metadata (JSONB) containing userstrings like Material, Codi, etc."
     )
 
-    @field_validator('material_type')
-    @classmethod
-    def validate_material_type(cls, v: str) -> str:
-        """
-        Validate material_type against MATERIAL_COLORS dictionary (62 real materials).
-
-        Args:
-            v: Material type string from database
-
-        Returns:
-            Validated material type
-
-        Raises:
-            ValueError: If material not in VALID_MATERIALS list
-        """
-        from constants import VALID_MATERIALS
-
-        if v not in VALID_MATERIALS:
-            raise ValueError(
-                f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} "
-                f"valid materials (e.g., Montjuïc, Ulldecona, Floresta). "
-                f"See agent.constants.MATERIAL_COLORS for full list."
-            )
-        return v
-
     model_config = ConfigDict(
         json_schema_extra={
         "example": {
         "id": "550e8400-e29b-41d4-a716-446655440000",
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
-        "material_type": "Montjuïc",
         "high_poly_url": "https://d1234abcd.cloudfront.net/models/high-poly/550e8400_20260307T120000Z.glb",
         "mid_poly_url": "https://d1234abcd.cloudfront.net/models/mid-poly/550e8400_20260307T120000Z.glb",
         "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400_20260307T120000Z.glb",
@@ -556,12 +507,11 @@ class ElementsListResponse(BaseModel):
         "id": "550e8400-e29b-41d4-a716-446655440000",
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
-        "material_type": "Montjuïc",
         "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]}
         }
         ],
-        "filters_applied": {"status": "validated", "material_type": "Montjuïc"},
+        "filters_applied": {"status": "validated"},
         "meta": {"total": 6, "filtered": 6}
         }
         }
@@ -591,7 +541,6 @@ class ElementDetail(BaseModel):
     id: UUID = Field(..., description="Element UUID")
     iso_code: str = Field(..., description="ISO-19650 identifier")
     status: ElementStatus = Field(..., description="Lifecycle state")
-    material_type: str = Field(..., description="Stone material type (62 options)")
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
     updated_at: Optional[str] = Field(None, description="Last update timestamp (ISO 8601)")
     low_poly_url: Optional[str] = Field(None, description="Presigned CDN URL (TTL 5min)")
@@ -601,23 +550,12 @@ class ElementDetail(BaseModel):
     triangle_count: Optional[int] = Field(None, description="Triangle count (performance)")
     rhino_metadata: Optional[dict] = Field(None, description="Rhino 3DM metadata (JSONB)")
 
-    @field_validator('material_type')
-    @classmethod
-    def validate_material_type(cls, v: str) -> str:
-        """Validate material_type against 62 real materials."""
-        from constants import VALID_MATERIALS
-
-        if v not in VALID_MATERIALS:
-            raise ValueError(f"Invalid material_type: '{v}'. Must be one of {len(VALID_MATERIALS)} valid materials.")
-        return v
-
     model_config = ConfigDict(
         json_schema_extra={
         "example": {
         "id": "550e8400-e29b-41d4-a716-446655440000",
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
-        "material_type": "Montjuïc",
         "created_at": "2026-03-06T10:30:00Z",
         "low_poly_url": "https://d1234abcd.cloudfront.net/models/low-poly/550e8400.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},

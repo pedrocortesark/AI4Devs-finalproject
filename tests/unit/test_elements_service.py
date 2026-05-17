@@ -37,9 +37,6 @@ except ModuleNotFoundError:
     from src.backend.services.elements_service import ElementsService
     from src.backend.schemas import Element, ElementsListResponse, ElementStatus, BoundingBox
 
-# Import material validation from agent constants
-from agent.constants import VALID_MATERIALS
-
 
 # ===== HAPPY PATH TESTS =====
 

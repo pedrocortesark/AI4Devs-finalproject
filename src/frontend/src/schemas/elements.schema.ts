@@ -11,7 +11,6 @@
  */
 
 import { z } from 'zod';
-import { MATERIAL_COLORS } from '../constants/materials';
 
 // ===== Enums =====
 
@@ -28,12 +27,6 @@ export const ElementStatusSchema = z.enum([
   'completed',
   'archived',
 ]);
-
-/**
- * MaterialType enum schema (62 real stone types from Sagrada Família)
- */
-const materialKeys = Object.keys(MATERIAL_COLORS) as [string, ...string[]];
-export const MaterialTypeSchema = z.enum(materialKeys);
 
 // ===== Bounding Box =====
 
@@ -54,7 +47,6 @@ export const ElementSchema = z.object({
   id: z.string().uuid(),
   iso_code: z.string(),
   status: ElementStatusSchema,
-  material_type: MaterialTypeSchema,
   high_poly_url: z.string().url().nullable().optional(),  // US-015: High-detail GLB (~7k tris, 0-15m)
   mid_poly_url: z.string().url().nullable().optional(),   // US-015: Mid-detail GLB (~2k tris, 15-40m)
   low_poly_url: z.string().url().nullable(),              // US-015: Low-detail GLB (~500 tris, 40-100m)
@@ -95,7 +87,6 @@ export const ElementDetailSchema = z.object({
   id: z.string().uuid(),
   iso_code: z.string(),
   status: ElementStatusSchema,
-  material_type: MaterialTypeSchema,
   created_at: z.string().datetime(),
   high_poly_url: z.string().url().nullable().optional(),  // US-015: High-detail GLB
   mid_poly_url: z.string().url().nullable().optional(),   // US-015: Mid-detail GLB
@@ -128,12 +119,10 @@ export type ElementsListResponse = z.infer<typeof ElementsListResponseSchema>;
 export type ElementDetail = z.infer<typeof ElementDetailSchema>;
 export type ElementNavigationResponse = z.infer<typeof ElementNavigationResponseSchema>;
 export type ElementStatus = z.infer<typeof ElementStatusSchema>;
-export type MaterialType = z.infer<typeof MaterialTypeSchema>;
 
 /**
  * Query parameters for GET /api/elements (all optional)
  */
 export interface ElementsQueryParams {
   status?: z.infer<typeof ElementStatusSchema>;
-  material_type?: z.infer<typeof MaterialTypeSchema>;
 }

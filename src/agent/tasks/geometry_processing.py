@@ -37,9 +37,6 @@ try:
         DRACO_QUANTIZE_POSITION_BITS,
         DRACO_QUANTIZE_NORMAL_BITS,
         DRACO_QUANTIZE_TEXCOORD_BITS,
-        VALID_MATERIALS,
-        DEFAULT_MATERIAL,
-        MATERIAL_USERSTRING_KEY,
     )
 except ImportError:
     from celery_app import celery_app
@@ -63,9 +60,6 @@ except ImportError:
         DRACO_QUANTIZE_POSITION_BITS,
         DRACO_QUANTIZE_NORMAL_BITS,
         DRACO_QUANTIZE_TEXCOORD_BITS,
-        VALID_MATERIALS,
-        DEFAULT_MATERIAL,
-        MATERIAL_USERSTRING_KEY,
     )
 
 import rhino3dm
@@ -315,123 +309,6 @@ def _parse_rhino_file(file_path: str, iso_code: str) -> rhino3dm.File3dm:
     logger.info("parse_rhino_file.success",
                iso_code=iso_code, objects_count=len(rhino_file.Objects))
     return rhino_file
-
-
-def _validate_and_normalize_material(raw_value: str) -> str:
-    """Validate and normalize material string (T-1504-AGENT).
-    
-    Validates against 62 real stone types from MATERIAL_COLORS dictionary.
-    Normalizes to title case and trims whitespace.
-    
-    Args:
-        raw_value: Raw material string from UserString
-    
-    Returns:
-        Normalized material (one of 62 types) or "Montjuïc" if invalid
-    """
-    normalized = raw_value.strip().capitalize()
-    return normalized if normalized in VALID_MATERIALS else DEFAULT_MATERIAL
-
-
-def get_material_color(material: str) -> tuple[int, int, int]:
-    """Get RGB color for a given material (T-1504-AGENT - AC-06).
-    
-    Returns the RGB color tuple associated with a material type.
-    If material is not found, returns the default material color (Montjuïc).
-    Used by frontend for canvas rendering of 3D parts.
-    
-    Args:
-        material: Material name from MATERIAL_COLORS dictionary
-    
-    Returns:
-        RGB tuple (R, G, B) with values in range [0, 255]
-    
-    Examples:
-        >>> get_material_color("Ulldecona")
-        (240, 220, 180)
-        
-        >>> get_material_color("Montjuïc")
-        (230, 180, 100)
-        
-        >>> get_material_color("InvalidMaterial")
-        (230, 180, 100)  # Returns Montjuïc default color
-    """
-    return MATERIAL_COLORS.get(material, MATERIAL_COLORS[DEFAULT_MATERIAL])
-
-
-def _extract_material_type(rhino_file: rhino3dm.File3dm, block_id: str, iso_code: str) -> str:
-    """Extract material type from Rhino UserString (T-1504-AGENT).
-    
-    Extracts "Material" UserString from object-level ONLY (no document/layer fallback).
-    Validates against 62 real stone types from MATERIAL_COLORS dictionary.
-    
-    Implementation Details:
-    - AC-02: Searches ONLY in object.Attributes.GetUserStrings() (no document/layer)
-    - AC-03: Normalizes input (.strip().capitalize()) for case-insensitive matching
-    - AC-04: Validates against VALID_MATERIALS (62 types), logs warning if invalid
-    - AC-05: Defaults to "Montjuïc" (most common material) if not found
-    
-    Args:
-        rhino_file: Parsed rhino3dm.File3dm object
-        block_id: UUID of the block (for logging)
-        iso_code: ISO code of the block (for logging)
-    
-    Returns:
-        Validated material_type: One of 62 real stone types
-    
-    Examples:
-        >>> # Extract valid material from object UserString
-        >>> rhino_file = rhino3dm.File3dm.Read("GLPER.B-PAE0720.0701.3dm")
-        >>> material = _extract_material_type(rhino_file, "uuid-123", "GLPER.B-PAE0720.0701")
-        >>> print(material)  # "Montjuïc" or "Ulldecona" or other valid material
-        
-        >>> # Default when no Material UserString found
-        >>> rhino_file_no_material = rhino3dm.File3dm.Read("block_without_material.3dm")
-        >>> material = _extract_material_type(rhino_file_no_material, "uuid-456", "TEST.001")
-        >>> print(material)  # "Montjuïc" (default)
-        
-        >>> # Normalization: lowercase → title case
-        >>> # If object has Material="ulldecona", returns "Ulldecona"
-    """
-    
-    # Search only in object-level UserString (AC-02: Extracción Solo de Object UserStrings)
-    if hasattr(rhino_file, 'Objects') and rhino_file.Objects is not None:
-        for obj in rhino_file.Objects:
-            try:
-                if hasattr(obj, 'Attributes') and hasattr(obj.Attributes, 'GetUserStrings'):
-                    obj_strings = obj.Attributes.GetUserStrings()
-                    if obj_strings is not None and hasattr(obj_strings, 'Keys'):
-                        if MATERIAL_USERSTRING_KEY in obj_strings.Keys:
-                            raw_value = obj_strings[MATERIAL_USERSTRING_KEY]
-                            material_type = _validate_and_normalize_material(raw_value)
-                            
-                            if material_type != DEFAULT_MATERIAL or raw_value.strip().capitalize() in VALID_MATERIALS:
-                                logger.info("extract_material_type.success",
-                                          block_id=block_id,
-                                          material_type=material_type,
-                                          source="object",
-                                          raw_value=raw_value)
-                            else:
-                                logger.warning("extract_material_type.invalid_value",
-                                             block_id=block_id,
-                                             raw_value=raw_value,
-                                             normalized=raw_value.strip().capitalize(),
-                                             source="object",
-                                             defaulting_to=DEFAULT_MATERIAL)
-                            return material_type
-            except Exception as e:
-                logger.warning("extract_material_type.object_error",
-                             block_id=block_id,
-                             error=str(e))
-                continue
-    
-    # Default to "Montjuïc" if not found (AC-05: Default Fallback a Montjuïc)
-    logger.info("extract_material_type.default",
-               block_id=block_id,
-               material_type=DEFAULT_MATERIAL,
-               source="default",
-               reason="No Material UserString found in objects")
-    return DEFAULT_MATERIAL
 
 
 def _extract_all_user_strings(rhino_file: rhino3dm.File3dm, block_id: str, iso_code: str) -> dict:
@@ -1312,11 +1189,10 @@ def _update_block_lod_urls(
     mid_poly_url: str,
     low_poly_url: str,
     bbox: dict,
-    material_type: str,
     rhino_metadata: dict | None = None,
     mtl_url: str | None = None,
 ) -> None:
-    """Update database with all LOD URLs, bbox, material_type, rhino_metadata, and mtl_url.
+    """Update database with all LOD URLs, bbox, rhino_metadata, and mtl_url.
     
     US-015: Real LOD System Implementation
     
@@ -1330,7 +1206,6 @@ def _update_block_lod_urls(
         mid_poly_url: Public URL of mid-poly GLB (~1500-2000 faces)
         low_poly_url: Public URL of low-poly GLB (~400-600 faces)
         bbox: Bounding box in absolute Rhino coordinates: {"min": [x,y,z], "max": [x,y,z]}
-        material_type: Validated material type (e.g., "Montjuïc", "Ceramic")
         rhino_metadata: Complete UserStrings dictionary (all metadata from 3DM file)
         mtl_url: Public URL of companion .mtl file for per-face layer colors (or None)
     """
@@ -1343,12 +1218,11 @@ def _update_block_lod_urls(
                 mid_poly_url = %s,
                 low_poly_url = %s,
                 bbox = %s,
-                material_type = %s,
                 rhino_metadata = %s,
                 mtl_url = %s
             WHERE id = %s
             """,
-            (high_poly_url, mid_poly_url, low_poly_url, json.dumps(bbox), material_type,
+            (high_poly_url, mid_poly_url, low_poly_url, json.dumps(bbox),
              json.dumps(rhino_metadata or {}), mtl_url, block_id)
         )
         conn.commit()
@@ -1359,31 +1233,6 @@ def _update_block_lod_urls(
                     low_poly_url=low_poly_url,
                     mtl_url=mtl_url,
                     metadata_keys=list(rhino_metadata.keys()) if rhino_metadata else [])
-
-
-# Legacy function for backward compatibility (deprecated)
-def _update_block_low_poly_url(block_id: str, url: str, bbox: dict, material_type: str) -> None:
-    """[DEPRECATED] Use _update_block_lod_urls instead.
-    
-    Update database with low_poly_url, bbox, and material_type for processed block.
-    Maintained for backward compatibility with existing scripts.
-
-    Args:
-        block_id: UUID of the block to update
-        url: Public URL of the uploaded GLB file
-        bbox: Bounding box in centred coordinates: {"min": [x,y,z], "max": [x,y,z]}
-        material_type: Validated material type ("Stone" or "Ceramic")
-    """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE blocks SET low_poly_url = %s, bbox = %s, material_type = %s WHERE id = %s",
-            (url, json.dumps(bbox), material_type, block_id)
-        )
-        conn.commit()
-
-    logger.info("update_db.success", block_id=block_id, low_poly_url=url,
-                bbox_min=bbox["min"], bbox_max=bbox["max"], material_type=material_type)
 
 
 @celery_app.task(
@@ -1458,10 +1307,7 @@ def generate_low_poly_glb(self, block_id: str):
         # Step 3: Parse .3dm file
         rhino_file = _parse_rhino_file(temp_3dm_path, iso_code)
 
-        # Step 3b: Extract material type from UserStrings (T-1503-AGENT)
-        material_type = _extract_material_type(rhino_file, block_id, iso_code)
-
-        # Step 3c: Extract ALL UserStrings for metadata storage (includes GrauEstructural, etc.)
+        # Step 3b: Extract ALL UserStrings for metadata storage (includes GrauEstructural, etc.)
         rhino_metadata = _extract_all_user_strings(rhino_file, block_id, iso_code)
 
         # Step 4-5: Extract and merge meshes (returns bbox in absolute Rhino coords)
@@ -1479,14 +1325,13 @@ def generate_low_poly_glb(self, block_id: str):
             idef_object_ids=idef_object_ids,
         )
 
-        # Step 7: Update database with all LOD URLs + bbox + material_type + rhino_metadata
+        # Step 7: Update database with all LOD URLs + bbox + rhino_metadata
         _update_block_lod_urls(
             block_id,
             lod_data['high_poly_url'],
             lod_data['mid_poly_url'],
             lod_data['low_poly_url'],
             bbox,
-            material_type,
             rhino_metadata,
             mtl_url=lod_data.get('mtl_url'),
         )

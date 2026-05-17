@@ -125,32 +125,12 @@ class TestElementE2EFlow:
 
     def test_hp_be_02_element_has_material_from_material_colors(self, supabase_client):
         """
-        HP-BE-02: Verify Element has material_type from MATERIAL_COLORS (62 valid materials)
-
-        Given: An element created from .3dm file with UserString "Material"
-        When: Agent processes file and extracts material
-        Then:
-            - Element material_type is one of 62 valid materials
-            - Material is NOT null
-            - Material is a string (not enum)
-            - Material matches one of: Montjuïc, Ulldecona, Floresta, etc.
+        HP-BE-02: REMOVED - material_type column eliminated (no longer used)
+        
+        Reason: material_type extraction was incorrect (searched wrong location).
+        Material data now in rhino_metadata JSONB field.
         """
-        # Import MATERIAL_COLORS to verify against
-        from src.agent.constants import MATERIAL_COLORS
-
-        # Query existing elements (from previous test or setup)
-        result = supabase_client.table("blocks").select(
-            "id, iso_code, material_type"
-        ).like("iso_code", "GLPER.B-PAE0720%").limit(1).execute()
-
-        if len(result.data) == 0:
-            pytest.skip("No elements in database to test material_type validation")
-
-        element = result.data[0]
-        assert element["material_type"] is not None, "material_type should not be null"
-        assert isinstance(element["material_type"], str), "material_type should be string"
-        assert element["material_type"] in MATERIAL_COLORS, \
-            f"material_type '{element['material_type']}' not in MATERIAL_COLORS (62 valid materials)"
+        pytest.skip("Test obsolete: material_type column removed from schema")
 
     def test_hp_be_03_element_has_https_absolute_low_poly_url(self, supabase_client):
         """

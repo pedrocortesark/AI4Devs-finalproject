@@ -4,13 +4,12 @@ Classification Helper Functions
 Utilities for:
 1. Fallback regex classification (when LLM fails)
 2. Prompt injection prevention (sanitize user inputs)
-3. Material color lookup (integration with MATERIAL_COLORS)
 
 T-1802-AGENT: LLM Classification Helpers
 """
 
 import re
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any
 
 import structlog
 
@@ -20,8 +19,6 @@ from src.agent.constants import (
     FALLBACK_DEFAULT_CONFIDENCE,
     FORBIDDEN_PATTERNS,
     PROMPT_INJECTION_REDACTED_TEXT,
-    MATERIAL_COLORS,
-    DEFAULT_MATERIAL,
 )
 from src.agent.graph.state import ClassificationMethod
 
@@ -146,38 +143,6 @@ def fallback_classify_by_regex(iso_code: str) -> Dict[str, Any]:
         "classified_at": datetime.datetime.utcnow().isoformat() + "Z",
     }
 
-
-def get_material_color(material: str) -> Tuple[int, int, int]:
-    """
-    Get RGB color for material type.
-    
-    Uses MATERIAL_COLORS dictionary (62 Sagrada Família stone types).
-    Defaults to Montjuïc (most common) if material not found.
-    
-    Args:
-        material: Material name (e.g., "Montjuïc", "Ulldecona")
-        
-    Returns:
-        RGB tuple (r, g, b) where each value is 0-255
-        
-    Example:
-        >>> get_material_color("Montjuïc")
-        (230, 180, 100)  # Warm ochre
-        
-        >>> get_material_color("Unknown Material")
-        (230, 180, 100)  # Default to Montjuïc
-    """
-    color = MATERIAL_COLORS.get(material)
-    
-    if color is None:
-        logger.debug(
-            "material_not_found_using_default",
-            requested=material,
-            default=DEFAULT_MATERIAL,
-        )
-        color = MATERIAL_COLORS[DEFAULT_MATERIAL]
-    
-    return color
 
 
 def validate_llm_confidence(confidence: float, threshold: float = 0.7) -> bool:
