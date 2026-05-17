@@ -41,6 +41,46 @@ from src.agent.constants import (
 # Test Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
 
+class _NoopRateLimiter:
+    """Disabled rate limiter stub.
+
+    Mirrors RateLimiterService's documented graceful-degradation contract
+    (enabled=False → all ops are no-ops returning True). Used to keep these
+    unit tests deterministic: the real RateLimiterService builds a Redis
+    token bucket and, when Redis is absent (e.g. `pytest --no-deps`),
+    acquire_token() blocks ~30s before failing — making test_llm_client_*
+    flaky depending on run order/timing. These tests mock ChatOpenAI, so the
+    rate limiter is irrelevant to what they assert.
+    """
+    enabled = False
+
+    def acquire_token(self, *args, **kwargs):
+        return True
+
+    def acquire_concurrent_slot(self, *args, **kwargs):
+        return True
+
+    def release_concurrent_slot(self, *args, **kwargs):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limiter(monkeypatch):
+    """Inject the disabled rate limiter into every LLMClient built in this
+    module (when the test does not pass one explicitly), so no test ever
+    blocks on a missing Redis token bucket."""
+    import src.agent.graph.llm_client as llm_mod
+
+    real_init = llm_mod.LLMClient.__init__
+
+    def patched_init(self, rate_limiter=None):
+        return real_init(self, rate_limiter=rate_limiter or _NoopRateLimiter())
+
+    monkeypatch.setattr(llm_mod.LLMClient, "__init__", patched_init)
+    # Reset the module singleton so get_llm_client() rebuilds with the stub.
+    monkeypatch.setattr(llm_mod, "_llm_client_instance", None)
+
+
 @pytest.fixture
 def mock_llm_response_valid():
     """Valid LLM response with high confidence"""

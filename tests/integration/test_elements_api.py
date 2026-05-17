@@ -222,7 +222,6 @@ def test_hp_03_filter_by_material_type(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-MONT-{i}",
             "status": "validated",
-            "material_type": "Montjuïc",
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -233,7 +232,6 @@ def test_hp_03_filter_by_material_type(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-ULLD-{i}",
             "status": "validated",
-            "material_type": "Ulldecona",
             "low_poly_url": "models/low-poly/test2.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -348,7 +346,6 @@ def test_hp_05_get_element_navigation(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-NAV-{i}",
             "status": "validated",
-            "material_type": "Montjuïc",
             "created_at": (base_time - timedelta(minutes=3-i)).isoformat(),
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
@@ -413,7 +410,6 @@ def test_hp_06_schema_contract_alignment(supabase_client: Client):
         "id": element_id,
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
-        "material_type": "Montjuïc",
         "low_poly_url": "models/low-poly/test.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
         "is_archived": False
@@ -437,7 +433,7 @@ def test_hp_06_schema_contract_alignment(supabase_client: Client):
     assert test_elem is not None, "Test element not found in response"
 
     # Validate exact schema fields
-    expected_fields = {"id", "iso_code", "status", "material_type", "low_poly_url", "bbox"}
+    expected_fields = {"id", "iso_code", "status", "low_poly_url", "bbox"}
     actual_fields = set(test_elem.keys())
     
     # No workshop_id/workshop_name/tipologia (removed in US-015)
@@ -469,7 +465,6 @@ def test_ec_01_filter_only_render_ready_elements(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "TEST-COMPLETE",
             "status": "validated",
-            "material_type": "Montjuïc",
             "low_poly_url": "models/low-poly/complete.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -478,7 +473,6 @@ def test_ec_01_filter_only_render_ready_elements(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "TEST-NO-POLY",
             "status": "processing",
-            "material_type": "Ulldecona",
             "low_poly_url": None,
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -487,7 +481,6 @@ def test_ec_01_filter_only_render_ready_elements(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "TEST-NO-BBOX",
             "status": "processing",
-            "material_type": "Floresta",
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": None,
             "is_archived": False
@@ -496,7 +489,6 @@ def test_ec_01_filter_only_render_ready_elements(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "TEST-NEITHER",
             "status": "uploaded",
-            "material_type": "Montjuïc",
             "low_poly_url": None,
             "bbox": None,
             "is_archived": False
@@ -530,6 +522,7 @@ def test_ec_01_filter_only_render_ready_elements(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="Test obsolete: material_type filter removed from API")
 def test_ec_02_multiple_filters_combine_correctly(supabase_client: Client):
     """
     EC-02: GET /api/elements with multiple filters (status + material_type) combines correctly.
@@ -547,7 +540,6 @@ def test_ec_02_multiple_filters_combine_correctly(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "TEST-MATCH",
             "status": "validated",
-            "material_type": "Montjuïc",
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -556,7 +548,6 @@ def test_ec_02_multiple_filters_combine_correctly(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "TEST-STATUS-ONLY",
             "status": "validated",
-            "material_type": "Ulldecona",
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -565,7 +556,6 @@ def test_ec_02_multiple_filters_combine_correctly(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "TEST-MATERIAL-ONLY",
             "status": "in_fabrication",
-            "material_type": "Montjuïc",
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -615,7 +605,6 @@ def test_ec_03_element_detail_without_validation_report(supabase_client: Client)
         "id": element_id,
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
-        "material_type": "Montjuïc",
         "created_at": datetime.utcnow().isoformat(),
         "low_poly_url": "models/low-poly/test.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
@@ -666,7 +655,6 @@ def test_ec_04_navigation_first_element_prev_null(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-NAV-FIRST-{i}",
             "status": "validated",
-            "material_type": "Montjuïc",
             "created_at": (base_time - timedelta(days=365) - timedelta(minutes=3-i)).isoformat(),  # Far past
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
@@ -732,7 +720,6 @@ def test_ec_05_navigation_last_element_next_null(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-NAV-LAST-{i}",
             "status": "validated",
-            "material_type": "Montjuïc",
             "created_at": (base_time + timedelta(days=365) - timedelta(minutes=3-i)).isoformat(),  # Far future
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
@@ -796,7 +783,6 @@ def test_ec_06_material_type_validates_against_62_materials(supabase_client: Cli
             "id": str(uuid4()),
             "iso_code": f"TEST-MAT-{i}",
             "status": "validated",
-            "material_type": material,
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -845,7 +831,6 @@ def test_ec_07_elements_without_tipologia_excluded(supabase_client: Client):
         "id": element_id,
         "iso_code": "TEST-NO-TIP",
         "status": "validated",
-        "material_type": "Montjuïc",
         "low_poly_url": "models/low-poly/test.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
         "is_archived": False
@@ -972,6 +957,7 @@ def test_err_04_nonexistent_element_returns_404(supabase_client: Client):
         "Error should indicate element not found"
 
 
+@pytest.mark.skip(reason="Test obsolete: material_type column removed from schema")
 def test_err_05_pydantic_rejects_old_enum_stone(supabase_client: Client):
     """
     ERR-05: Pydantic validation rejects material_type="Stone" (old enum value, now invalid).
@@ -1071,7 +1057,6 @@ def test_int_01_query_performance_under_500ms(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-PERF-{i}",
             "status": "validated",
-            "material_type": "Montjuïc",
             "low_poly_url": f"models/low-poly/test_{i}.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -1114,7 +1099,6 @@ def test_int_02_cdn_url_transformation_applied(supabase_client: Client):
         "id": element_id,
         "iso_code": "TEST-CDN",
         "status": "validated",
-        "material_type": "Montjuïc",
         "low_poly_url": "models/low-poly/test.glb",  # Supabase Storage path
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
         "is_archived": False
@@ -1188,7 +1172,6 @@ def test_int_05_redis_cache_integration_navigation(supabase_client: Client):
         "id": element_id,
         "iso_code": "TEST-CACHE",
         "status": "validated",
-        "material_type": "Montjuïc",
         "low_poly_url": "models/low-poly/test.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
         "is_archived": False

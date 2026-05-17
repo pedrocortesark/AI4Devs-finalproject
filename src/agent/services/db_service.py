@@ -53,6 +53,52 @@ class DBService:
             logger.exception("db_service.update_block_status.error", part_id=part_id, error=str(e))
             return False
 
+    def update_block_classification(
+        self,
+        part_id: str,
+        tipologia: str,
+        material: Optional[str] = None,
+    ) -> bool:
+        """
+        Persist the LangGraph LLM classification onto the block (US-018 wiring).
+
+        Sets blocks.tipologia (NOT NULL text column, defaulted to "pending" by
+        register_3dm_blocks) to the tipologia decided by the agent. The material
+        is NOT a dedicated column anymore (material_type was removed); it travels
+        in validation_report.metadata.classification instead, so it is ignored
+        here on purpose but kept in the signature for call-site clarity.
+
+        Args:
+            part_id: blocks.id UUID
+            tipologia: Classified tipologia (e.g. "dovela", "capitel")
+            material: Inferred material (persisted only in validation_report)
+
+        Returns:
+            True if a row was updated, False otherwise.
+        """
+        logger.info(
+            "db_service.update_block_classification",
+            part_id=part_id, tipologia=tipologia,
+        )
+        try:
+            result = self.supabase.table("blocks").update({
+                "tipologia": tipologia
+            }).eq("id", part_id).execute()
+
+            if result.data:
+                return True
+            logger.error(
+                "db_service.update_block_classification.no_rows_affected",
+                part_id=part_id,
+            )
+            return False
+        except Exception as e:
+            logger.exception(
+                "db_service.update_block_classification.error",
+                part_id=part_id, error=str(e),
+            )
+            return False
+
     def save_validation_report(
         self,
         part_id: str,

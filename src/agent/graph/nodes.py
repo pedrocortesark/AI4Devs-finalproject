@@ -231,6 +231,94 @@ def _append_to_errors(state: ValidationState, error_msg: str) -> list:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# HELPER: build geometry_metadata from an already-downloaded .3dm (US-018 wiring)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_initial_geometry_metadata(
+    local_path: str,
+    parse_result: Any,
+    iso_code: str = None,
+) -> Dict[str, Any]:
+    """
+    Build the geometry_metadata dict from a .3dm file already on local disk.
+
+    WHY THIS EXISTS
+    ===============
+    The production Celery task (validate_file) downloads the uploaded .3dm by
+    its real storage key and parses it once. The LangGraph ExtractGeometry node,
+    however, re-downloads by `{block_id}.3dm` — a key that does NOT exist in the
+    real "1 file → N InstanceDefinition blocks" model.
+
+    This helper lets the task pre-compute the exact geometry_metadata structure
+    the graph expects, so ExtractGeometry can reuse it (idempotency guard) and
+    skip the (wrong, redundant) download. The structure mirrors what
+    node_extract_geometry produces on its happy path.
+
+    Args:
+        local_path   : Absolute path to the downloaded .3dm file
+        parse_result : FileProcessingResult from RhinoParserService.parse_file()
+        iso_code     : Real blocks.iso_code (used by ClassifyTipologia for the LLM)
+
+    Returns:
+        geometry_metadata dict with the same keys node_extract_geometry returns
+        (layers, bbox, volume, vertices_count, faces_count, rhino_model,
+        user_strings, file_exists_in_storage, has_mesh) plus iso_code.
+    """
+    try:
+        import rhino3dm
+    except ImportError:
+        rhino3dm = None
+
+    bbox_dict = {"min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 1.0], "dimensions": [1.0, 1.0, 1.0]}
+    volume = 0.0
+    vertices_count = 0
+    faces_count = 0
+
+    model = rhino3dm.File3dm.Read(local_path) if rhino3dm else None
+
+    if model and model.Objects:
+        min_x, min_y, min_z = float('inf'), float('inf'), float('inf')
+        max_x, max_y, max_z = float('-inf'), float('-inf'), float('-inf')
+
+        for obj in model.Objects:
+            if obj.Geometry:
+                obj_bbox = obj.Geometry.GetBoundingBox()
+                if obj_bbox.IsValid:
+                    min_x = min(min_x, obj_bbox.Min.X)
+                    min_y = min(min_y, obj_bbox.Min.Y)
+                    min_z = min(min_z, obj_bbox.Min.Z)
+                    max_x = max(max_x, obj_bbox.Max.X)
+                    max_y = max(max_y, obj_bbox.Max.Y)
+                    max_z = max(max_z, obj_bbox.Max.Z)
+
+                if hasattr(obj.Geometry, 'Vertices'):
+                    vertices_count += len(obj.Geometry.Vertices)
+                if hasattr(obj.Geometry, 'Faces'):
+                    faces_count += len(obj.Geometry.Faces)
+
+        if min_x != float('inf'):
+            bbox_dict = {
+                "min": [min_x, min_y, min_z],
+                "max": [max_x, max_y, max_z],
+                "dimensions": [max_x - min_x, max_y - min_y, max_z - min_z],
+            }
+            volume = (max_x - min_x) * (max_y - min_y) * (max_z - min_z)
+
+    return {
+        "layers": parse_result.layers,
+        "bbox": bbox_dict,
+        "volume": volume,
+        "vertices_count": vertices_count,
+        "faces_count": faces_count,
+        "rhino_model": model,
+        "user_strings": getattr(parse_result, "user_strings", None),
+        "file_exists_in_storage": True,
+        "has_mesh": vertices_count > 0,
+        "iso_code": iso_code,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # HELPER: T-1805 Audit Trail - State Snapshot Serializer
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -526,6 +614,24 @@ def node_extract_geometry(state: ValidationState) -> Dict[str, Any]:
     node_name = "ExtractGeometry"
     block_id = state.get("block_id", "unknown")
     logger.info("node.enter", node=node_name, block_id=block_id)
+
+    # US-018 wiring: if the caller already downloaded + parsed the .3dm and
+    # pre-populated geometry_metadata (production validate_file path), reuse it
+    # and skip the {block_id}.3dm download (which is wrong in the real
+    # "1 file → N InstanceDefinition blocks" model). Old/test callers that do
+    # NOT pre-populate fall through to the original download logic unchanged.
+    preloaded = state.get("geometry_metadata") or {}
+    if preloaded.get("file_exists_in_storage"):
+        logger.info(
+            "extract_geometry.using_preloaded_metadata",
+            node=node_name,
+            block_id=block_id,
+            layer_count=len(preloaded.get("layers", [])),
+        )
+        return {
+            "geometry_metadata": preloaded,
+            "validation_path": _append_to_path(state, node_name),
+        }
 
     # Initialize Supabase client
     supabase = get_supabase_client()
@@ -850,8 +956,12 @@ def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
     layers = geometry_metadata.get("layers", [])
     vertices_count = geometry_metadata.get("vertices_count", 0)
     
-    # Sanitize iso_code (prevent prompt injection)
-    iso_code = sanitize_user_string(block_id)
+    # Sanitize iso_code (prevent prompt injection).
+    # US-018 wiring: block_id is the blocks.id UUID in the real pipeline, which
+    # is meaningless to the LLM. Prefer the real iso_code passed in via
+    # geometry_metadata; fall back to block_id for legacy/test callers.
+    iso_code_source = geometry_metadata.get("iso_code") or block_id
+    iso_code = sanitize_user_string(iso_code_source)
     
     # Check if Circuit Breaker is OPEN
     if circuit_breaker.is_open():
@@ -942,13 +1052,20 @@ def node_classify_tipologia(state: ValidationState) -> Dict[str, Any]:
                 confidence=confidence,
             )
         
-    except LLMClassificationError as e:
-        # LLM failed → record failure and use fallback
+    except Exception as e:
+        # Any LLM failure → record failure and use the regex fallback.
+        # Broadened from LLMClassificationError to Exception so that a failure
+        # *constructing* the client also degrades gracefully instead of
+        # crashing the whole graph. This matters in the prod agent image,
+        # where llm_client's `from src.backend...` import is unavailable, and
+        # whenever OPENAI_API_KEY is missing — the pipeline must still produce
+        # a (regex) classification rather than mark the block error_processing.
         logger.error(
             "llm_classification_failed",
             node=node_name,
             block_id=block_id,
             error=str(e),
+            error_type=type(e).__name__,
         )
         
         # Record failure in Circuit Breaker (may trip circuit)

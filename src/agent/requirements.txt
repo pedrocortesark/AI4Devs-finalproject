@@ -18,6 +18,7 @@ rhino3dm==8.4.0
 numpy>=1.24.0         # Updated for trimesh 4.11.3 compatibility
 scipy>=1.11.0         # Scientific computing (required for normal vector validation)
 trimesh==4.11.3       # Mesh decimation library (simplify_quadric_decimation) - UPDATED to fix GLB export bug
+fast-simplification   # Fast mesh simplification backend for trimesh decimation
 rtree==1.1.0          # Spatial index for trimesh (required dependency)
 open3d==0.18.0        # Required backend for trimesh decimation algorithm
 

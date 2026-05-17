@@ -61,6 +61,34 @@ def _is_transient_error(exc: Exception, error_msg: str = None) -> bool:
     return any(pattern in check_msg.lower() for pattern in transient_patterns)
 
 
+def _normalize_error(err) -> dict:
+    """Coerce a graph error (str | pydantic model | dict) into a JSON-safe dict
+    with the {category, target, message} shape DBService persists."""
+    if isinstance(err, str):
+        return {"category": "validation", "target": "", "message": err}
+    if hasattr(err, "model_dump"):
+        data = err.model_dump()
+    elif isinstance(err, dict):
+        data = err
+    else:
+        data = {"message": str(err)}
+    return {
+        "category": data.get("category", "validation"),
+        "target": data.get("target", ""),
+        "message": data.get("message", str(data)),
+    }
+
+
+def _collect_graph_errors(final_state) -> list:
+    """Flatten nomenclature + geometry + runtime errors from the final
+    LangGraph state into a single normalized list for the validation report."""
+    collected = []
+    for key in ("nomenclature_errors", "geometry_errors", "error_messages"):
+        for err in final_state.get(key) or []:
+            collected.append(_normalize_error(err))
+    return collected
+
+
 @celery_app.task(
     name=TASK_HEALTH_CHECK,
     bind=True,
@@ -90,27 +118,43 @@ def health_check(self):
     max_retries=TASK_MAX_RETRIES,
     default_retry_delay=TASK_RETRY_DELAY_SECONDS
 )
-def validate_file(self, part_id: str, s3_key: str):
+def validate_file(self, part_id: str, s3_key: str, iso_code: str = None):
     """
-    Validate .3dm file from S3.
+    Validate a .3dm block through the LangGraph "Librarian" pipeline (US-018).
 
     This task:
     1. Updates block status to 'processing'
-    2. Downloads .3dm from S3 to /tmp
-    3. Parses with rhino3dm.File3dm.Read()
-    4. Extracts layer metadata
-    5. Saves validation report to database
-    6. Updates block status to 'validated' or 'error_processing'
-    7. Cleans up temporary files
+    2. Downloads .3dm from S3 to /tmp and parses it with rhino3dm
+    3. Pre-loads the parsed geometry into the LangGraph state and runs
+       validation_graph (nomenclature + geometry validation + LLM tipologia
+       classification with regex fallback)
+    4. Maps the final graph state to the validation_report + block status +
+       tipologia (persistence keyed by blocks.id via DBService)
+    5. Cleans up temporary files
 
     Args:
-        part_id: UUID of the part in database
-        s3_key: S3 object key for the .3dm file
+        part_id: UUID of the block row in the database (blocks.id)
+        s3_key: S3 object key for the uploaded .3dm file (shared by N blocks)
+        iso_code: ISO-19650 code of this block (fed to the LLM classifier).
+                  Optional for backward compatibility with old enqueues.
 
     Returns:
         dict: Result with success status and metadata
     """
-    logger.info("validate_file.started", part_id=part_id, s3_key=s3_key)
+    logger.info("validate_file.started", part_id=part_id, s3_key=s3_key, iso_code=iso_code)
+
+    # Lazy import of the LangGraph pipeline: deferred to task-execution time so
+    # that merely importing this module (e.g. Celery autodiscovery, pytest
+    # collection of contract tests) does NOT eagerly compile the graph or pull
+    # the graph→nodes→llm_client chain into sys.modules.
+    try:
+        from src.agent.graph.graph import validation_graph
+        from src.agent.graph.state import make_initial_state, ValidationStatus
+        from src.agent.graph.nodes import build_initial_geometry_metadata
+    except ImportError:
+        from graph.graph import validation_graph
+        from graph.state import make_initial_state, ValidationStatus
+        from graph.nodes import build_initial_geometry_metadata
 
     # Initialize services
     file_download = FileDownloadService()
@@ -169,6 +213,16 @@ def validate_file(self, part_id: str, s3_key: str):
         # Step 3: Parse .3dm file
         parse_result = rhino_parser.parse_file(local_path)
 
+        # Step 3b: Pre-build geometry_metadata from the file ON DISK, before
+        # cleanup. This is fed into the LangGraph state so the ExtractGeometry
+        # node reuses it instead of re-downloading by the (wrong) {block_id}.3dm
+        # key. Only meaningful when the parse succeeded.
+        geometry_metadata = None
+        if parse_result.success:
+            geometry_metadata = build_initial_geometry_metadata(
+                local_path, parse_result, iso_code
+            )
+
         # Step 4: Cleanup temp file
         file_download.cleanup_temp_file(local_path)
 
@@ -211,7 +265,9 @@ def validate_file(self, part_id: str, s3_key: str):
                 "error": parse_result.error_message
             }
 
-        # Step 6: Build metadata from parsed layers
+        # Step 6: Run the LangGraph "Librarian" pipeline.
+        # We pre-load the parsed geometry so ExtractGeometry reuses it (its
+        # idempotency guard) instead of re-downloading by the wrong key.
         layers_metadata = [
             {
                 "name": layer.name,
@@ -223,36 +279,78 @@ def validate_file(self, part_id: str, s3_key: str):
             for layer in parse_result.layers
         ]
 
+        initial_state = make_initial_state(
+            block_id=part_id,
+            retry_count=self.request.retries,
+        )
+        initial_state["geometry_metadata"] = geometry_metadata
+
+        final_state = validation_graph.invoke(initial_state)
+
+        overall_status = final_state.get("overall_status")
+        is_valid = overall_status == ValidationStatus.VALIDATED
+        semantic = final_state.get("semantic_data") or {}
+        classification_method = final_state.get("classification_method")
+        errors = _collect_graph_errors(final_state)
+
         metadata = {
             "layers": layers_metadata,
-            **parse_result.file_metadata
+            **parse_result.file_metadata,
+            "geometry": {
+                "volume": geometry_metadata.get("volume"),
+                "bbox": geometry_metadata.get("bbox"),
+                "vertices_count": geometry_metadata.get("vertices_count"),
+                "faces_count": geometry_metadata.get("faces_count"),
+            },
+            "classification": {
+                "tipologia": semantic.get("tipologia"),
+                "material": semantic.get("material"),
+                "confidence": semantic.get("confidence"),
+                "reasoning": semantic.get("reasoning"),
+                "method": classification_method.value if classification_method else None,
+                "circuit_breaker_tripped": final_state.get("circuit_breaker_tripped", False),
+            },
+            "validation_path": final_state.get("validation_path", []),
         }
 
-        # Step 7: Save validation report (no errors for MVP - T-026/T-027 add validation)
+        # Step 7: Persist the validation report (keyed by blocks.id)
         db_service.save_validation_report(
             part_id=part_id,
-            is_valid=True,
-            errors=[],
+            is_valid=is_valid,
+            errors=errors,
             metadata=metadata,
             validated_by=worker_id
         )
 
-        # Step 8: Update status to validated
-        db_service.update_block_status(part_id, "validated")
+        # Step 8: Persist status (+ tipologia when the agent validated the piece)
+        db_service.update_block_status(
+            part_id, "validated" if is_valid else "error_processing"
+        )
+        if is_valid and semantic.get("tipologia"):
+            db_service.update_block_classification(
+                part_id, semantic["tipologia"], semantic.get("material")
+            )
 
-        # Step 9: Enqueue geometry processing to generate low-poly GLB
-        celery_app.send_task(TASK_GENERATE_LOW_POLY_GLB, args=[part_id])
-        logger.info("validate_file.geometry_task_enqueued", part_id=part_id)
+        # Step 9: Only generate the low-poly GLB for accepted pieces
+        if is_valid:
+            celery_app.send_task(TASK_GENERATE_LOW_POLY_GLB, args=[part_id])
+            logger.info("validate_file.geometry_task_enqueued", part_id=part_id)
 
         logger.info(
-            "validate_file.success",
+            "validate_file.completed",
             part_id=part_id,
-            layer_count=len(parse_result.layers)
+            is_valid=is_valid,
+            overall_status=str(overall_status),
+            tipologia=semantic.get("tipologia"),
+            classification_method=classification_method.value if classification_method else None,
+            layer_count=len(parse_result.layers),
         )
 
         return {
-            "success": True,
+            "success": is_valid,
             "part_id": part_id,
+            "overall_status": str(overall_status),
+            "tipologia": semantic.get("tipologia"),
             "layer_count": len(parse_result.layers),
             "metadata": metadata
         }
@@ -359,9 +457,14 @@ def register_3dm_blocks(self, file_key: str):
         # Step 3: Register blocks (idempotent — skips existing iso_codes)
         new_blocks = db_service.register_blocks_for_iso_codes(iso_codes, file_key)
 
-        # Step 4: Enqueue validate_file for each newly created block
+        # Step 4: Enqueue validate_file for each newly created block.
+        # iso_code is passed so the LangGraph ClassifyTipologia node feeds the
+        # real ISO-19650 code to the LLM (block id is an opaque UUID).
         for block in new_blocks:
-            celery_app.send_task(TASK_VALIDATE_FILE, args=[block["id"], file_key])
+            celery_app.send_task(
+                TASK_VALIDATE_FILE,
+                args=[block["id"], file_key, block["iso_code"]],
+            )
             logger.info("register_3dm_blocks.validate_enqueued",
                         block_id=block["id"],
                         iso_code=block["iso_code"])

@@ -131,7 +131,7 @@ class UploadService:
         event_id = str(uuid.uuid4())
         event_data = {
             "id": event_id,
-            "file_id": file_id,
+            "block_id": file_id,  # Renamed from file_id to block_id in migration 20260508000001
             "event_type": EVENT_TYPE_UPLOAD_CONFIRMED,
             "metadata": {
                 "file_key": file_key,
