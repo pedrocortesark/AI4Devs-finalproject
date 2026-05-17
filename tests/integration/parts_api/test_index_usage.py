@@ -92,7 +92,7 @@ def test_idx01_filter_queries_use_composite_index(supabase_client: Client):
 
     explain_query = """
         EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
-        SELECT id, iso_code, status, tipologia, workshop_id, low_poly_url, bbox, created_at
+        SELECT id, iso_code, status, tipologia, low_poly_url, bbox, created_at
         FROM blocks
         WHERE is_archived = false
           AND status = 'validated'

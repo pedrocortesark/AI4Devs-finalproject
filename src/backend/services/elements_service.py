@@ -117,7 +117,6 @@ class ElementsService:
             id=row["id"],
             iso_code=row["iso_code"],
             status=ElementStatus(row["status"]),
-            material_type=row["material_type"],
             high_poly_url=high_poly_url,  # CDN-transformed or None
             mid_poly_url=mid_poly_url,    # CDN-transformed or None
             low_poly_url=low_poly_url,    # CDN-transformed or None
@@ -127,13 +126,12 @@ class ElementsService:
             rhino_metadata=rhino_metadata if isinstance(rhino_metadata, dict) else None,
         )
 
-    def _build_filters_applied(self, status: Optional[str], material_type: Optional[str]) -> Dict[str, str]:
+    def _build_filters_applied(self, status: Optional[str]) -> Dict[str, str]:
         """
         Build filters_applied dictionary from non-NULL filter parameters.
 
         Args:
             status: Status filter value
-            material_type: Material type filter value
 
         Returns:
             Dictionary with only non-NULL filters included
@@ -141,33 +139,13 @@ class ElementsService:
         filters = {}
         if status is not None:
             filters["status"] = status
-        if material_type is not None:
-            filters["material_type"] = material_type
         return filters
 
-    def _validate_material_type(self, material_type: str) -> None:
-        """
-        Validate material_type against MATERIAL_COLORS dictionary (62 real materials).
 
-        Args:
-            material_type: Material type string to validate
-
-        Raises:
-            ValueError: If material not in VALID_MATERIALS list
-        """
-        from constants import VALID_MATERIALS
-
-        if material_type not in VALID_MATERIALS:
-            raise ValueError(
-                f"Invalid material_type: '{material_type}'. Must be one of {len(VALID_MATERIALS)} "
-                f"valid materials (e.g., Montjuïc, Ulldecona, Floresta). "
-                f"See constants.MATERIAL_COLORS for full list."
-            )
 
     def list_elements(
         self,
-        status: Optional[str] = None,
-        material_type: Optional[str] = None
+        status: Optional[str] = None
     ) -> ElementsListResponse:
         """
         List all render-ready elements with optional filtering.
@@ -177,13 +155,12 @@ class ElementsService:
         - bbox IS NOT NULL
 
         Query optimization:
-        - Uses composite index idx_blocks_canvas_query (status, material_type)
+        - Uses composite index idx_blocks_canvas_query (status)
         - Always filters is_archived=false
         - Returns minimal fields for 3D rendering (no heavy blobs)
 
         Args:
             status: Filter by lifecycle status (validated, in_fabrication, etc.)
-            material_type: Filter by stone material (Montjuïc, Ulldecona, etc.)
 
         Returns:
             ElementsListResponse with:
@@ -192,7 +169,6 @@ class ElementsService:
             - meta: {total: int, filtered: int}
 
         Raises:
-            ValueError: If material_type is invalid (not in 63 materials)
             Exception: If database query fails
 
         Examples:
@@ -210,21 +186,7 @@ class ElementsService:
             >>> result = service.list_elements(status="validated")
             >>> result.filters_applied
             {"status": "validated"}
-            >>>
-            >>> # Filter by material type
-            >>> result = service.list_elements(material_type="Montjuïc")
-            >>> all(e.material_type == "Montjuïc" for e in result.elements)
-            True
-            >>>
-            >>> # Combine multiple filters
-            >>> result = service.list_elements(status="validated", material_type="Ulldecona")
-            >>> result.filters_applied
-            {"status": "validated", "material_type": "Ulldecona"}
         """
-        # Validate material_type if provided
-        if material_type is not None:
-            self._validate_material_type(material_type)
-
         # Build base query with render-ready filter (application-level)
         query = (
             self.supabase
@@ -238,8 +200,6 @@ class ElementsService:
         # Apply dynamic filters
         if status is not None:
             query = query.eq("status", status)
-        if material_type is not None:
-            query = query.eq("material_type", material_type)
 
         # Execute query with ordering
         query = query.order(QUERY_FIELD_CREATED_AT, desc=QUERY_ORDER_DESC)
@@ -249,7 +209,7 @@ class ElementsService:
         elements = [self._transform_row_to_element(row) for row in response.data]
 
         # Build response
-        filters_applied = self._build_filters_applied(status, material_type)
+        filters_applied = self._build_filters_applied(status)
 
         return ElementsListResponse(
             elements=elements,

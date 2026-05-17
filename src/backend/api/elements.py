@@ -73,8 +73,7 @@ router = APIRouter()
 
 @router.get("", response_model=ElementsListResponse)
 async def list_elements(
-    status: Optional[str] = Query(None, description="Filter by lifecycle status (validated, in_fabrication, etc.)"),
-    material_type: Optional[str] = Query(None, description="Filter by stone material type (Montjuïc, Ulldecona, etc.)")
+    status: Optional[str] = Query(None, description="Filter by lifecycle status (validated, in_fabrication, etc.)")
 ) -> ElementsListResponse:
     """
     List all render-ready elements with optional filtering.
@@ -85,7 +84,6 @@ async def list_elements(
 
     Query Parameters:
         - status: Filter by lifecycle status
-        - material_type: Filter by stone material (one of 63 options)
 
     Returns:
         ElementsListResponse with:
@@ -99,7 +97,7 @@ async def list_elements(
         - Target response size: <200KB gzipped
 
     Errors:
-        - 400: Invalid status enum or material_type
+        - 400: Invalid status enum
         - 500: Database query failure
 
     Examples:
@@ -111,7 +109,6 @@ async def list_elements(
         ...       "id": "550e8400-e29b-41d4-a716-446655440000",
         ...       "iso_code": "SF-BLC-001-002",
         ...       "status": "validated",
-        ...       "material_type": "Montjuïc",
         ...       "low_poly_url": "https://cdn.example.com/550e8400.glb",
         ...       "bbox": {"min": [-1, -1, -1], "max": [1, 1, 1]}
         ...     }
@@ -120,11 +117,11 @@ async def list_elements(
         ...   "meta": {"total": 124, "filtered": 124}
         ... }
         >>>
-        >>> # GET /api/elements?status=validated&material_type=Montjuïc
+        >>> # GET /api/elements?status=validated
         >>> # Response:
         >>> {
         ...   "elements": [...],
-        ...   "filters_applied": {"status": "validated", "material_type": "Montjuïc"},
+        ...   "filters_applied": {"status": "validated"},
         ...   "meta": {"total": 124, "filtered": 8}
         ... }
     """
@@ -136,8 +133,8 @@ async def list_elements(
         supabase = get_supabase_client()
         service = ElementsService(supabase)
 
-        # Fetch elements (material validation happens in service)
-        return service.list_elements(status=status, material_type=material_type)
+        # Fetch elements
+        return service.list_elements(status=status)
 
     except ValueError as e:
         # Material validation error from service

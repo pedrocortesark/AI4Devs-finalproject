@@ -34,16 +34,15 @@ def test_block_id():
         
         # Insert test block with validated status
         cursor.execute("""
-            INSERT INTO blocks (id, iso_code, status, url_original, tipologia, low_poly_url, workshop_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO blocks (id, iso_code, status, url_original, tipologia, low_poly_url)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             block_id,
             f'SF-TEST-{block_id[:8].upper()}-001',
             'validated',
             f'https://xyz.supabase.co/storage/v1/object/public/raw-uploads/test-{block_id}.3dm',
             'capitel',
-            None,  # Will be populated by task
-            None
+            None  # Will be populated by task
         ))
         conn.commit()
         

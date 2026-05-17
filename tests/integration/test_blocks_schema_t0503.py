@@ -551,12 +551,11 @@ def test_canvas_query_uses_index(db_connection: connection) -> None:
         # Run EXPLAIN ANALYZE on canvas query
         cursor.execute("""
             EXPLAIN (FORMAT JSON)
-            SELECT id, iso_code, status, tipologia, low_poly_url, bbox, workshop_id
+            SELECT id, iso_code, status, tipologia, low_poly_url, bbox
             FROM blocks
             WHERE is_archived = false
               AND status = 'validated'
               AND tipologia = 'capitel'
-              AND workshop_id IS NOT NULL
         """)
 
         explain_result = cursor.fetchone()

@@ -73,7 +73,6 @@ def test_hp_01_list_all_elements_no_filters(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"GLPER.B-PAE0720.070{i}",
             "status": "validated",
-            "material_type": "Montjuïc",  # One of 62 real materials
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -86,7 +85,6 @@ def test_hp_01_list_all_elements_no_filters(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "GLPER.B-TEST.0001",
             "status": "processing",
-            "material_type": "Ulldecona",
             "low_poly_url": None,
             "bbox": None,
             "is_archived": False
@@ -95,7 +93,6 @@ def test_hp_01_list_all_elements_no_filters(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": "GLPER.B-TEST.0002",
             "status": "processing",
-            "material_type": "Floresta",
             "low_poly_url": "models/low-poly/incomplete.glb",
             "bbox": None,
             "is_archived": False
@@ -135,8 +132,6 @@ def test_hp_01_list_all_elements_no_filters(supabase_client: Client):
             assert elem["bbox"] is not None, f"Element {elem['id']} has null bbox"
             assert "workshop_id" not in elem, "workshop_id field should not exist (US-015 cleanup)"
             assert "workshop_name" not in elem, "workshop_name field should not exist (US-015 cleanup)"
-            assert "tipologia" not in elem, "tipologia field should not exist (renamed to material_type)"
-            assert "material_type" in elem, "material_type field required"
 
     # CLEANUP
     for block in all_blocks:
@@ -160,7 +155,6 @@ def test_hp_02_filter_by_status(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-VAL-{i}",
             "status": "validated",
-            "material_type": "Montjuïc",
             "low_poly_url": "models/low-poly/test.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -171,7 +165,6 @@ def test_hp_02_filter_by_status(supabase_client: Client):
             "id": str(uuid4()),
             "iso_code": f"TEST-FAB-{i}",
             "status": "in_fabrication",
-            "material_type": "Ulldecona",
             "low_poly_url": "models/low-poly/test2.glb",
             "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
             "is_archived": False
@@ -211,6 +204,7 @@ def test_hp_02_filter_by_status(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="Test obsolete: material_type column removed from schema")
 def test_hp_03_filter_by_material_type(supabase_client: Client):
     """
     HP-03: GET /api/elements?material_type=Montjuïc filters correctly.
@@ -283,7 +277,7 @@ def test_hp_04_get_element_detail(supabase_client: Client):
     When: GET /api/elements/{id}
     Then:
         - Returns HTTP 200
-        - ElementDetail has all fields: id, iso_code, status, material_type, created_at,
+        - ElementDetail has all fields: id, iso_code, status, created_at,
           low_poly_url, bbox, validation_report
         - validation_report is parsed from JSONB correctly
     """
@@ -293,7 +287,6 @@ def test_hp_04_get_element_detail(supabase_client: Client):
         "id": element_id,
         "iso_code": "GLPER.B-PAE0720.0701",
         "status": "validated",
-        "material_type": "Montjuïc",
         "created_at": datetime.utcnow().isoformat(),
         "low_poly_url": "models/low-poly/test.glb",
         "bbox": {"min": [-0.35, -0.70, -0.35], "max": [0.35, 0.70, 0.35]},
@@ -323,7 +316,6 @@ def test_hp_04_get_element_detail(supabase_client: Client):
     assert data["id"] == element_id
     assert data["iso_code"] == "GLPER.B-PAE0720.0701"
     assert data["status"] == "validated"
-    assert data["material_type"] == "Montjuïc"
     assert data["created_at"] is not None
     assert data["low_poly_url"] is not None
     assert data["bbox"] is not None
@@ -784,6 +776,7 @@ def test_ec_05_navigation_last_element_next_null(supabase_client: Client):
         supabase_client.table("blocks").delete().eq("id", block["id"]).execute()
 
 
+@pytest.mark.skip(reason="Test obsolete: material_type column removed from schema")
 def test_ec_06_material_type_validates_against_62_materials(supabase_client: Client):
     """
     EC-06: material_type field validates against 62-item MATERIAL_COLORS dictionary.
@@ -881,6 +874,7 @@ def test_ec_07_elements_without_tipologia_excluded(supabase_client: Client):
 
 # ===== ERROR HANDLING =====
 
+@pytest.mark.skip(reason="Test obsolete: material_type column removed from schema")
 def test_err_01_invalid_material_type_filter_returns_400(supabase_client: Client):
     """
     ERR-01: GET /api/elements?material_type=InvalidMaterial returns 400 with descriptive error.
@@ -1010,6 +1004,7 @@ def test_err_05_pydantic_rejects_old_enum_stone(supabase_client: Client):
         "Error should indicate material is invalid"
 
 
+@pytest.mark.skip(reason="Test obsolete: material_type column removed from schema")
 def test_err_06_pydantic_rejects_empty_material_type(supabase_client: Client):
     """
     ERR-06: Pydantic validation rejects material_type="" (empty string).
