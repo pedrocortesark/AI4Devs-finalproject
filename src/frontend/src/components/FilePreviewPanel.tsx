@@ -62,14 +62,6 @@ function Badge({ variant }: { variant: BadgeVariant }) {
   );
 }
 
-function Check({ ok }: { ok: boolean }) {
-  return (
-    <span style={{ color: ok ? DS.green : DS.red, fontSize: '14px' }}>
-      {ok ? '✓' : '✕'}
-    </span>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export interface FilePreviewPanelProps {
@@ -178,11 +170,13 @@ export function FilePreviewPanel({
                 </td>
                 {/* ISO — informational only, not blocking */}
                 <td style={{ padding: '10px 12px', textAlign: 'center', verticalAlign: 'middle' }}>
-                  <span style={{
-                    fontSize: '11px',
-                    color: block.iso_valid ? DS.green : DS.yellow,
-                    title: block.iso_issues[0] ?? '',
-                  }}>
+                  <span
+                    title={block.iso_issues[0] ?? ''}
+                    style={{
+                      fontSize: '11px',
+                      color: block.iso_valid ? DS.green : DS.yellow,
+                    }}
+                  >
                     {block.iso_valid ? '✓' : '⚠'}
                   </span>
                 </td>

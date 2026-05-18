@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import Dashboard3D from './components/Dashboard/Dashboard3D';
+import { ChatAssistant } from './components/ChatAssistant';
 import { UploadZone } from './components/UploadZone';
 import { FilePreviewPanel } from './components/FilePreviewPanel';
 import { BlockIngestionStatus } from './components/BlockIngestionStatus';
@@ -555,12 +556,16 @@ function DashboardPage() {
 
 function App() {
   const path = window.location.pathname;
+  const page = path === '/upload' ? <UploadPage /> : <DashboardPage />;
 
-  if (path === '/upload') {
-    return <UploadPage />;
-  }
-
-  return <DashboardPage />;
+  // US-019: "El Archivista" RAG panel — global fixed overlay (does not
+  // disturb either page's layout), available on both routes.
+  return (
+    <>
+      {page}
+      <ChatAssistant />
+    </>
+  );
 }
 
 export default App;
