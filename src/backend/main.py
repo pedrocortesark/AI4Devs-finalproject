@@ -19,6 +19,7 @@ from api.parts import router as parts_router
 from api.celery_health import router as celery_health_router
 from api.metrics import router as metrics_router
 from api.prometheus import router as prometheus_router  # T-1809: Prometheus exporter
+from api.chat import router as chat_router  # US-019: RAG "The Archivist"
 
 app = FastAPI(
     title="SF-PM API",
@@ -169,4 +170,6 @@ app.include_router(celery_health_router, prefix="/api/debug", tags=["Debug"])
 app.include_router(metrics_router, prefix="/api", tags=["Metrics"])
 # T-1809: Prometheus endpoint (no /api prefix - Prometheus expects /metrics at root)
 app.include_router(prometheus_router, tags=["Prometheus"])
+# US-019: RAG conversational endpoint ("The Archivist")
+app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
 
