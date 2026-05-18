@@ -59,9 +59,8 @@ export async function fetchElements(
     if (params?.status) {
       queryParams.append('status', params.status);
     }
-    if (params?.material_type) {
-      queryParams.append('material_type', params.material_type);
-    }
+    // material_type filter was removed from the model/API (commit 2a702b9);
+    // the elements list endpoint only filters by status.
     const queryString = queryParams.toString();
     const url = `${API_BASE_URL}/api/elements${queryString ? `?${queryString}` : ''}`;
 
