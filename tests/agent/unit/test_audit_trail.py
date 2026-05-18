@@ -23,7 +23,6 @@ from src.agent.graph.nodes import (
     serialize_state_snapshot,
     insert_event,
     with_audit_trail,
-    node_validate_nomenclature,
 )
 from src.agent.graph.events import EventBuffer
 from src.agent.constants import EventType, EVENT_BUFFER_THRESHOLD, STATE_SNAPSHOT_FIELDS
@@ -117,22 +116,25 @@ def test_early_rejection_minimal_events(mock_get_supabase):
     EC-02: Early rejection via fail-fast generates minimal events.
 
     Scenario:
-        - Execute StateGraph with invalid nomenclature
-        - Conditional edge routes directly to MarkRejected (skips nodes 3-7)
-        - Verify only 6 events (ExtractGeometry, ValidateNomenclature, MarkRejected)
+        - Execute StateGraph with invalid geometry
+        - Conditional edge routes directly to MarkRejected (skips downstream)
+        - Verify only 6 events (ExtractGeometry, ValidateGeometry, MarkRejected)
 
     Acceptance criteria:
         - ExtractGeometry: 2 events (entered + completed)
-        - ValidateNomenclature: 2 events (entered + completed)
+        - ValidateGeometry: 2 events (entered + completed)
         - MarkRejected: 2 events (entered + completed)
         - Total: 6 events (not 16)
-        - No events for: ValidateGeometry, ClassifyTipologia, EnrichMetadata, GenerateReport, MarkValidated
+        - No events for: ClassifyTipologia, EnrichMetadata, GenerateReport, MarkValidated
 
     BDD:
-        GIVEN a .3dm file with invalid ISO-19650 nomenclature
-        WHEN ValidateNomenclature returns nomenclature_valid=False
+        GIVEN a .3dm file with invalid geometry
+        WHEN ValidateGeometry returns geometry_valid=False
         THEN the graph routes to MarkRejected (fail-fast)
         AND only 6 audit trail events are created (3 nodes × 2 events)
+
+    Note: the ISO-19650 nomenclature gatekeeper was removed
+    (see memory-bank/decisions.md); geometry is now the quality gate.
     """
     # Mock Supabase client
     mock_supabase = Mock()
@@ -146,26 +148,26 @@ def test_early_rejection_minimal_events(mock_get_supabase):
     
     mock_get_supabase.return_value = mock_supabase
     
-    # Create state with nomenclature failure
-    state = make_initial_state("INVALID-NAME")
-    state["nomenclature_valid"] = False
+    # Create state with geometry failure
+    state = make_initial_state("INVALID-GEOMETRY")
+    state["geometry_valid"] = False
     state["overall_status"] = ValidationStatus.PROCESSING
-    
-    # Execute 3 nodes (ExtractGeometry, ValidateNomenclature, MarkRejected)
+
+    # Execute 3 nodes (ExtractGeometry, ValidateGeometry, MarkRejected)
     @with_audit_trail
     def mock_extract_geometry(s: ValidationState):
         return {"geometry_metadata": {"file_exists_in_storage": True}}
-    
+
     @with_audit_trail
-    def mock_validate_nomenclature(s: ValidationState):
-        return {"nomenclature_valid": False}
-    
+    def mock_validate_geometry(s: ValidationState):
+        return {"geometry_valid": False}
+
     @with_audit_trail
     def mock_mark_rejected(s: ValidationState):
         return {"overall_status": ValidationStatus.REJECTED}
-    
+
     state = {**state, **mock_extract_geometry(state)}
-    state = {**state, **mock_validate_nomenclature(state)}
+    state = {**state, **mock_validate_geometry(state)}
     state = {**state, **mock_mark_rejected(state)}
     
     # Verify only 6 events (3 nodes × 2 events)
@@ -177,12 +179,12 @@ def test_early_rejection_minimal_events(mock_get_supabase):
     
     # Node names derived from function names (mock_extract_geometry → MockExtractGeometry)
     assert any("Extract" in name for name in node_names), f"No ExtractGeometry variant found in {node_names}"
-    assert any("Nomenclature" in name for name in node_names), f"No ValidateNomenclature variant found in {node_names}"
+    assert any("ValidateGeometry" in name for name in node_names), f"No ValidateGeometry variant found in {node_names}"
     assert any("Reject" in name for name in node_names), f"No MarkRejected variant found in {node_names}"
-    
-    # Should NOT have these nodes
-    assert not any("ValidateGeometry" in name for name in node_names)
+
+    # Should NOT have downstream nodes (fail-fast skipped them)
     assert not any("Tipologia" in name for name in node_names)
+    assert not any("Validated" in name for name in node_names)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -1,14 +1,15 @@
 """
 Geometry Validation Service
 
-Validates geometric integrity of Rhino objects to detect:
-- Invalid geometry (Rhino's internal validity checks)
-- Null/missing geometry
-- Degenerate bounding boxes
-- Zero-volume solids (Brep/Mesh)
+Validates that a .3dm model is composed EXCLUSIVELY of BLOCK INSTANCES:
+- The model must contain ONLY InstanceReference objects (no loose geometry)
+- At least one block instance must exist
+- Each placed instance has valid geometry
+- Each placed instance has a non-degenerate bounding box
+- Each placed instance has non-zero volume
 
-This ensures that all geometry can be safely processed in downstream
-fabrication workflows without encountering geometric defects.
+Any loose geometry (Breps, surfaces, reference/joint helpers) makes the file
+invalid — the block IS its placed instances. See memory-bank/decisions.md.
 """
 
 import structlog
@@ -103,22 +104,67 @@ class GeometryValidator:
             logger.warning("geometry_validator.validate_geometry.none_input")
             return errors
 
-        logger.info("geometry_validator.validate_geometry.started", object_count=len(model.Objects))
-
+        # A valid block .3dm must be composed EXCLUSIVELY of BLOCK INSTANCES
+        # (InstanceReference). The real piece geometry lives *inside* the
+        # InstanceDefinitions; any loose geometry in the model (Breps, surfaces,
+        # reference/joint helpers) is NOT allowed. See memory-bank/decisions.md.
+        instances = []
+        non_instances = []  # (object_id, geometry_type) of disallowed geometry
         for obj in model.Objects:
-            object_id = self._get_object_id(obj)
-
-            # Check 1: Null geometry
             if obj.Geometry is None:
-                errors.append(ValidationErrorItem(
-                    category=GEOMETRY_CATEGORY_NAME,
-                    target=object_id,
-                    message=GEOMETRY_ERROR_NULL
-                ))
-                continue  # Skip further checks
+                # No geometry at all is also not a valid block instance.
+                non_instances.append((self._get_object_id(obj), "None"))
+                continue
+            geom_type = obj.Geometry.__class__.__name__
+            if geom_type == "InstanceReference":
+                instances.append(obj)
+            else:
+                non_instances.append((self._get_object_id(obj), geom_type))
 
-            # Check 2: Invalid geometry
-            if not obj.Geometry.IsValid:
+        logger.info(
+            "geometry_validator.validate_geometry.started",
+            total_objects=len(model.Objects),
+            instance_count=len(instances),
+            non_instance_count=len(non_instances),
+        )
+
+        # Rule 1: the model must contain ONLY block instances.
+        if non_instances:
+            from collections import Counter
+            type_breakdown = dict(Counter(t for _, t in non_instances))
+            errors.append(ValidationErrorItem(
+                category=GEOMETRY_CATEGORY_NAME,
+                target="model",
+                message=(
+                    f"Model must contain only block instances (InstanceReference); "
+                    f"found {len(non_instances)} disallowed geometry object(s): "
+                    f"{type_breakdown}."
+                ),
+            ))
+            logger.debug("geometry_validator.validation_failed",
+                         failure_reason="non_instance_geometry_present",
+                         non_instance_types=type_breakdown)
+
+        # Rule 2: there must be at least one block instance.
+        if not instances:
+            errors.append(ValidationErrorItem(
+                category=GEOMETRY_CATEGORY_NAME,
+                target="model",
+                message=(
+                    "No block instances (InstanceReference) found in the model; "
+                    "a valid block .3dm must contain at least one placed instance."
+                ),
+            ))
+            logger.info("geometry_validator.validate_geometry.completed",
+                        instances_checked=0, errors_found=len(errors))
+            return errors
+
+        for obj in instances:
+            object_id = self._get_object_id(obj)
+            geom = obj.Geometry
+
+            # Check 1: Invalid instance geometry
+            if not geom.IsValid:
                 errors.append(ValidationErrorItem(
                     category=GEOMETRY_CATEGORY_NAME,
                     target=object_id,
@@ -128,9 +174,9 @@ class GeometryValidator:
                             object_id=object_id,
                             failure_reason="invalid_geometry")
 
-            # Check 3: Degenerate bounding box
+            # Check 2: Degenerate bounding box of the placed instance
             # rhino3dm GetBoundingBox() takes no arguments (unlike .NET Rhino API)
-            bbox = obj.Geometry.GetBoundingBox()
+            bbox = geom.GetBoundingBox()
             if not bbox.IsValid:
                 errors.append(ValidationErrorItem(
                     category=GEOMETRY_CATEGORY_NAME,
@@ -140,27 +186,23 @@ class GeometryValidator:
                 logger.debug("geometry_validator.validation_failed",
                             object_id=object_id,
                             failure_reason="degenerate_bbox")
+                continue  # cannot compute a meaningful volume without a bbox
 
-            # Check 4: Zero volume (solo Brep/Mesh)
-            # Check if geometry is Brep or Mesh (supports both real rhino3dm and mocks)
-            geom_type_name = obj.Geometry.__class__.__name__
-            is_brep_or_mesh = geom_type_name in ('Brep', 'Mesh')
-
-            if is_brep_or_mesh:
-                volume = (bbox.Max.X - bbox.Min.X) * (bbox.Max.Y - bbox.Min.Y) * (bbox.Max.Z - bbox.Min.Z)
-                if volume < MIN_VALID_VOLUME:
-                    errors.append(ValidationErrorItem(
-                        category=GEOMETRY_CATEGORY_NAME,
-                        target=object_id,
-                        message=GEOMETRY_ERROR_ZERO_VOLUME.format(min_volume=MIN_VALID_VOLUME)
-                    ))
-                    logger.debug("geometry_validator.validation_failed",
-                                object_id=object_id,
-                                failure_reason="zero_volume",
-                                volume=volume)
+            # Check 3: Zero-volume placed instance
+            volume = (bbox.Max.X - bbox.Min.X) * (bbox.Max.Y - bbox.Min.Y) * (bbox.Max.Z - bbox.Min.Z)
+            if volume < MIN_VALID_VOLUME:
+                errors.append(ValidationErrorItem(
+                    category=GEOMETRY_CATEGORY_NAME,
+                    target=object_id,
+                    message=GEOMETRY_ERROR_ZERO_VOLUME.format(min_volume=MIN_VALID_VOLUME)
+                ))
+                logger.debug("geometry_validator.validation_failed",
+                            object_id=object_id,
+                            failure_reason="zero_volume",
+                            volume=volume)
 
         logger.info("geometry_validator.validate_geometry.completed",
-                    objects_checked=len(model.Objects),
+                    instances_checked=len(instances),
                     errors_found=len(errors))
 
         return errors

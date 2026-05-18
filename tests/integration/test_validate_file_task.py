@@ -22,16 +22,24 @@ class TestValidateFileTaskHappyPath:
     @pytest.mark.integration
     def test_validate_file_task_completes_successfully(self, test_3dm_file_in_storage):
         """
-        SCENARIO: Complete validation workflow for valid .3dm file.
-        GIVEN: A .3dm file exists in S3 raw-uploads bucket
+        SCENARIO: Complete LangGraph validation for the real Sagrada Família model.
+
+        PRECONDITION: test-model.3dm must contain ONLY block instances
+        (InstanceReference) and no loose geometry — GeometryValidator now
+        rejects any non-instance geometry (see memory-bank/decisions.md).
+        Until the fixture is re-exported clean from Rhino this test is RED by
+        design (the shipped file still has loose Breps).
+
+        GIVEN: test-model.3dm (only the block instances; nomenclature not checked)
         AND: A block record exists in DB with status='uploaded'
-        WHEN: validate_file.apply_async(part_id, s3_key) is called
-        THEN: Task completes, DB updated to status='validated', validation_report populated
+        WHEN: validate_file(part_id, s3_key) is called
+        THEN: Librarian validates it → status='validated', is_valid=True,
+              and the report carries the LLM/regex classification.
         """
         # Setup: Create test block in DB
         supabase = get_supabase_client()
         test_block_id = str(uuid.uuid4())
-        s3_key = test_3dm_file_in_storage  # Use uploaded fixture
+        s3_key = test_3dm_file_in_storage  # Real SF fixture (6 instances → valid)
         unique_suffix = str(uuid.uuid4())[:8]  # Short unique ID
 
         test_block = {
@@ -59,8 +67,59 @@ class TestValidateFileTaskHappyPath:
         updated_block = block_after.data[0]
 
         assert updated_block["status"] == "validated"
-        assert updated_block["validation_report"] is not None
-        assert updated_block["validation_report"]["is_valid"] is True
+        report = updated_block["validation_report"]
+        assert report is not None
+        assert report["is_valid"] is True
+        # New contract: report carries the Librarian classification block
+        assert "classification" in report["metadata"]
+        assert report["metadata"]["classification"]["tipologia"]
+
+        # Cleanup
+        supabase.table("blocks").delete().eq("id", test_block_id).execute()
+
+    @pytest.mark.integration
+    def test_validate_file_rejects_file_without_block_instances(self, valid_iso_3dm_file_in_storage):
+        """
+        SCENARIO: Librarian gatekeeps a .3dm that has geometry but NO block
+        instances. GeometryValidator validates only InstanceReference objects
+        (the block IS its placed instances — see memory-bank/decisions.md); a
+        file with loose geometry but zero instances is not a valid block file.
+
+        GIVEN: valid-iso-model.3dm (a single loose mesh solid, no InstanceReference)
+        WHEN: validate_file(part_id, s3_key) is called
+        THEN: status='error_processing', is_valid=False, geometry error present
+              ("No block instances ... found").
+        """
+        supabase = get_supabase_client()
+        test_block_id = str(uuid.uuid4())
+        s3_key = valid_iso_3dm_file_in_storage  # mesh-only, no block instances
+        unique_suffix = str(uuid.uuid4())[:8]
+
+        test_block = {
+            "id": test_block_id,
+            "iso_code": f"SF-TEST-{unique_suffix}",
+            "tipologia": "stone",
+            "url_original": s3_key,
+            "status": "uploaded"
+        }
+        supabase.table("blocks").insert(test_block).execute()
+
+        result = validate_file(part_id=test_block_id, s3_key=s3_key)
+
+        assert result is not None
+        assert result.get("success") is False
+
+        block_after = supabase.table("blocks").select("*").eq("id", test_block_id).execute()
+        updated_block = block_after.data[0]
+
+        assert updated_block["status"] == "error_processing"
+        report = updated_block["validation_report"]
+        assert report is not None
+        assert report["is_valid"] is False
+        # At least one geometry error must be present (no nomenclature gate anymore)
+        assert any(
+            e.get("category") == "geometry" for e in report["errors"]
+        ), f"expected geometry errors, got: {report['errors']}"
 
         # Cleanup
         supabase.table("blocks").delete().eq("id", test_block_id).execute()
@@ -69,13 +128,13 @@ class TestValidateFileTaskHappyPath:
     def test_validate_file_extracts_layer_metadata(self, test_3dm_file_in_storage):
         """
         SCENARIO: Validation extracts and stores layer information.
-        GIVEN: A .3dm file with layers named SF-C12-M-001, SF-C12-M-002
+        GIVEN: The real Sagrada Família model (test-model.3dm)
         WHEN: validate_file task completes
-        THEN: validation_report.metadata contains 'layers' array with correct names
+        THEN: validation_report.metadata contains a non-empty 'layers' array
         """
         supabase = get_supabase_client()
         test_block_id = str(uuid.uuid4())
-        s3_key = test_3dm_file_in_storage  # Use uploaded fixture
+        s3_key = test_3dm_file_in_storage  # Real SF fixture (6 instances → valid)
         unique_suffix = str(uuid.uuid4())[:8]
 
         test_block = {
@@ -118,7 +177,7 @@ class TestValidateFileTaskHappyPath:
         """
         supabase = get_supabase_client()
         test_block_id = str(uuid.uuid4())
-        s3_key = test_3dm_file_in_storage  # Use uploaded fixture
+        s3_key = test_3dm_file_in_storage  # Real SF fixture (6 instances → valid)
         unique_suffix = str(uuid.uuid4())[:8]
 
         test_block = {

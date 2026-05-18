@@ -96,7 +96,8 @@ def mock_rhino_model_valid():
     # Mock mesh with vertices/faces
     obj1.Geometry.Vertices = [MagicMock() for _ in range(100)]
     obj1.Geometry.Faces = [MagicMock() for _ in range(50)]
-    obj1.Geometry.__class__.__name__ = 'Brep'  # Mark as Brep
+    # GeometryValidator validates BLOCK INSTANCES only (see decisions.md)
+    obj1.Geometry.__class__.__name__ = 'InstanceReference'
     
     obj2 = MagicMock()
     obj2.Attributes.LayerIndex = 1
@@ -110,8 +111,9 @@ def mock_rhino_model_valid():
     obj2.Geometry.GetBoundingBox.return_value = bbox2
     obj2.Geometry.Vertices = [MagicMock() for _ in range(80)]
     obj2.Geometry.Faces = [MagicMock() for _ in range(40)]
-    obj2.Geometry.__class__.__name__ = 'Mesh'
-    
+    # GeometryValidator now requires the model to contain ONLY block instances
+    obj2.Geometry.__class__.__name__ = 'InstanceReference'
+
     mock_model.Objects = [obj1, obj2]
     
     # Mock user strings (document-level)
@@ -224,91 +226,10 @@ def mock_redis_client():
 class TestStateGraphValidatorsIntegration:
     """Integration tests for Adapter Pattern validators."""
     
-    def test_nomenclature_valid_executes_extract_geometry(
-        self, mock_valid_3dm_file, mock_rhino_model_valid
-    ):
-        """
-        INT-01: Nomenclature OK → extract_geometry executed.
-        
-        GIVEN a .3dm file with VALID layer names (ISO-19650)
-        WHEN the graph runs
-        THEN ValidateNomenclature returns nomenclature_valid=True
-        AND ExtractGeometry is executed (validation_path includes both nodes)
-        """
-        with patch("infra.supabase_client.get_supabase_client") as mock_supabase:
-            # Mock Supabase Storage download
-            mock_storage = MagicMock()
-            mock_storage.download.return_value = mock_valid_3dm_file
-            mock_supabase.return_value.storage.from_.return_value = mock_storage
-            
-            # Mock rhino3dm.File3dm.Read() to return valid model
-            with patch("rhino3dm.File3dm.Read", return_value=mock_rhino_model_valid):
-                # Create graph and run
-                graph = create_validation_graph()
-                block_id = str(uuid4())
-                initial_state = make_initial_state(block_id)
-                
-                final_state = graph.invoke(initial_state)
-                
-                # Verify ValidateNomenclature was executed
-                assert "ValidateNomenclature" in final_state["validation_path"]
-                
-                # Verify nomenclature_valid=True (VALID layer names)
-                assert final_state["nomenclature_valid"] is True
-                assert len(final_state["nomenclature_errors"]) == 0
-                
-                # Verify ExtractGeometry was executed (not skipped)
-                assert "ExtractGeometry" in final_state["validation_path"]
-                
-                # Verify geometry_metadata populated
-                assert "layers" in final_state["geometry_metadata"]
-                assert len(final_state["geometry_metadata"]["layers"]) == 2
-                assert final_state["geometry_metadata"]["layers"][0].name == "SF-C12-D-001"
-    
-    def test_nomenclature_fail_skips_extract_geometry(
-        self, mock_valid_3dm_file, mock_rhino_model_invalid_nomenclature
-    ):
-        """
-        INT-02: Nomenclature FAIL → downstream nodes skipped (fail-fast).
-        
-        GIVEN a .3dm file with INVALID layer names (not ISO-19650)
-        WHEN the graph runs
-        THEN ValidateNomenclature returns nomenclature_valid=False
-        AND graph routes directly to MarkRejected (fail-fast)
-        AND downstream nodes (ClassifyTipologia, EnrichMetadata) are NOT in validation_path
-        
-        Note: ExtractGeometry IS in validation_path because it's the first node (T-1803 reordering).
-        The fail-fast happens AFTER nomenclature validation, skipping ClassifyTipologia+.
-        """
-        with patch("infra.supabase_client.get_supabase_client") as mock_supabase:
-            mock_storage = MagicMock()
-            mock_storage.download.return_value = mock_valid_3dm_file
-            mock_supabase.return_value.storage.from_.return_value = mock_storage
-            
-            with patch("rhino3dm.File3dm.Read", return_value=mock_rhino_model_invalid_nomenclature):
-                graph = create_validation_graph()
-                block_id = str(uuid4())
-                initial_state = make_initial_state(block_id)
-                
-                final_state = graph.invoke(initial_state)
-                
-                # Verify nomenclature_valid=False (INVALID layer names)
-                assert final_state["nomenclature_valid"] is False
-                assert len(final_state["nomenclature_errors"]) == 2  # 2 invalid layers
-                
-                # T-1803: ExtractGeometry IS in path (first node), ValidateNomenclature IS in path
-                assert "ExtractGeometry" in final_state["validation_path"]
-                assert "ValidateNomenclature" in final_state["validation_path"]
-                
-                # Verify downstream nodes were SKIPPED (fail-fast after nomenclature)
-                assert "ClassifyTipologia" not in final_state["validation_path"]
-                assert "EnrichMetadata" not in final_state["validation_path"]
-                assert "GenerateReport" not in final_state["validation_path"]
-                
-                # Verify routed to MarkRejected
-                assert "MarkRejected" in final_state["validation_path"]
-                assert final_state["overall_status"] == ValidationStatus.REJECTED
-    
+    # NOTE: INT-01/INT-02 (nomenclature OK / nomenclature FAIL fail-fast) were
+    # removed together with the ISO-19650 nomenclature node — real Sagrada
+    # Família layer names never follow ISO-19650. See memory-bank/decisions.md.
+
     def test_geometry_valid_executes_enrich_metadata(
         self, mock_valid_3dm_file, mock_rhino_model_valid
     ):
@@ -382,13 +303,13 @@ class TestStateGraphValidatorsIntegration:
         """
         INT-05: Full happy path → estado VALIDATED, semantic_data populated.
         
-        GIVEN a .3dm file with VALID nomenclature + VALID geometry
+        GIVEN a .3dm file with VALID geometry
         WHEN the graph runs to completion
-        THEN all validators pass (nomenclature_valid=True, geometry_valid=True)
+        THEN geometry validation passes (geometry_valid=True)
         AND semantic_data is populated with LLM classification + Material
         AND overall_status=VALIDATED
-        AND validation_path includes all nodes (ValidateNomenclature, ExtractGeometry,
-            ValidateGeometry, ClassifyTipologia, EnrichMetadata, GenerateReport, MarkValidated)
+        AND validation_path includes all nodes (ExtractGeometry, ValidateGeometry,
+            ClassifyTipologia, EnrichMetadata, GenerateReport, MarkValidated)
         """
         with patch("infra.supabase_client.get_supabase_client") as mock_supabase:
             mock_storage = MagicMock()
@@ -402,8 +323,7 @@ class TestStateGraphValidatorsIntegration:
                 
                 final_state = graph.invoke(initial_state)
                 
-                # Verify all validators passed
-                assert final_state["nomenclature_valid"] is True
+                # Verify geometry validation passed
                 assert final_state["geometry_valid"] is True
                 
                 # Verify semantic_data populated with LLM + Material
@@ -419,7 +339,6 @@ class TestStateGraphValidatorsIntegration:
                 
                 # Verify validation_path includes all nodes (happy path)
                 expected_nodes = [
-                    "ValidateNomenclature",
                     "ExtractGeometry",
                     "ValidateGeometry",
                     "ClassifyTipologia",

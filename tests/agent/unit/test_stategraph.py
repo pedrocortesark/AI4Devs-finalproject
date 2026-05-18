@@ -38,17 +38,11 @@ from unittest.mock import patch, MagicMock
 try:
     from src.agent.graph.state import make_initial_state, ValidationStatus, ClassificationMethod
     from src.agent.graph.graph import create_validation_graph
-    from src.agent.graph.nodes import (
-        node_validate_nomenclature,
-        node_mark_rejected,
-    )
+    from src.agent.graph.nodes import node_mark_rejected
 except ImportError:
     from graph.state import make_initial_state, ValidationStatus, ClassificationMethod
     from graph.graph import create_validation_graph
-    from graph.nodes import (
-        node_validate_nomenclature,
-        node_mark_rejected,
-    )
+    from graph.nodes import node_mark_rejected
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -128,8 +122,10 @@ def mock_supabase_and_rhino3dm():
     obj1.Geometry.GetBoundingBox.return_value = bbox1
     obj1.Geometry.Vertices = [MagicMock() for _ in range(100)]
     obj1.Geometry.Faces = [MagicMock() for _ in range(50)]
-    obj1.Geometry.__class__.__name__ = 'Brep'
-    
+    # GeometryValidator now validates BLOCK INSTANCES only (see decisions.md):
+    # the placed instance must be an InstanceReference with a valid 3D bbox.
+    obj1.Geometry.__class__.__name__ = 'InstanceReference'
+
     mock_model.Objects = [obj1]
     
     # Mock user strings
@@ -202,10 +198,10 @@ class TestHappyPathFlow:
         # THEN: Final status should be VALIDATED
         assert final_state["overall_status"] == ValidationStatus.VALIDATED
         
-        # AND: Validation path should include all 8 nodes (T-1803: ExtractGeometry now FIRST)
+        # AND: Validation path should include all 6 nodes
+        # (ISO-19650 nomenclature node removed — see memory-bank/decisions.md)
         expected_path = [
-            "ExtractGeometry",  # T-1803: Changed to first node (downloads .3dm)
-            "ValidateNomenclature",
+            "ExtractGeometry",  # First node (downloads .3dm)
             "ValidateGeometry",
             "ClassifyTipologia",
             "EnrichMetadata",

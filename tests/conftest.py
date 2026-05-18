@@ -316,11 +316,54 @@ def test_3dm_file_in_storage(supabase_client: Client):
         pytest.skip(f"Failed to upload test fixture: {e}")
     
     yield DESTINATION_PATH
-    
+
     # Cleanup: Delete test file after session
     try:
         supabase_client.storage.from_(BUCKET_NAME).remove([DESTINATION_PATH])
         print(f"🧹 Test fixture cleaned up from storage")
+    except Exception:
+        pass  # Ignore cleanup errors
+
+
+@pytest.fixture(scope="session")
+def valid_iso_3dm_file_in_storage(supabase_client: Client):
+    """
+    Upload the "no block instances" .3dm fixture to Storage.
+
+    GeometryValidator now validates only BLOCK INSTANCES (InstanceReference) —
+    the block IS its placed instances; loose Breps/surfaces are ignored (see
+    memory-bank/decisions.md). This fixture is a single loose mesh solid with
+    NO InstanceReference, so the Librarian REJECTS it ("No block instances
+    found"). The happy-path fixture is now the real test-model.3dm (6
+    instances). This fixture exercises the negative path of the new gate.
+
+    See tests/fixtures/valid-iso-model.3dm. (Filename retains the historical
+    'iso' name; ISO-19650 nomenclature is no longer checked.)
+
+    Storage path: raw-uploads/test-fixtures/valid-iso-model.3dm
+    """
+    from pathlib import Path
+
+    BUCKET_NAME = "raw-uploads"
+    DESTINATION_PATH = "test-fixtures/valid-iso-model.3dm"
+    SOURCE_FILE = Path(__file__).parent / "fixtures" / "valid-iso-model.3dm"
+
+    try:
+        with open(SOURCE_FILE, 'rb') as file:
+            supabase_client.storage.from_(BUCKET_NAME).upload(
+                path=DESTINATION_PATH,
+                file=file,
+                file_options={"content-type": "application/octet-stream", "upsert": "true"}
+            )
+        print(f"✅ Valid ISO fixture uploaded to {BUCKET_NAME}/{DESTINATION_PATH}")
+    except Exception as e:
+        pytest.skip(f"Failed to upload valid ISO fixture: {e}")
+
+    yield DESTINATION_PATH
+
+    try:
+        supabase_client.storage.from_(BUCKET_NAME).remove([DESTINATION_PATH])
+        print(f"🧹 Valid ISO fixture cleaned up from storage")
     except Exception:
         pass  # Ignore cleanup errors
 

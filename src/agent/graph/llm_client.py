@@ -116,19 +116,39 @@ class LLMClient:
         # JSON output parser
         self.parser = JsonOutputParser()
         
-        # T-1810: Initialize rate limiter
+        # T-1810: Initialize rate limiter.
+        # The RateLimiterService lives in src/backend; it is reachable from the
+        # backend test container ("services.*") and from local docker-compose
+        # ("src.backend.*", since ./src is mounted), but NOT from the prod agent
+        # image (built from the src/agent context only). Rate limiting is
+        # best-effort by design (it already degrades when Redis is down), so a
+        # missing module must NOT crash classification — we degrade to
+        # rate_limiter=None, which classify_tipologia already treats as "no
+        # throttling". This keeps real LLM classification working in prod.
         if rate_limiter is None:
-            # Use singleton rate limiter (default)
-            from services.rate_limiter_service import RateLimiterService
-            from infra.redis_client import get_redis_client
-            
-            redis_client = get_redis_client()
-            self.rate_limiter = RateLimiterService(
-                redis_client=redis_client,
-                rate_limit_per_min=OPENAI_RATE_LIMIT_PER_MIN,
-                max_concurrent=OPENAI_MAX_CONCURRENT,
-                bucket_size=OPENAI_RATE_LIMIT_BUCKET_SIZE,
-            )
+            self.rate_limiter = None
+            try:
+                try:
+                    from services.rate_limiter_service import RateLimiterService
+                    from infra.redis_client import get_redis_client
+                except ImportError:
+                    from src.backend.services.rate_limiter_service import RateLimiterService
+                    from src.backend.infra.redis_client import get_redis_client
+
+                redis_client = get_redis_client()
+                self.rate_limiter = RateLimiterService(
+                    redis_client=redis_client,
+                    rate_limit_per_min=OPENAI_RATE_LIMIT_PER_MIN,
+                    max_concurrent=OPENAI_MAX_CONCURRENT,
+                    bucket_size=OPENAI_RATE_LIMIT_BUCKET_SIZE,
+                )
+            except ImportError as e:
+                logger.warning(
+                    "rate_limiter_unavailable_degrading",
+                    error=str(e),
+                    message="RateLimiterService not importable (prod agent image); "
+                            "continuing without client-side rate limiting",
+                )
         else:
             self.rate_limiter = rate_limiter
         

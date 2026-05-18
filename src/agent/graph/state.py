@@ -146,7 +146,11 @@ class ValidationState(TypedDict, total=False):
     created_at: str
     retry_count: int
 
-    # ── Nomenclature validation (4-5 of 15) ────────────────────────────────
+    # ── Nomenclature (4-5 of 16) — VESTIGIAL ───────────────────────────────
+    # ISO-19650 nomenclature validation was removed (real SF layer names never
+    # follow ISO-19650; see memory-bank/decisions.md). These fields are kept
+    # only so the report/snapshot schema and field-count tests stay stable;
+    # nothing populates them anymore. nomenclature_valid defaults True.
     nomenclature_valid: bool
     nomenclature_errors: List[str]
 
@@ -207,8 +211,9 @@ def make_initial_state(block_id: str, retry_count: int = 0) -> ValidationState:
         created_at=datetime.utcnow().isoformat(),
         retry_count=retry_count,
 
-        # Nomenclature validation (4-5 of 16) — set by ValidateNomenclature node
-        nomenclature_valid=False,
+        # Nomenclature (4-5 of 16) — VESTIGIAL: validation removed, nothing
+        # populates these. Default True so reports show "no nomenclature issue".
+        nomenclature_valid=True,
         nomenclature_errors=[],
 
         # Geometry (6-8 of 16) — set by ExtractGeometry + ValidateGeometry nodes

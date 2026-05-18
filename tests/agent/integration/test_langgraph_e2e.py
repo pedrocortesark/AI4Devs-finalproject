@@ -231,7 +231,12 @@ class TestLangGraphE2E:
             
             # Step 3: Mock NomenclatureValidator to pass (focus on LLM workflow)
             # This allows us to test the full StateGraph including ClassifyTipologia
-            with patch("src.agent.services.nomenclature_validator.NomenclatureValidator") as MockNomenclature:
+            # NOMENCLATURE REMOVED (see memory-bank/decisions.md): the ISO-19650
+            # node no longer exists. These patch blocks are kept structurally but
+            # repointed to an inert side-effect-only target (insert_event) so the
+            # MockNomenclature shim stays valid and unused. The graph never calls
+            # nomenclature anymore, so this does not affect the scenario.
+            with patch("src.agent.graph.nodes.insert_event") as MockNomenclature:
                 mock_nomenclature_instance = MagicMock()
                 # validate_nomenclature returns List[ValidationErrorItem], empty list = valid
                 mock_nomenclature_instance.validate_nomenclature.return_value = []
@@ -298,6 +303,10 @@ class TestLangGraphE2E:
         # Real event count verification would require unmocked Supabase connection
     
     @pytest.mark.e2e
+    @pytest.mark.skip(reason="OBSOLETE: ISO-19650 nomenclature validation was "
+                             "removed (real SF layer names never follow ISO-19650). "
+                             "The graph no longer rejects on nomenclature. "
+                             "See memory-bank/decisions.md.")
     def test_ec_e2e_02_invalid_nomenclature_rejected(
         self,
         supabase_client,
@@ -335,7 +344,12 @@ class TestLangGraphE2E:
             mock_supabase.return_value.table.return_value = mock_table
             
             # Mock NomenclatureValidator to FAIL (return errors)
-            with patch("src.agent.services.nomenclature_validator.NomenclatureValidator") as MockNomenclature:
+            # NOMENCLATURE REMOVED (see memory-bank/decisions.md): the ISO-19650
+            # node no longer exists. These patch blocks are kept structurally but
+            # repointed to an inert side-effect-only target (insert_event) so the
+            # MockNomenclature shim stays valid and unused. The graph never calls
+            # nomenclature anymore, so this does not affect the scenario.
+            with patch("src.agent.graph.nodes.insert_event") as MockNomenclature:
                 mock_nomenclature_instance = MagicMock()
                 mock_nomenclature_instance.validate_nomenclature.return_value = [
                     ValidationErrorItem(
@@ -417,7 +431,12 @@ class TestLangGraphE2E:
             mock_supabase.return_value.table.return_value = mock_table
             
             # Mock Nomenclature + Geometry to PASS
-            with patch("src.agent.services.nomenclature_validator.NomenclatureValidator") as MockNomenclature:
+            # NOMENCLATURE REMOVED (see memory-bank/decisions.md): the ISO-19650
+            # node no longer exists. These patch blocks are kept structurally but
+            # repointed to an inert side-effect-only target (insert_event) so the
+            # MockNomenclature shim stays valid and unused. The graph never calls
+            # nomenclature anymore, so this does not affect the scenario.
+            with patch("src.agent.graph.nodes.insert_event") as MockNomenclature:
                 mock_nomenclature_instance = MagicMock()
                 mock_nomenclature_instance.validate_nomenclature.return_value = []
                 MockNomenclature.return_value = mock_nomenclature_instance
@@ -492,7 +511,12 @@ class TestLangGraphE2E:
             mock_supabase.return_value.table.return_value = mock_table
             
             # Mock Nomenclature to PASS
-            with patch("src.agent.services.nomenclature_validator.NomenclatureValidator") as MockNomenclature:
+            # NOMENCLATURE REMOVED (see memory-bank/decisions.md): the ISO-19650
+            # node no longer exists. These patch blocks are kept structurally but
+            # repointed to an inert side-effect-only target (insert_event) so the
+            # MockNomenclature shim stays valid and unused. The graph never calls
+            # nomenclature anymore, so this does not affect the scenario.
+            with patch("src.agent.graph.nodes.insert_event") as MockNomenclature:
                 mock_nomenclature_instance = MagicMock()
                 mock_nomenclature_instance.validate_nomenclature.return_value = []
                 MockNomenclature.return_value = mock_nomenclature_instance
@@ -597,7 +621,12 @@ class TestLangGraphE2E:
                 mock_supabase.return_value.table.return_value = mock_table
                 
                 # Mock validators based on scenario
-                with patch("src.agent.services.nomenclature_validator.NomenclatureValidator") as MockNomenclature:
+                # NOMENCLATURE REMOVED (see memory-bank/decisions.md): the ISO-19650
+            # node no longer exists. These patch blocks are kept structurally but
+            # repointed to an inert side-effect-only target (insert_event) so the
+            # MockNomenclature shim stays valid and unused. The graph never calls
+            # nomenclature anymore, so this does not affect the scenario.
+            with patch("src.agent.graph.nodes.insert_event") as MockNomenclature:
                     mock_nomenclature_instance = MagicMock()
                     if scenario["nomenclature_valid"]:
                         mock_nomenclature_instance.validate_nomenclature.return_value = []
@@ -683,7 +712,12 @@ class TestLangGraphE2E:
             mock_table.insert.return_value.execute.return_value = MagicMock(data=[{"id": 1}])
             mock_supabase.return_value.table.return_value = mock_table
             
-            with patch("src.agent.services.nomenclature_validator.NomenclatureValidator") as MockNomenclature:
+            # NOMENCLATURE REMOVED (see memory-bank/decisions.md): the ISO-19650
+            # node no longer exists. These patch blocks are kept structurally but
+            # repointed to an inert side-effect-only target (insert_event) so the
+            # MockNomenclature shim stays valid and unused. The graph never calls
+            # nomenclature anymore, so this does not affect the scenario.
+            with patch("src.agent.graph.nodes.insert_event") as MockNomenclature:
                 mock_nomenclature_instance = MagicMock()
                 mock_nomenclature_instance.validate_nomenclature.return_value = [
                     ValidationErrorItem(category="nomenclature", target="Layer", message="Invalid")
@@ -715,7 +749,12 @@ class TestLangGraphE2E:
             mock_table.insert.return_value.execute.return_value = MagicMock(data=[{"id": 1}])
             mock_supabase.return_value.table.return_value = mock_table
             
-            with patch("src.agent.services.nomenclature_validator.NomenclatureValidator") as MockNomenclature:
+            # NOMENCLATURE REMOVED (see memory-bank/decisions.md): the ISO-19650
+            # node no longer exists. These patch blocks are kept structurally but
+            # repointed to an inert side-effect-only target (insert_event) so the
+            # MockNomenclature shim stays valid and unused. The graph never calls
+            # nomenclature anymore, so this does not affect the scenario.
+            with patch("src.agent.graph.nodes.insert_event") as MockNomenclature:
                 mock_nomenclature_instance = MagicMock()
                 mock_nomenclature_instance.validate_nomenclature.return_value = []
                 MockNomenclature.return_value = mock_nomenclature_instance

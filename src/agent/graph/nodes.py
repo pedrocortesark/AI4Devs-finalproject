@@ -29,8 +29,10 @@ and return minimal state updates so the graph can flow from START to END in test
 
 NODE NAMING CONVENTION
 ======================
-Each function is named after its position in the validation pipeline:
-  node_validate_nomenclature   → checks layer names against ISO-19650 (US-002)
+Each function is named after its position in the validation pipeline.
+NOTE: node_validate_nomenclature (ISO-19650 layer-name check) was removed —
+real Sagrada Família layer names never follow ISO-19650. See
+memory-bank/decisions.md.
   node_extract_geometry        → downloads .3dm and reads geometry (rhino3dm)
   node_validate_geometry       → checks mesh integrity (topology validation)
   node_classify_tipologia      → LLM: what architectural type is this? (GPT-4 or fallback)
@@ -475,85 +477,7 @@ def insert_event(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# NODE 1: ValidateNomenclature
-# ─────────────────────────────────────────────────────────────────────────────
-
-@with_audit_trail
-def node_validate_nomenclature(state: ValidationState) -> Dict[str, Any]:
-    """
-    Node 1: Validate that all layer names comply with ISO-19650 pattern.
-
-    This is the FIRST node in the graph and acts as a gatekeeper.
-    If nomenclature fails, the conditional edge routes directly to REJECTED
-    without running the expensive nodes (geometry parsing, LLM calls).
-
-    Implementation (T-1803 Adapter Pattern):
-        Uses NomenclatureValidator service (US-002) via adapter wrapper.
-        Adapter pattern: Extract layers from state → call validator → update state.
-        Zero regression: NomenclatureValidator code remains 100% unchanged.
-
-    Flow:
-        1. Extract geometry_metadata.layers from state (populated by ExtractGeometry)
-        2. Call NomenclatureValidator.validate_nomenclature(layers)
-        3. Update state with nomenclature_valid (bool) and nomenclature_errors (list)
-
-    Note: This node depends on ExtractGeometry running FIRST to populate layers.
-    Graph ordering ensures ExtractGeometry → ValidateNomenclature sequence.
-
-    Args:
-        state: Current ValidationState (reads: geometry_metadata.layers)
-
-    Returns:
-        Partial state update with:
-          - nomenclature_valid (bool): True if all layers match ISO-19650 pattern
-          - nomenclature_errors (List[ValidationErrorItem]): Errors for invalid layers
-          - validation_path (list with "ValidateNomenclature" appended)
-
-    Example:
-        >>> state = {"geometry_metadata": {"layers": [LayerInfo(name="SF-C12-D-001", index=0)]}}
-        >>> result = node_validate_nomenclature(state)
-        >>> result["nomenclature_valid"]
-        True
-    """
-    from src.agent.services.nomenclature_validator import NomenclatureValidator
-    
-    node_name = "ValidateNomenclature"
-    block_id = state.get("block_id", "unknown")
-    logger.info("node.enter", node=node_name, block_id=block_id)
-
-    # T-1803 ADAPTER: Extract layers from state (populated by ExtractGeometry)
-    geometry_metadata = state.get("geometry_metadata", {})
-    layers = geometry_metadata.get("layers", [])
-    
-    logger.debug(
-        "nomenclature_adapter.layer_count",
-        node=node_name,
-        block_id=block_id,
-        layer_count=len(layers),
-    )
-
-    # Call NomenclatureValidator (US-002 service, UNCHANGED code)
-    validator = NomenclatureValidator()
-    errors = validator.validate_nomenclature(layers)
-    
-    is_valid = len(errors) == 0
-
-    logger.info(
-        "node.complete",
-        node=node_name,
-        nomenclature_valid=is_valid,
-        error_count=len(errors),
-    )
-
-    return {
-        "nomenclature_valid": is_valid,
-        "nomenclature_errors": errors,
-        "validation_path": _append_to_path(state, node_name),
-    }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NODE 2: ExtractGeometry
+# NODE 1: ExtractGeometry
 # ─────────────────────────────────────────────────────────────────────────────
 
 @with_audit_trail
