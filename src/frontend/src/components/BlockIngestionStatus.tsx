@@ -309,6 +309,13 @@ export function BlockIngestionStatus({ fileKey, onNewUpload }: BlockIngestionSta
             const idx = prev.findIndex((r) => r.id === record.id);
             const updated = rowFromRecord(record);
             if (idx === -1) return [...prev, updated];
+            // Realtime UPDATE payloads can omit validation_report (depends on
+            // the table REPLICA IDENTITY), which would blank the rejection
+            // reason the initial fetch already loaded. Preserve it.
+            if (record.validation_report == null && prev[idx].validation_report) {
+              updated.validation_report = prev[idx].validation_report;
+              updated.error_reason = prev[idx].validation_report?.errors?.[0]?.message;
+            }
             const next = [...prev];
             next[idx] = updated;
             return next;
@@ -387,6 +394,41 @@ export function BlockIngestionStatus({ fileKey, onNewUpload }: BlockIngestionSta
             borderRadius: '8px', fontSize: '13px', color: '#FF6B60',
           }}>
             {error}
+          </div>
+        )}
+
+        {/* ── Rejection reasons (readable) ── */}
+        {summary.failed > 0 && (
+          <div style={{
+            padding: '12px 14px', marginBottom: '16px',
+            backgroundColor: 'rgba(255,69,58,0.08)',
+            border: '1px solid rgba(255,69,58,0.3)',
+            borderRadius: '8px',
+          }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#FF6B60', marginBottom: '8px' }}>
+              Motivo del rechazo ({summary.failed})
+            </div>
+            {rows
+              .filter((r) => r.state === 'error_processing' || r.state === 'rejected')
+              .map((r) => {
+                const errs = r.validation_report?.errors;
+                return (
+                  <div key={r.id} style={{ fontSize: '12px', color: DS.textSecondary, marginBottom: '6px', lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600, color: DS.textPrimary }}>{r.iso_code}</span>
+                    {Array.isArray(errs) && errs.length > 0 ? (
+                      <ul style={{ margin: '2px 0 0', paddingLeft: '18px' }}>
+                        {errs.map((e: any, k: number) => (
+                          <li key={k}>
+                            <span style={{ color: DS.textTertiary }}>{e.category}:</span> {e.message}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span> — {r.error_reason ?? 'Sin detalle disponible'}</span>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         )}
 

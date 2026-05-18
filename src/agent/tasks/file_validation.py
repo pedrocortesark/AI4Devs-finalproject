@@ -55,7 +55,14 @@ def _is_transient_error(exc: Exception, error_msg: str = None) -> bool:
     transient_patterns = [
         "timeout", "timed out", "connection", "network",
         "rate limit", "503", "502", "504", "temporary",
-        "unavailable", "redis", "could not connect"
+        "unavailable", "redis", "could not connect",
+        # Storage download blips: download_from_s3 wraps any raised exception
+        # as "S3 download error: ..." (incl. the storage3 spurious
+        # UnboundLocalError "cannot access local variable 'response'..."). These
+        # are transient → Celery should retry. NOTE: a genuinely missing object
+        # yields "S3 download failed: File not found ..." (no match here) and
+        # correctly stays permanent.
+        "s3 download error", "cannot access local variable",
     ]
     check_msg = error_msg if error_msg else str(exc)
     return any(pattern in check_msg.lower() for pattern in transient_patterns)

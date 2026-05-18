@@ -5,6 +5,7 @@ Handles downloading files from Supabase Storage (S3-compatible).
 Downloads .3dm files to temporary directory for processing.
 """
 
+import time
 from pathlib import Path
 import structlog
 from infra.supabase_client import get_supabase_client
@@ -13,6 +14,13 @@ logger = structlog.get_logger()
 
 # Storage bucket constant
 STORAGE_BUCKET_RAW_UPLOADS = "raw-uploads"
+
+# Short in-process retry for the storage download. storage3 can raise a
+# spurious UnboundLocalError ("cannot access local variable 'response'...")
+# or other transient errors on intermittent Storage blips; retrying absorbs
+# them so a flaky download does NOT permanently fail the block.
+DOWNLOAD_MAX_ATTEMPTS = 4
+DOWNLOAD_RETRY_BACKOFF_SECONDS = 0.5
 
 
 class FileDownloadService:
@@ -52,8 +60,33 @@ class FileDownloadService:
                 filename = f"{task_id}-{filename}"
             local_path = self.temp_dir / filename
 
-            # Download file from Supabase Storage
-            response = self.supabase.storage.from_(STORAGE_BUCKET_RAW_UPLOADS).download(s3_key)
+            # Download from Supabase Storage with a short retry. A raised
+            # exception is a transient blip (incl. the storage3 spurious
+            # UnboundLocalError) → retry. `download()` returning None means the
+            # object genuinely does not exist → do NOT retry (permanent).
+            response = None
+            last_exc = None
+            for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
+                try:
+                    response = self.supabase.storage.from_(STORAGE_BUCKET_RAW_UPLOADS).download(s3_key)
+                    last_exc = None
+                    break
+                except Exception as e:  # noqa: BLE001 — intentionally broad: any error → retry
+                    last_exc = e
+                    logger.warning(
+                        "file_download.download_from_s3.retry",
+                        s3_key=s3_key,
+                        attempt=attempt,
+                        max_attempts=DOWNLOAD_MAX_ATTEMPTS,
+                        error=str(e),
+                    )
+                    if attempt < DOWNLOAD_MAX_ATTEMPTS:
+                        time.sleep(DOWNLOAD_RETRY_BACKOFF_SECONDS * attempt)
+
+            if last_exc is not None:
+                # Every attempt raised — surface to the outer handler so
+                # validate_file classifies it transient and Celery-retries.
+                raise last_exc
 
             if response is None:
                 error_msg = f"S3 download failed: File not found for key {s3_key}"
