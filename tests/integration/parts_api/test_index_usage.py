@@ -27,6 +27,42 @@ from .helpers import cleanup_test_blocks_by_pattern
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _purge_synthetic_blocks(supabase_client: Client):
+    """Guaranteed teardown for every test in this module.
+
+    These tests are @pytest.mark.xfail ("RED phase, expected to FAIL"), so the
+    inline `# CLEANUP` at the end of each test body NEVER runs when the
+    expected assertion fails — that is why the real Supabase filled up with
+    ~1100 synthetic ACTIVE-*/ARCHIVED-* (and TEST-IDX*) blocks.
+
+    A fixture finalizer always runs (pass, fail, xfail, raised exception, or
+    skip), so deleting here actually removes what the tests create. Bulk
+    DELETE via direct PG (fast for 1000+ rows); best-effort — never fails the
+    test on a cleanup error.
+    """
+    patterns = ["ACTIVE-%", "ARCHIVED-%", "TEST-IDX01-%", "TEST-IDX03-%", "TEST-IDX04-%"]
+    yield
+    db_url = os.getenv("SUPABASE_DATABASE_URL")
+    if db_url:
+        try:
+            conn = psycopg2.connect(db_url)
+            try:
+                with conn, conn.cursor() as cur:
+                    for pat in patterns:
+                        cur.execute("DELETE FROM blocks WHERE iso_code LIKE %s", (pat,))
+            finally:
+                conn.close()
+            return
+        except Exception:
+            pass  # fall back to Supabase client below
+    for pat in patterns:
+        try:
+            cleanup_test_blocks_by_pattern(supabase_client, pat)
+        except Exception:
+            pass  # best-effort: cleanup must never fail the test
+
+
 def get_direct_db_connection():
     """
     Establish direct PostgreSQL connection for EXPLAIN ANALYZE queries.
