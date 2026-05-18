@@ -120,7 +120,11 @@ export function FilterBar({ selectedId, showDetailsPanel, onShowDetails }: Filte
   }, [parts]);
 
   const materialOptions = useMemo(() => {
-    const values = [...new Set(parts.map((p) => p.tipologia).filter(Boolean))].sort();
+    // Real stone material from the .3dm "Material" UserString (was wrongly
+    // derived from tipologia). Null until geometry processing populates it.
+    const values = [...new Set(
+      parts.map((p) => p.material).filter((v): v is string => !!v)
+    )].sort();
     return values.map((v) => ({ value: v, label: v }));
   }, [parts]);
 

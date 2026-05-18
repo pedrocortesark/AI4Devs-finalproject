@@ -461,6 +461,11 @@ class Element(BaseModel):
         None,
         description="Architectural grouping from Rhino metadata (SF_ARC_Agrupacio1 attribute)"
     )
+    material: Optional[str] = Field(
+        None,
+        description="Stone material from the .3dm 'Material' UserString (e.g. 'Montjuïc'); "
+                    "null until geometry processing populates rhino_metadata"
+    )
     rhino_metadata: Optional[dict] = Field(
         None,
         description="Raw Rhino 3DM metadata (JSONB) containing userstrings like Material, Codi, etc."

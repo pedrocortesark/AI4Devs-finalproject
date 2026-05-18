@@ -54,6 +54,7 @@ export async function listParts(
     iso_code: element.iso_code,
     status: element.status,
     tipologia: element.material_type, // Map material_type → tipologia for backward compat
+    material: element.material ?? null, // Stone material from .3dm "Material" UserString
     agrupacio: element.agrupacio ?? null, // SF_ARC_Agrupacio1 from Rhino metadata
     high_poly_url: element.high_poly_url || null,  // US-015: High-detail LOD (~7k tris)
     mid_poly_url: element.mid_poly_url || null,    // US-015: Mid-detail LOD (~2k tris)

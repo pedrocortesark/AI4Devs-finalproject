@@ -113,6 +113,13 @@ class ElementsService:
         agrupacio_raw = rhino_metadata.get("SF_ARC_Agrupacio1") if isinstance(rhino_metadata, dict) else None
         agrupacio = str(agrupacio_raw) if agrupacio_raw is not None else None
 
+        # Extract the stone material from the .3dm "Material" UserString.
+        # rhino_metadata is populated by the async geometry_processing task; its
+        # exact shape varies (flat top-level keys vs the nested
+        # {document, layers, objects} UserStringCollection), so probe both —
+        # same precedence as node_enrich_metadata (document first, then objects).
+        material = self._extract_material(rhino_metadata)
+
         return Element(
             id=row["id"],
             iso_code=row["iso_code"],
@@ -123,8 +130,35 @@ class ElementsService:
             mtl_url=mtl_url,
             bbox=bbox,
             agrupacio=agrupacio,
+            material=material,
             rhino_metadata=rhino_metadata if isinstance(rhino_metadata, dict) else None,
         )
+
+    @staticmethod
+    def _extract_material(rhino_metadata: Any) -> Optional[str]:
+        """Return the 'Material' UserString from rhino_metadata, or None.
+
+        Defensive against both persisted shapes:
+          - flat:   {"Material": "Montjuïc", "Codi": "...", ...}
+          - nested: {"document": {"Material": "..."}, "objects": {<id>: {...}}}
+        """
+        if not isinstance(rhino_metadata, dict):
+            return None
+        # Flat top-level
+        val = rhino_metadata.get("Material")
+        if val:
+            return str(val)
+        # Nested document-level
+        document = rhino_metadata.get("document")
+        if isinstance(document, dict) and document.get("Material"):
+            return str(document["Material"])
+        # Fallback: first object-level user strings
+        objects = rhino_metadata.get("objects")
+        if isinstance(objects, dict):
+            for obj_strings in objects.values():
+                if isinstance(obj_strings, dict) and obj_strings.get("Material"):
+                    return str(obj_strings["Material"])
+        return None
 
     def _build_filters_applied(self, status: Optional[str]) -> Dict[str, str]:
         """

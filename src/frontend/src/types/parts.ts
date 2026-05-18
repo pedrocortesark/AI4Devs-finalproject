@@ -35,6 +35,7 @@ export interface PartCanvasItem {
   iso_code: string;                // e.g., "SF-C12-D-001"
   status: BlockStatus;             // Enum value
   tipologia: string;               // material_type (Montjuïc, Ulldecona, etc.) — mapped from API
+  material?: string | null;        // Stone material from .3dm "Material" UserString (Material filter source)
   agrupacio: string | null;        // SF_ARC_Agrupacio1 from Rhino metadata
   high_poly_url?: string | null;   // US-015: High-poly URL (~7k tris) for LOD Level 0 (0-5m)
   mid_poly_url?: string | null;    // US-015: Mid-poly URL (~2k tris) for LOD Level 1 (5-20m)
@@ -134,6 +135,9 @@ export interface PartDetail {
 
   /** Stone/material type (e.g., "Montjuïc", "Ulldecona") — maps to MATERIAL_COLORS */
   material_type?: string | null;
+
+  /** Stone material from the .3dm "Material" UserString (source for the Material filter) */
+  material?: string | null;
 
   /** Raw Rhino metadata attributes from .3dm file (key/value pairs) */
   rhino_metadata?: Record<string, unknown> | null;

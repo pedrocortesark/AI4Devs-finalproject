@@ -154,8 +154,9 @@ export const usePartsStore = create<PartsState>((set, get) => ({
     const { parts, filters } = get();
 
     return parts.filter(part => {
-      // Apply material filter (OR logic) — filters by material_type via tipologia field
-      if (filters.material.length > 0 && !filters.material.includes(part.tipologia)) {
+      // Apply material filter (OR logic) — real stone material from the .3dm
+      // "Material" UserString (was wrongly comparing against tipologia)
+      if (filters.material.length > 0 && (!part.material || !filters.material.includes(part.material))) {
         return false;
       }
 
