@@ -11,6 +11,7 @@ infra/generate_embeddings.py); the OpenAI SDK is used for embeddings + chat.
 """
 
 import os
+import re
 
 import psycopg2
 import psycopg2.extras
@@ -79,17 +80,41 @@ async def ask(request: Request, body: ChatAskRequest) -> ChatAskResponse:
         logger.error("chat.embed_failed", error=str(e))
         raise HTTPException(status_code=502, detail=f"Error generando embedding: {e}")
 
-    # 2. Vector search via match_blocks() + resolve iso_codes
+    # Candidate iso_codes mentioned in the question (e.g. GLPER.A-PAE0720.0103).
+    # Tokens with >=2 separators; validated against the DB so a permissive
+    # regex cannot inject false context (only real blocks match).
+    code_candidates = list({
+        t.upper()
+        for t in re.findall(r"[A-Za-z][A-Za-z0-9]*(?:[.\-][A-Za-z0-9]+){2,}", body.question)
+    })
+
+    # 2. Direct iso_code hits (deterministic) + vector search, merged.
     try:
         conn = psycopg2.connect(db_url)
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+            direct: list = []
+            if code_candidates:
+                cur.execute(
+                    "SELECT b.id AS block_id, be.content, 1.0::float AS similarity "
+                    "FROM blocks b JOIN block_embeddings be ON be.block_id = b.id "
+                    "WHERE upper(b.iso_code) = ANY(%s)",
+                    (code_candidates,),
+                )
+                direct = cur.fetchall()
+
             cur.execute(
                 "SELECT block_id, content, similarity "
                 "FROM match_blocks(%s::vector, %s)",
                 (qvec, body.top_k),
             )
-            matches = cur.fetchall()
+            vec = cur.fetchall()
+
+            # Merge: exact iso_code hits first, then vector hits not already in.
+            seen = {str(r["block_id"]) for r in direct}
+            matches = direct + [v for v in vec if str(v["block_id"]) not in seen]
+
             iso_by_id: dict = {}
             if matches:
                 ids = [str(m["block_id"]) for m in matches]

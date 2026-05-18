@@ -30,32 +30,48 @@ EMBED_DIMS = 1536
 BATCH_SIZE = 96                          # OpenAI accepts batched inputs
 
 
-def _material(block: dict) -> str:
-    """Material from validation_report classification, falling back to the
-    rhino_metadata 'Material' UserString (flat / nested document / objects)."""
-    vr = block.get("validation_report") or {}
-    cl = (vr.get("metadata") or {}).get("classification") or {}
-    if cl.get("material"):
-        return str(cl["material"])
-    rm = block.get("rhino_metadata") or {}
-    if isinstance(rm, dict):
-        if rm.get("Material"):
-            return str(rm["Material"])
-        doc = rm.get("document")
-        if isinstance(doc, dict) and doc.get("Material"):
-            return str(doc["Material"])
-        objs = rm.get("objects")
-        if isinstance(objs, dict):
-            for v in objs.values():
-                if isinstance(v, dict) and v.get("Material"):
-                    return str(v["Material"])
-    return "desconocido"
+# Curated rhino_metadata UserStrings to embed, ordered with the
+# DISCRIMINATING fields first (material, dimensions, volume, weight,
+# location/agrupación) so near-identical pieces still get distinct vectors.
+# Admin/identical boilerplate (Plano, Arquitecto, Dibujado por, Fecha,
+# Cantidad, Fase de proyecto, Tipo de objeto) is dropped — it is the same
+# across every piece and only dilutes semantic search. Path/ID noise
+# (folders, Guid, CodiArxiu, Prefix) was already excluded. NOTE: the LLM
+# tipologia (validation_report.classification) is intentionally NOT embedded:
+# it guesses "capitel" from volume and is wrong for this domain — the real
+# element type is SF_GEN_NomElement (e.g. "COS" = Costella).
+RM_FIELDS = [
+    ("Material", "Material"),
+    ("SF_GEN_Material", "Material (código)"),
+    ("SF_GEN_NomElement", "Elemento"),
+    ("SF_GEN_NomSubElement", "Subelemento"),
+    ("SF_ARC_PeçaTipus", "Tipo de pieza"),
+    ("SF_GEN_Volum_m3", "Volumen (m³)"),
+    ("SF_GEN_VolumBrut_m3", "Volumen bruto (m³)"),
+    ("SF_GEN_Pes_t", "Peso (t)"),
+    ("SF_GEN_AlçadaBruta_m", "Altura bruta (m)"),
+    ("SF_GEN_AmpladaBruta_m", "Anchura bruta (m)"),
+    ("SF_GEN_ProfunditatBruta_m", "Profundidad bruta (m)"),
+    ("SF_GEN_GrauEstructural", "Grado estructural"),
+    ("Resistencia", "Resistencia"),
+    ("SF_ARC_Agrupacio1", "Agrupación"),
+    ("SF_ARC_Agrupacio1Tipus", "Tipo de agrupación"),
+    ("SF_LOC_Zona", "Zona"),
+    ("SF_LOC_Eix", "Eje"),
+    ("SF_PRO_Tram", "Tramo"),
+    ("SF_ARC_Filada", "Filada"),
+    ("SF_ARC_Numeral", "Numeral"),
+]
+
+_EMPTY_SENTINELS = {"", "unknown", "desconocido", "none", "null", "nan", "n/a", "-"}
 
 
-def _agrupacio(block: dict) -> str:
-    rm = block.get("rhino_metadata") or {}
-    val = rm.get("SF_ARC_Agrupacio1") if isinstance(rm, dict) else None
-    return str(val) if val else "sin agrupación"
+def _clean(v) -> str | None:
+    """Trimmed string, or None if empty / a not-a-value sentinel."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    return None if s.lower() in _EMPTY_SENTINELS else s
 
 
 def _validation_summary(block: dict) -> str:
@@ -66,18 +82,26 @@ def _validation_summary(block: dict) -> str:
     errs = vr.get("errors") or []
     if errs:
         parts = [f"{e.get('category', 'error')}: {e.get('message', '')}" for e in errs[:3]]
-        return f"Rechazada. Motivo(s): " + " | ".join(parts)
+        return "Rechazada. Motivo(s): " + " | ".join(parts)
     return f"Estado de validación: {status}."
 
 
 def build_content(block: dict) -> str:
-    """Compact NL summary that gets embedded. Optimised for questions about
-    typology, material, status/rejections and architectural grouping."""
+    """NL summary that gets embedded, built from the real SF UserStrings in
+    rhino_metadata (authoritative), plus DB status + validation outcome.
+    Excludes the unreliable LLM tipologia and filesystem/ID noise."""
+    rm = block.get("rhino_metadata")
+    if not isinstance(rm, dict):
+        rm = {}
+    codi = _clean(rm.get("Codi")) or block.get("iso_code") or "desconocida"
+    parts = []
+    for key, label in RM_FIELDS:
+        val = _clean(rm.get(key))
+        if val:
+            parts.append(f"{label}: {val}")
+    body = (". ".join(parts) + ". ") if parts else ""
     return (
-        f"Pieza {block.get('iso_code')}. "
-        f"Tipología: {block.get('tipologia') or 'desconocida'}. "
-        f"Material: {_material(block)}. "
-        f"Agrupación arquitectónica: {_agrupacio(block)}. "
+        f"Pieza {codi}. {body}"
         f"Estado: {block.get('status')}. "
         f"{_validation_summary(block)}"
     )
