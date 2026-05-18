@@ -83,6 +83,7 @@ def mock_rhino_model_valid():
     # Mock objects with VALID geometry
     obj1 = MagicMock()
     obj1.Attributes.LayerIndex = 0
+    obj1.Attributes.IsInstanceDefinitionObject = False  # top-level placed object
     obj1.Geometry = MagicMock()
     obj1.Geometry.IsValid = True  # VALID geometry
     
@@ -101,6 +102,7 @@ def mock_rhino_model_valid():
     
     obj2 = MagicMock()
     obj2.Attributes.LayerIndex = 1
+    obj2.Attributes.IsInstanceDefinitionObject = False  # top-level placed object
     obj2.Geometry = MagicMock()
     obj2.Geometry.IsValid = True
     
@@ -176,6 +178,7 @@ def mock_rhino_model_invalid_geometry():
     # INVALID object: null geometry
     obj1 = MagicMock()
     obj1.Attributes.LayerIndex = 0
+    obj1.Attributes.IsInstanceDefinitionObject = False  # top-level placed object
     obj1.Geometry = None  # NULL GEOMETRY (fails validation)
     
     mock_model.Objects = [obj1]

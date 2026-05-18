@@ -24,13 +24,12 @@ class TestValidateFileTaskHappyPath:
         """
         SCENARIO: Complete LangGraph validation for the real Sagrada Família model.
 
-        PRECONDITION: test-model.3dm must contain ONLY block instances
-        (InstanceReference) and no loose geometry — GeometryValidator now
-        rejects any non-instance geometry (see memory-bank/decisions.md).
-        Until the fixture is re-exported clean from Rhino this test is RED by
-        design (the shipped file still has loose Breps).
+        GeometryValidator validates only the DOCUMENT-LEVEL objects (those with
+        Attributes.IsInstanceDefinitionObject == False); the geometry inside the
+        block definitions is skipped. test-model.3dm has exactly 6 top-level
+        InstanceReference objects → it validates. See memory-bank/decisions.md.
 
-        GIVEN: test-model.3dm (only the block instances; nomenclature not checked)
+        GIVEN: test-model.3dm (6 block instances; nomenclature not checked)
         AND: A block record exists in DB with status='uploaded'
         WHEN: validate_file(part_id, s3_key) is called
         THEN: Librarian validates it → status='validated', is_valid=True,

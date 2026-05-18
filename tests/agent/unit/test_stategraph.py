@@ -112,6 +112,7 @@ def mock_supabase_and_rhino3dm():
     # Mock objects with VALID geometry
     obj1 = MagicMock()
     obj1.Attributes.LayerIndex = 0
+    obj1.Attributes.IsInstanceDefinitionObject = False  # top-level placed object
     obj1.Geometry = MagicMock()
     obj1.Geometry.IsValid = True
     

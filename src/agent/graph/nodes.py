@@ -528,7 +528,13 @@ def node_extract_geometry(state: ValidationState) -> Dict[str, Any]:
     import os
     from infra.supabase_client import get_supabase_client
     from src.agent.services.rhino_parser_service import RhinoParserService
-    from constants import STORAGE_BUCKET_RAW_UPLOADS  # Backend constant
+    # STORAGE_BUCKET_RAW_UPLOADS is a backend constant. Bare `constants`
+    # resolves to the agent's constants in the agent-worker (no such symbol);
+    # only `src.backend.constants` resolves there. See memory-bank/decisions.md.
+    try:
+        from constants import STORAGE_BUCKET_RAW_UPLOADS
+    except (ImportError, ModuleNotFoundError):
+        from src.backend.constants import STORAGE_BUCKET_RAW_UPLOADS
     
     try:
         import rhino3dm

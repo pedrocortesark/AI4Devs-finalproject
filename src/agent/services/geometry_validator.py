@@ -1,15 +1,18 @@
 """
 Geometry Validation Service
 
-Validates that a .3dm model is composed EXCLUSIVELY of BLOCK INSTANCES:
-- The model must contain ONLY InstanceReference objects (no loose geometry)
+Validates that a .3dm model's DOCUMENT-LEVEL objects are exclusively
+BLOCK INSTANCES. Note: rhino3dm's model.Objects also lists the geometry
+inside each InstanceDefinition (objects with Attributes
+.IsInstanceDefinitionObject == True); that internal block geometry is
+skipped — only top-level placed objects are checked:
+- Top-level objects must be ONLY InstanceReference (no loose geometry)
 - At least one block instance must exist
 - Each placed instance has valid geometry
 - Each placed instance has a non-degenerate bounding box
 - Each placed instance has non-zero volume
 
-Any loose geometry (Breps, surfaces, reference/joint helpers) makes the file
-invalid — the block IS its placed instances. See memory-bank/decisions.md.
+See memory-bank/decisions.md.
 """
 
 import structlog
@@ -40,11 +43,16 @@ except ImportError:
         GEOMETRY_ERROR_ZERO_VOLUME,
     )
 
-# Import backend schema for validation errors
+# Import backend schema for validation errors.
+# ValidationErrorItem lives in src/backend/schemas.py. The bare `schemas`
+# import resolves in the backend test container; the agent-worker (the real
+# Celery worker / prod) only resolves `src.backend.schemas`. The previous
+# try/except had two identical branches (no working fallback) and crashed the
+# graph in the agent-worker — see memory-bank/decisions.md.
 try:
     from schemas import ValidationErrorItem
 except ModuleNotFoundError:
-    from schemas import ValidationErrorItem
+    from src.backend.schemas import ValidationErrorItem
 
 logger = structlog.get_logger()
 
@@ -105,12 +113,21 @@ class GeometryValidator:
             return errors
 
         # A valid block .3dm must be composed EXCLUSIVELY of BLOCK INSTANCES
-        # (InstanceReference). The real piece geometry lives *inside* the
-        # InstanceDefinitions; any loose geometry in the model (Breps, surfaces,
-        # reference/joint helpers) is NOT allowed. See memory-bank/decisions.md.
+        # (InstanceReference) at the DOCUMENT level.
+        #
+        # IMPORTANT: rhino3dm's model.Objects also contains the geometry that
+        # makes up each InstanceDefinition (Breps on T_Jnt/ref/… layers). That
+        # is the *internal* geometry of the blocks, NOT loose document geometry,
+        # and must NOT be validated nor counted. Such objects carry
+        # Attributes.IsInstanceDefinitionObject == True. We only inspect the
+        # top-level placed objects (IsInstanceDefinitionObject == False).
+        # See memory-bank/decisions.md.
         instances = []
         non_instances = []  # (object_id, geometry_type) of disallowed geometry
         for obj in model.Objects:
+            # Skip block-definition internal geometry (content of the blocks).
+            if getattr(obj.Attributes, "IsInstanceDefinitionObject", False):
+                continue
             if obj.Geometry is None:
                 # No geometry at all is also not a valid block instance.
                 non_instances.append((self._get_object_id(obj), "None"))
@@ -124,6 +141,7 @@ class GeometryValidator:
         logger.info(
             "geometry_validator.validate_geometry.started",
             total_objects=len(model.Objects),
+            top_level_objects=len(instances) + len(non_instances),
             instance_count=len(instances),
             non_instance_count=len(non_instances),
         )
