@@ -2,7 +2,8 @@
  * DetailsPanel Constants
  *
  * UI configuration for the sliding details side-panel.
- * Design system: material-inspired, dark-on-light, enterprise dashboard style.
+ * Design system: shared dark "DS" language (Apple-inspired) — mirrors
+ * src/styles/designTokens.ts so the panel matches the canvas dashboard.
  *
  * @module details/DetailsPanel.constants
  */
@@ -28,23 +29,23 @@ export const TAB_ORDER: TabId[] = ['general', 'geometry', 'metadata', 'raw'];
 // ─── Color Palette ────────────────────────────────────────────────────────────
 
 export const COLORS = {
-  primary:        '#1976d2',
-  primaryLight:   '#e3f2fd',
-  secondary:      '#424242',
-  background:     '#ffffff',
-  surface:        '#f5f5f5',
-  border:         '#e0e0e0',
-  text:           '#212121',
-  textSecondary:  '#757575',
-  textMuted:      '#9e9e9e',
-  error:          '#d32f2f',
-  errorLight:     '#ffebee',
-  warning:        '#ffa726',
-  warningLight:   '#fff3e0',
-  success:        '#388e3c',
-  successLight:   '#e8f5e9',
-  info:           '#1976d2',
-  infoLight:      '#e3f2fd',
+  primary:        '#007AFF',
+  primaryLight:   'rgba(0, 122, 255, 0.12)',
+  secondary:      'rgba(255, 255, 255, 0.92)',
+  background:     '#1C1C1E',
+  surface:        '#2C2C2E',
+  border:         'rgba(255, 255, 255, 0.08)',
+  text:           'rgba(255, 255, 255, 0.92)',
+  textSecondary:  'rgba(255, 255, 255, 0.5)',
+  textMuted:      'rgba(255, 255, 255, 0.3)',
+  error:          '#FF453A',
+  errorLight:     'rgba(255, 69, 58, 0.12)',
+  warning:        '#FF9F0A',
+  warningLight:   'rgba(255, 159, 10, 0.12)',
+  success:        '#34C759',
+  successLight:   'rgba(52, 199, 89, 0.12)',
+  info:           '#007AFF',
+  infoLight:      'rgba(0, 122, 255, 0.12)',
 } as const;
 
 // ─── Status Badge Colors ──────────────────────────────────────────────────────
@@ -56,14 +57,14 @@ export interface StatusStyle {
 }
 
 export const STATUS_BADGE_STYLES: Record<string, StatusStyle> = {
-  validated:        { background: COLORS.successLight, color: COLORS.success,  border: '#a5d6a7' },
-  error_processing: { background: COLORS.errorLight,   color: COLORS.error,    border: '#ef9a9a' },
-  processing:       { background: COLORS.warningLight, color: '#e65100',       border: '#ffcc02' },
-  uploaded:         { background: COLORS.infoLight,    color: COLORS.primary,  border: '#90caf9' },
-  in_fabrication:   { background: '#e8eaf6',           color: '#3949ab',       border: '#9fa8da' },
-  completed:        { background: '#e0f2f1',           color: '#00695c',       border: '#80cbc4' },
-  rejected:         { background: '#fce4ec',           color: '#c62828',       border: '#f48fb1' },
-  archived:         { background: '#f5f5f5',           color: '#616161',       border: '#bdbdbd' },
+  validated:        { background: COLORS.successLight, color: COLORS.success,  border: 'rgba(52, 199, 89, 0.35)' },
+  error_processing: { background: COLORS.errorLight,   color: COLORS.error,    border: 'rgba(255, 69, 58, 0.35)' },
+  processing:       { background: COLORS.warningLight, color: COLORS.warning,  border: 'rgba(255, 159, 10, 0.35)' },
+  uploaded:         { background: COLORS.infoLight,    color: COLORS.primary,  border: 'rgba(0, 122, 255, 0.35)' },
+  in_fabrication:   { background: COLORS.warningLight, color: COLORS.warning,  border: 'rgba(255, 159, 10, 0.35)' },
+  completed:        { background: COLORS.successLight, color: COLORS.success,  border: 'rgba(52, 199, 89, 0.35)' },
+  rejected:         { background: COLORS.errorLight,   color: COLORS.error,    border: 'rgba(255, 69, 58, 0.35)' },
+  archived:         { background: 'rgba(255, 255, 255, 0.06)', color: COLORS.textSecondary, border: 'rgba(255, 255, 255, 0.12)' },
 };
 
 export const DEFAULT_STATUS_STYLE: StatusStyle = {
