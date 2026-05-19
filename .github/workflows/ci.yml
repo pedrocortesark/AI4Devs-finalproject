@@ -93,13 +93,20 @@ jobs:
           timeout 45 bash -c 'until docker compose logs agent-worker | grep -q "celery@.*ready"; do sleep 2; done'
           echo "✅ Celery worker is ready"
 
+      # TEMP (demo freeze): these run *integration* tests against the REAL
+      # production Supabase (secrets.*), which creates SF-TEST blocks and
+      # triggers geometry cleaners that wipe the live demo inventory on every
+      # push. Disabled for the Friday 2026-05-22 demo window. Re-enable after
+      # the demo (ideally pointed at a dedicated test Supabase project).
       - name: Run backend integration tests
+        if: ${{ false }}
         run: make test
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
 
       - name: Run agent tests (T-025-AGENT)
+        if: ${{ false }}
         run: make test-agent
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
