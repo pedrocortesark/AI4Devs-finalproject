@@ -10,6 +10,7 @@
  */
 
 import { ERROR_MESSAGES, MODAL_STYLES } from './PartDetailModal.constants';
+import { DS } from '@/styles/designTokens';
 import type { PartDetail } from '@/types/parts';
 import { ModelLoader } from '@/components/ModelLoader';
 import { PartMetadataPanel } from './PartMetadataPanel';
@@ -73,13 +74,14 @@ export function renderErrorState(error: Error, onRetry?: () => void): JSX.Elemen
           style={{
             marginTop: '1rem',
             padding: '0.5rem 1rem',
-            backgroundColor: '#3B82F6',
-            color: 'white',
+            backgroundColor: DS.blue,
+            color: '#fff',
             border: 'none',
-            borderRadius: '6px',
+            borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '1rem',
+            fontSize: '0.9375rem',
             fontWeight: 500,
+            fontFamily: DS.font,
           }}
         >
           Reintentar
@@ -113,29 +115,119 @@ export function renderMetadataTab(partData: PartDetail): JSX.Element {
  */
 export function renderValidationTab(partData: PartDetail): JSX.Element {
   if (partData.validation_report) {
-    const hasErrors = !partData.validation_report.is_valid && partData.validation_report.errors;
-    
+    const report = partData.validation_report;
+    const isValid = report.is_valid === true;
+    const hasErrors = !isValid && Array.isArray(report.errors) && report.errors.length > 0;
+    const tone = isValid ? DS.green : DS.red;
+
     return (
-      <div>
-        <h3 style={{ marginTop: 0 }}>Reporte de Validación</h3>
+      <div style={{ fontFamily: DS.font, color: DS.textPrimary }}>
+        {/* Status card */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '16px',
+            borderRadius: '12px',
+            border: `1px solid ${DS.borderSubtle}`,
+            background: DS.bgSurface,
+            marginBottom: '16px',
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '9999px',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: tone,
+              background: isValid ? 'rgba(52,199,89,0.12)' : 'rgba(255,69,58,0.12)',
+            }}
+          >
+            {isValid ? '✓' : '✕'} {isValid ? 'Validación correcta' : 'Validación fallida'}
+          </span>
+          <span style={{ fontSize: '0.8125rem', color: DS.textSecondary }}>
+            {isValid
+              ? 'La pieza cumple todas las reglas de validación.'
+              : `${hasErrors ? report.errors.length : 0} ${
+                  hasErrors && report.errors.length === 1 ? 'error detectado' : 'errores detectados'
+                }`}
+          </span>
+        </div>
+
+        {/* Error list */}
         {hasErrors && (
-          <>
-            <p style={{ color: '#ef4444', fontWeight: 'bold' }}>
-              Errores de validación detectados
-            </p>
-            <ul data-testid="validation-errors-list" style={{ listStyleType: 'disc', paddingLeft: '1.5rem' }}>
-              {partData.validation_report.errors.map((error, idx) => (
-                <li key={idx} style={{ marginBottom: '0.5rem' }}>
-                  <strong>{error.category}</strong> ({error.target}): {error.message}
-                </li>
-              ))}
-            </ul>
-          </>
+          <ul
+            data-testid="validation-errors-list"
+            style={{ listStyle: 'none', margin: '0 0 16px', padding: 0 }}
+          >
+            {report.errors.map((error, idx) => (
+              <li
+                key={idx}
+                style={{
+                  padding: '12px 14px',
+                  marginBottom: '8px',
+                  borderRadius: '10px',
+                  border: `1px solid ${DS.borderSubtle}`,
+                  background: DS.bgSurface,
+                  borderLeft: `3px solid ${DS.red}`,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'baseline',
+                    marginBottom: '4px',
+                  }}
+                >
+                  <strong style={{ fontSize: '0.8125rem', color: DS.textPrimary }}>
+                    {error.category}
+                  </strong>
+                  <span style={{ fontSize: '0.75rem', color: DS.textTertiary }}>
+                    {error.target}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.875rem', color: DS.textSecondary }}>
+                  {error.message}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
-        <details style={{ marginTop: '1rem' }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>Ver JSON completo</summary>
-          <pre style={{ fontSize: '0.875rem', overflowX: 'auto', marginTop: '0.5rem' }}>
-            {JSON.stringify(partData.validation_report, null, 2)}
+
+        {/* Raw JSON (collapsed) */}
+        <details style={{ marginTop: '4px' }}>
+          <summary
+            style={{
+              cursor: 'pointer',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              color: DS.textSecondary,
+              userSelect: 'none',
+            }}
+          >
+            Ver JSON técnico
+          </summary>
+          <pre
+            style={{
+              fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace",
+              fontSize: '0.75rem',
+              color: DS.textSecondary,
+              background: DS.bgElevated,
+              border: `1px solid ${DS.borderSubtle}`,
+              borderRadius: '8px',
+              padding: '12px',
+              overflowX: 'auto',
+              marginTop: '8px',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {JSON.stringify(report, null, 2)}
           </pre>
         </details>
       </div>
@@ -143,7 +235,20 @@ export function renderValidationTab(partData: PartDetail): JSX.Element {
   }
 
   return (
-    <div style={{ textAlign: 'center', padding: '3rem', color: '#6B7280' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        padding: '3rem',
+        color: DS.textTertiary,
+        fontFamily: DS.font,
+        fontSize: '0.9375rem',
+      }}
+    >
+      <div style={{ fontSize: '2rem', marginBottom: '12px', opacity: 0.5 }}>📋</div>
       Sin reporte de validación disponible
     </div>
   );

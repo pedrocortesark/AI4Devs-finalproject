@@ -6,6 +6,7 @@
  */
 
 import type { TabId } from '@/types/modal';
+import { DS } from '@/styles/designTokens';
 
 /**
  * Modal styling constants (inline styles for Portal rendering)
@@ -21,21 +22,25 @@ export const MODAL_STYLES = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: DS.overlay,
+    backdropFilter: 'blur(2px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 9999, // T-1007: High z-index to appear above Dashboard (z-100)
   },
   container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: '12px',
+    backgroundColor: DS.bgCard,
+    color: DS.textPrimary,
+    fontFamily: DS.font,
+    borderRadius: '14px',
+    border: `1px solid ${DS.borderMid}`,
     padding: '0',
     width: '90vw',
     maxWidth: '1200px',
     height: '85vh',
     maxHeight: '900px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+    boxShadow: '0 24px 64px rgba(0, 0, 0, 0.6)',
     position: 'relative' as const,
     display: 'flex',
     flexDirection: 'column' as const,
@@ -46,7 +51,7 @@ export const MODAL_STYLES = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '20px 24px',
-    borderBottom: '1px solid #E5E7EB',
+    borderBottom: `1px solid ${DS.borderSubtle}`,
   },
   headerLeft: {
     display: 'flex',
@@ -55,13 +60,14 @@ export const MODAL_STYLES = {
   },
   headerTitle: {
     margin: 0,
-    fontSize: '1.5rem',
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: '1.4rem',
+    fontWeight: 600,
+    color: DS.textPrimary,
+    letterSpacing: '-0.01em',
   },
   headerSubtitle: {
-    fontSize: '0.875rem',
-    color: '#6B7280',
+    fontSize: '0.8125rem',
+    color: DS.textSecondary,
   },
   headerRight: {
     display: 'flex',
@@ -69,14 +75,14 @@ export const MODAL_STYLES = {
     gap: '12px',
   },
   navButton: {
-    background: '#F3F4F6',
-    border: 'none',
-    borderRadius: '6px',
+    background: DS.bgSurface,
+    border: `1px solid ${DS.borderSubtle}`,
+    borderRadius: '8px',
     padding: '8px 12px',
     cursor: 'pointer',
     fontSize: '1.125rem',
-    color: '#374151',
-    transition: 'background-color 0.2s',
+    color: DS.textSecondary,
+    transition: 'background-color 0.2s, color 0.2s',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -84,25 +90,25 @@ export const MODAL_STYLES = {
     height: '40px',
   },
   navButtonDisabled: {
-    background: '#F9FAFB',
-    color: '#D1D5DB',
+    background: 'rgba(255,255,255,0.04)',
+    color: DS.textTertiary,
     cursor: 'not-allowed',
   },
   closeButton: {
     background: 'none',
     border: 'none',
-    fontSize: '1.75rem',
+    fontSize: '1.6rem',
     cursor: 'pointer',
     padding: '4px 8px',
-    color: '#6B7280',
+    color: DS.textSecondary,
     lineHeight: 1,
   },
   tabBar: {
     display: 'flex',
-    borderBottom: '1px solid #E5E7EB',
+    borderBottom: `1px solid ${DS.borderSubtle}`,
     paddingLeft: '24px',
     paddingRight: '24px',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: DS.bgCard,
   },
   tabButton: {
     background: 'none',
@@ -110,26 +116,27 @@ export const MODAL_STYLES = {
     padding: '12px 20px',
     cursor: 'pointer',
     fontSize: '0.9375rem',
-    fontWeight: '500',
-    color: '#6B7280',
+    fontWeight: 500,
+    color: DS.textSecondary,
     borderBottom: '2px solid transparent',
     transition: 'all 0.2s',
   },
   tabButtonActive: {
-    color: '#2563EB',
-    borderBottomColor: '#2563EB',
+    color: DS.textPrimary,
+    borderBottomColor: DS.blue,
   },
   tabContent: {
     flex: 1,
     overflow: 'auto',
     padding: '24px',
+    color: DS.textPrimary,
   },
   loadingSpinner: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: '#6B7280',
+    color: DS.textSecondary,
     fontSize: '1rem',
   },
   errorContainer: {
@@ -143,18 +150,18 @@ export const MODAL_STYLES = {
   },
   errorIcon: {
     fontSize: '3rem',
-    color: '#EF4444',
+    color: DS.red,
     marginBottom: '16px',
   },
   errorTitle: {
     fontSize: '1.25rem',
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: 600,
+    color: DS.textPrimary,
     marginBottom: '8px',
   },
   errorMessage: {
     fontSize: '0.9375rem',
-    color: '#6B7280',
+    color: DS.textSecondary,
   },
 } as const;
 

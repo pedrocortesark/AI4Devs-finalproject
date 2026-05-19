@@ -6,6 +6,7 @@
  */
 
 import type { SectionConfig, SectionId } from './PartMetadataPanel.types';
+import { DS, STATUS_TONE } from '@/styles/designTokens';
 
 /**
  * Default values for component props
@@ -86,37 +87,41 @@ export const SECTIONS_CONFIG: SectionConfig[] = [
  */
 export const SECTION_STYLES = {
   container: {
-    padding: '1.5rem',
+    padding: '0',
     maxWidth: '100%',
     overflowY: 'auto' as const,
+    fontFamily: DS.font,
+    color: DS.textPrimary,
   },
   section: {
-    marginBottom: '1.5rem',
-    paddingBottom: '1rem',
-    borderBottom: '1px solid #E5E7EB',
+    marginBottom: '12px',
+    border: `1px solid ${DS.borderSubtle}`,
+    borderRadius: '12px',
+    background: DS.bgSurface,
+    overflow: 'hidden',
   },
   sectionLast: {
-    borderBottom: 'none',
+    marginBottom: '0',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0.75rem 0',
+    padding: '14px 16px',
     cursor: 'pointer',
     userSelect: 'none' as const,
   },
   headerTitle: {
-    fontSize: '1rem',
+    fontSize: '0.9375rem',
     fontWeight: '600' as const,
-    color: '#111827',
+    color: DS.textPrimary,
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
   },
   expandIcon: {
-    fontSize: '0.75rem',
-    color: '#9CA3AF',
+    fontSize: '0.6875rem',
+    color: DS.textTertiary,
     transition: 'transform 0.2s',
   },
   expandIconExpanded: {
@@ -125,35 +130,39 @@ export const SECTION_STYLES = {
   content: {
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '0.75rem',
-    marginTop: '0.75rem',
+    gap: '2px',
+    padding: '0 16px 16px',
+    borderTop: `1px solid ${DS.borderSubtle}`,
+    paddingTop: '12px',
   },
   fieldRow: {
     display: 'grid',
-    gridTemplateColumns: '140px 1fr',
+    gridTemplateColumns: '150px 1fr',
     gap: '1rem',
     alignItems: 'baseline',
+    padding: '8px 0',
+    borderBottom: `1px solid ${DS.borderSubtle}`,
   },
   fieldLabel: {
-    fontSize: '0.875rem',
+    fontSize: '0.8125rem',
     fontWeight: '500' as const,
-    color: '#6B7280',
+    color: DS.textSecondary,
   },
   fieldValue: {
     fontSize: '0.875rem',
-    color: '#111827',
+    color: DS.textPrimary,
     wordBreak: 'break-word' as const,
   },
   fieldValueMono: {
-    fontFamily: "'Monaco', 'Courier New', monospace",
+    fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace",
     fontSize: '0.75rem',
-    color: '#374151',
-    backgroundColor: '#F3F4F6',
+    color: DS.textPrimary,
+    backgroundColor: DS.bgElevated,
     padding: '0.25rem 0.5rem',
-    borderRadius: '4px',
+    borderRadius: '6px',
   },
   fieldValueEmpty: {
-    color: '#9CA3AF',
+    color: DS.textTertiary,
     fontStyle: 'italic' as const,
   },
   badge: {
@@ -164,39 +173,42 @@ export const SECTION_STYLES = {
     textTransform: 'uppercase' as const,
   },
   link: {
-    color: '#2563EB',
-    textDecoration: 'underline',
+    color: DS.blue,
+    textDecoration: 'none',
     wordBreak: 'break-all' as const,
   },
   coordinates: {
-    fontFamily: "'Monaco', 'Courier New', monospace",
+    fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace",
     fontSize: '0.75rem',
-    backgroundColor: '#F9FAFB',
-    padding: '0.5rem',
-    borderRadius: '4px',
+    color: DS.textPrimary,
+    backgroundColor: DS.bgElevated,
+    padding: '0.5rem 0.75rem',
+    borderRadius: '6px',
+    border: `1px solid ${DS.borderSubtle}`,
   },
   json: {
-    fontFamily: "'Monaco', 'Courier New', monospace",
+    fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace",
     fontSize: '0.75rem',
-    backgroundColor: '#F9FAFB',
+    color: DS.textSecondary,
+    backgroundColor: DS.bgElevated,
     padding: '0.75rem',
-    borderRadius: '4px',
+    borderRadius: '6px',
+    border: `1px solid ${DS.borderSubtle}`,
     overflowX: 'auto' as const,
     maxHeight: '300px',
     overflowY: 'auto' as const,
+    whiteSpace: 'pre-wrap' as const,
   },
 } as const;
 
 /**
- * Status badge color mapping
+ * Status badge color mapping — derived from the shared DS STATUS_TONE
+ * so metadata pills match the canvas dashboard exactly.
  */
-export const STATUS_COLORS: Record<string, { backgroundColor: string; color: string }> = {
-  validated: { backgroundColor: '#D1FAE5', color: '#065F46' },
-  uploaded: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
-  processing: { backgroundColor: '#FEF3C7', color: '#92400E' },
-  rejected: { backgroundColor: '#FEE2E2', color: '#991B1B' },
-  error_processing: { backgroundColor: '#FEE2E2', color: '#991B1B' },
-  in_fabrication: { backgroundColor: '#E0E7FF', color: '#3730A3' },
-  completed: { backgroundColor: '#D1FAE5', color: '#065F46' },
-  archived: { backgroundColor: '#F3F4F6', color: '#6B7280' },
-} as const;
+export const STATUS_COLORS: Record<string, { backgroundColor: string; color: string }> =
+  Object.fromEntries(
+    Object.entries(STATUS_TONE).map(([key, tone]) => [
+      key,
+      { backgroundColor: tone.bg, color: tone.color },
+    ]),
+  );
