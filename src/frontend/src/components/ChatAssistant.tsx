@@ -45,6 +45,23 @@ export function ChatAssistant() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns, loading]);
 
+  useEffect(() => {
+    const handleOpen = () => setOpen(true);
+    window.addEventListener('archivist:open', handleOpen as EventListener);
+    return () => window.removeEventListener('archivist:open', handleOpen as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open]);
+
   async function send() {
     const question = q.trim();
     if (!question || loading) return;
@@ -80,34 +97,41 @@ export function ChatAssistant() {
     selectPart(source.block_id);
   }
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        aria-label="Abrir El Archivista"
-        style={{
-          position: 'fixed', right: 20, bottom: 20, zIndex: 1000,
-          background: ACCENT, color: '#fff', border: 'none',
-          borderRadius: 24, padding: '12px 18px', fontSize: 14, fontWeight: 600,
-          cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
-        }}
-      >
-        💬 El Archivista
-      </button>
-    );
-  }
+  if (!open) return null;
 
   return (
     <div
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          setOpen(false);
+        }
+      }}
       style={{
-        position: 'fixed', right: 20, bottom: 20, zIndex: 1000,
-        width: 380, maxWidth: 'calc(100vw - 40px)', height: 520,
-        maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column',
-        background: BG, color: TEXT, borderRadius: 14,
-        border: `1px solid ${SURFACE}`, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
       }}
     >
+      <div
+        style={{
+          position: 'absolute',
+          right: 20,
+          bottom: 74,
+          width: 380,
+          maxWidth: 'calc(100vw - 40px)',
+          height: 520,
+          maxHeight: 'calc(100vh - 120px)',
+          display: 'flex',
+          flexDirection: 'column',
+          background: BG,
+          color: TEXT,
+          borderRadius: 14,
+          border: `1px solid ${SURFACE}`,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      >
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 14px', borderBottom: `1px solid ${SURFACE}`,
@@ -204,6 +228,7 @@ export function ChatAssistant() {
         >
           Enviar
         </button>
+      </div>
       </div>
     </div>
   );

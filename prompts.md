@@ -16961,3 +16961,45 @@ Diagnóstico completo del problema: (1) El botón decía "Layer Rhino" → renom
 Eliminar el realce visual de selección en el visor lateral de detalle para mostrar únicamente el color real proveniente del MTL (sin emissive ni tintado de selección).
 
 ---
+
+## 271 - Botón del Archivista en Barra Inferior
+**Fecha:** 2026-05-21 00:44
+
+**Prompt Original:**
+> Quiero incorporar el boton del archivista dentro de la barra inferior. Y a clickar en el, que se abra un panel
+
+**Resumen de la Respuesta/Acción:**
+Mover/duplicar el acceso de El Archivista al footer persistente y abrir el panel de chat desde ese botón, manteniendo la experiencia del dashboard limpia.
+
+---
+
+## 272 - Panel del Archivista sobre Barra y Cierre UX
+**Fecha:** 2026-05-21 00:52
+
+**Prompt Original:**
+> Quiero que el panel se abra sobre la barra inferior, y que se cierre al clickar fuera o pulsar ESC
+
+**Resumen de la Respuesta/Acción:**
+Ajustar el panel del Archivista para abrirse sobre la barra inferior y añadir cierre por clic fuera del panel y por tecla ESC.
+
+---
+
+## 273 - Reubicación UI: Chat, Gizmo y Switcher
+**Fecha:** 2026-05-21 01:00
+
+**Prompt Original:**
+> No, en el centro no queda bien porque la ventana de chat tapa el propio modelo. Creo que es mejor que aparezca a un lado del dock (a la derecha). El gizmo que te permite rotar la vista debe estar en esquina sup dcha, el switcher entre material y textura en la esquina sup izda
+
+**Resumen de la Respuesta/Acción:**
+Reubicar el panel del Archivista al lateral derecho sobre el dock inferior, mover el gizmo a esquina superior derecha y mover el switcher Material/Textura a esquina superior izquierda para despejar el centro del visor.
+
+---
+
+## [242] - 2026-05-21 09:53 - Commit excluyendo docs presentación
+
+**Prompt Original:**
+
+Perfecto, commitea todo menos los docus de la presentacion
+
+**Resumen:**
+Commit de cambios excluyendo la carpeta de documentación de presentación.

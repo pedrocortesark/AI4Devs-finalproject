@@ -139,13 +139,13 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
         {/* Loading Overlay — only shown on initial load, not on background polls */}
         {isLoading && parts.length === 0 && <LoadingOverlay message={MESSAGES.LOADING} />}
         
-        {/* Color mode toggle — top-right pill */}
+        {/* Color mode toggle — top-left pill */}
         {!isEmpty && (
           <div
             style={{
               position: 'absolute',
               top: '16px',
-              right: '16px',
+              left: '16px',
               display: 'flex',
               background: 'rgba(0,0,0,0.65)',
               borderRadius: '20px',

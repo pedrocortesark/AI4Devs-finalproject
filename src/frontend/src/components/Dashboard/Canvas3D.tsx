@@ -75,7 +75,7 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
       data-directional-intensity={String(LIGHTING_CONFIG.DIRECTIONAL_INTENSITY)}
       data-directional-shadows="true"
       data-has-gizmo="true"
-      data-gizmo-alignment="bottom-right"
+      data-gizmo-alignment="top-right"
       data-has-stats={showStats ? 'true' : undefined}
       data-controls-max-polar-angle={String(Math.PI / 2)}
       data-controls-min-distance={String(CONTROLS_CONFIG.MIN_DISTANCE)}
@@ -144,8 +144,8 @@ const Canvas3D: React.FC<Canvas3DProps> = ({
           maxPolarAngle={CONTROLS_CONFIG.MAX_POLAR_ANGLE}
         />
 
-        {/* GizmoHelper (bottom-right) */}
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+        {/* GizmoHelper (top-right) */}
+        <GizmoHelper alignment="top-right" margin={[80, 80]}>
           <GizmoViewcube />
         </GizmoHelper>
 

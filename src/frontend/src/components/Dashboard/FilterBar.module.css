@@ -215,6 +215,29 @@
   color: #bfdbfe;
 }
 
+.archivistButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 28px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 14px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  flex-shrink: 0;
+}
+
+.archivistButton:hover {
+  background: rgba(245, 158, 11, 0.3);
+  border-color: rgba(245, 158, 11, 0.75);
+  color: #fde68a;
+}
+
 /* ─── Dropdown panel ─────────────────────────────────────────────────────────── */
 
 .dropdownAnchor {

@@ -113,6 +113,10 @@ function FilterDropdown({ label, icon, options, value, onChange }: FilterDropdow
 export function FilterBar({ selectedId, showDetailsPanel, onShowDetails }: FilterBarProps) {
   const { parts, filters, setFilters, clearFilters, getFilteredParts } = usePartsStore();
 
+  const openArchivistPanel = () => {
+    window.dispatchEvent(new CustomEvent('archivist:open'));
+  };
+
   // Derive filter options dynamically from loaded parts (unique non-null values, sorted)
   const agrupacioOptions = useMemo(() => {
     const values = [...new Set(parts.map((p) => p.agrupacio).filter((v): v is string => v !== null))].sort();
@@ -170,6 +174,15 @@ export function FilterBar({ selectedId, showDetailsPanel, onShowDetails }: Filte
       <a href="/upload" className={styles.uploadButton} title="Subir nuevo archivo .3dm">
         + Subir
       </a>
+
+      {/* ── Archivist button ───────────────────── */}
+      <button
+        className={styles.archivistButton}
+        onClick={openArchivistPanel}
+        title="Abrir El Archivista"
+      >
+        💬 Archivista
+      </button>
 
       {/* ── Selection info (only when part selected and panel not open) ─────── */}
       {selectedId && !showDetailsPanel && (

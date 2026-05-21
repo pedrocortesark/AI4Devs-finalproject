@@ -94,12 +94,12 @@ describe('Canvas3D Component', () => {
   });
 
   describe('Happy Path - Scene Helpers', () => {
-    it('should render GizmoHelper in bottom-right', () => {
+    it('should render GizmoHelper in top-right', () => {
       render(<Canvas3D />);
       
       const canvas = screen.getByTestId('canvas');
       expect(canvas).toHaveAttribute('data-has-gizmo', 'true');
-      expect(canvas).toHaveAttribute('data-gizmo-alignment', 'bottom-right');
+      expect(canvas).toHaveAttribute('data-gizmo-alignment', 'top-right');
     });
 
     it('should render Stats when showStats is true', () => {

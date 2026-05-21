@@ -32,6 +32,8 @@ const createMockPart = (id: string = '123') => ({
   iso_code: `TEST-${id}`,
   status: 'validated' as const,
   tipologia: 'capitel' as const,
+  agrupacio: null,
+  material: null,
   low_poly_url: 'https://example.com/part.glb',
   bbox: { min: [0, 0, 0], max: [1, 1, 1] },
   workshop_id: null,
@@ -46,7 +48,7 @@ describe('Dashboard3D Component', () => {
         parts: [createMockPart()],
         isLoading: false,
         error: null,
-        filters: { status: [], tipologia: [], workshop_id: null },
+        filters: { agrupacio: [], material: [] },
         selectedId: null,
         setParts: vi.fn(),
         setLoading: vi.fn(),
@@ -109,7 +111,7 @@ describe('Dashboard3D Component', () => {
       expect(canvas).toHaveAttribute('data-has-lights', 'true');
     });
 
-    it('should render GizmoViewcube in bottom-right corner', () => {
+    it('should render GizmoViewcube in top-right corner', () => {
       render(<Dashboard3D />);
       
       const canvas = screen.getByTestId('canvas');
@@ -125,7 +127,7 @@ describe('Dashboard3D Component', () => {
           parts: [],
           isLoading: false,
           error: null,
-          filters: { status: [], tipologia: [], workshop_id: null },
+          filters: { agrupacio: [], material: [] },
           selectedId: null,
           setParts: vi.fn(),
           setLoading: vi.fn(),
@@ -150,7 +152,7 @@ describe('Dashboard3D Component', () => {
           parts: [createMockPart()],
           isLoading: false,
           error: null,
-          filters: { status: [], tipologia: [], workshop_id: null },
+          filters: { agrupacio: [], material: [] },
           selectedId: null,
           setParts: vi.fn(),
           setLoading: vi.fn(),
@@ -177,7 +179,7 @@ describe('Dashboard3D Component', () => {
           parts: [],
           isLoading: true,
           error: null,
-          filters: { status: [], tipologia: [], workshop_id: null },
+          filters: { agrupacio: [], material: [] },
           selectedId: null,
           setParts: vi.fn(),
           setLoading: vi.fn(),
@@ -210,7 +212,7 @@ describe('Dashboard3D Component', () => {
           parts: [createMockPart('1'), createMockPart('2')],
           isLoading: false,
           error: null,
-          filters: { status: [], tipologia: [], workshop_id: null },
+          filters: { agrupacio: [], material: [] },
           selectedId: null,
           setParts: vi.fn(),
           setLoading: vi.fn(),
