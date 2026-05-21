@@ -367,13 +367,20 @@ export function DetailsPanel({ partId, isOpen, onClose }: DetailsPanelProps) {
   // Fetch part detail (metadata, validation report, etc.)
   const { partData, loading, error, retry } = usePartDetail(partId ?? '', isOpen && !!partId);
 
-  // Get the OBJ URL directly from the parts store — the list endpoint returns OBJ URLs
-  // which are guaranteed to work with OBJLoader (PartDetail.low_poly_url may be GLB).
-  const storeUrl = usePartsStore(
-    (state) => state.parts.find((p) => p.id === partId)?.low_poly_url ?? null
+  const selectedPart = usePartsStore(
+    (state) => state.parts.find((p) => p.id === partId) ?? null
   );
-  // Viewer uses the store OBJ URL; falls back to partData URL if part not in store yet
-  const viewerUrl = storeUrl ?? partData?.low_poly_url ?? null;
+
+  // Use high-poly + MTL when available because low-poly decimation loses material groups.
+  const viewerUrl =
+    selectedPart?.high_poly_url
+    ?? selectedPart?.mid_poly_url
+    ?? selectedPart?.low_poly_url
+    ?? partData?.high_poly_url
+    ?? partData?.mid_poly_url
+    ?? partData?.low_poly_url
+    ?? null;
+  const viewerMtlUrl = selectedPart?.mtl_url ?? partData?.mtl_url ?? null;
 
   // Reset to first tab when part changes
   useEffect(() => {
@@ -423,7 +430,9 @@ export function DetailsPanel({ partId, isOpen, onClose }: DetailsPanelProps) {
           {/* 3D Viewer — uses OBJ URL from store (list endpoint) */}
           <div className={styles.viewer3d}>
             <PartViewer3D
+              key={`${partId ?? 'empty'}-${viewerUrl ?? 'no-url'}-${viewerMtlUrl ?? 'no-mtl'}`}
               url={viewerUrl}
+              mtlUrl={viewerMtlUrl}
               materialType={partData?.material_type}
             />
           </div>

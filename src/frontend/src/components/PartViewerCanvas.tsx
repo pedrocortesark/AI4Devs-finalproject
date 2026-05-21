@@ -183,7 +183,7 @@ export const PartViewerCanvas: React.FC<PartViewerCanvasProps> = ({
           environment="city" // HDRI environment map (realistic reflections)
           intensity={0.5}
           shadows={shadows ? 'contact' : false} // Soft contact shadows
-          adjustCamera={false} // Don't auto-adjust camera (we control it)
+          adjustCamera={1.25} // Auto-fit loaded model for centered, consistent framing
         >
           <Suspense fallback={<LoadingFallback message={loadingMessage} />}>
             {children}

@@ -37,6 +37,7 @@ PRESIGNED_URL_EXPIRATION_SECONDS = 300  # 5 minutes
 # ===== Celery Task Names =====
 TASK_VALIDATE_FILE = "agent.tasks.validate_file"
 TASK_REGISTER_3DM_BLOCKS = "agent.tasks.register_3dm_blocks"
+TASK_EMBED_BLOCK = "agent.tasks.embed_block"
 
 # ===== Block Defaults =====
 BLOCK_TIPOLOGIA_PENDING = "pending"
@@ -63,7 +64,7 @@ EVENT_TYPE_FALLBACK_ACTIVATED = "FALLBACK_ACTIVATED"
 # ===== Element API Query Fields (T-1504-BACK + US-015 LOD) =====
 ELEMENTS_LIST_SELECT_FIELDS = "id, iso_code, status, high_poly_url, mid_poly_url, low_poly_url, mtl_url, bbox, rhino_metadata"
 ELEMENT_DETAIL_SELECT_FIELDS = ("id, iso_code, status, created_at, updated_at, "
-                                 "high_poly_url, mid_poly_url, low_poly_url, bbox, validation_report, rhino_metadata")
+                                 "high_poly_url, mid_poly_url, low_poly_url, mtl_url, bbox, validation_report, rhino_metadata")
 
 # ===== Validation Error Messages =====
 ERROR_MSG_INVALID_STATUS = "Invalid status value. Must be one of: {valid_values}"

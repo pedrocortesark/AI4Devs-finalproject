@@ -13,6 +13,13 @@ import '@testing-library/jest-dom';
 // Mock Three.js components to avoid WebGL dependency in tests
 vi.mock('@react-three/fiber', () => ({
   useFrame: vi.fn(),
+  useLoader: vi.fn(() => ({
+    isObject3D: true,
+    clone: () => ({
+      traverse: vi.fn(),
+      isObject3D: true,
+    }),
+  })),
 }));
 
 vi.mock('@react-three/drei', () => ({

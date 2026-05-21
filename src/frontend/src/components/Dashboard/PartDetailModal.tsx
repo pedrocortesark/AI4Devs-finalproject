@@ -62,6 +62,7 @@ export const PartDetailModal: React.FC<PartDetailModalProps> = ({
 }) => {
   // Local state for current part ID (enables internal navigation)
   const [currentPartId, setCurrentPartId] = useState<string>(partId);
+  const [viewerResetKey, setViewerResetKey] = useState(0);
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const closeCalledRef = useRef(false);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -79,6 +80,7 @@ export const PartDetailModal: React.FC<PartDetailModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setCurrentPartId(partId);
+      setViewerResetKey((prev) => prev + 1);
     }
   }, [isOpen, partId]);
 
@@ -112,6 +114,7 @@ export const PartDetailModal: React.FC<PartDetailModalProps> = ({
    */
   const handleNavigate = (targetPartId: string) => {
     setCurrentPartId(targetPartId);
+    setViewerResetKey((prev) => prev + 1);
   };
 
   /**
@@ -297,7 +300,7 @@ export const PartDetailModal: React.FC<PartDetailModalProps> = ({
           {/* Success State - Render tab content */}
           {!loading && !error && partData && (
             <>
-              {activeTab === 'viewer' && renderViewerTab(currentPartId)}
+              {activeTab === 'viewer' && renderViewerTab(currentPartId, viewerResetKey)}
               {activeTab === 'metadata' && renderMetadataTab(partData)}
               {activeTab === 'validation' && renderValidationTab(partData)}
             </>

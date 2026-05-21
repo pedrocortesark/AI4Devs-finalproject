@@ -263,11 +263,11 @@ export function renderValidationTab(partData: PartDetail): JSX.Element {
  * @example
  * {activeTab === 'viewer' && renderViewerTab(currentPartId)}
  */
-export function renderViewerTab(partId: string): JSX.Element {
+export function renderViewerTab(partId: string, resetKey = 0): JSX.Element {
   return (
-    <ViewerErrorBoundary>
-      <PartViewerCanvas>
-        <ModelLoader partId={partId} />
+    <ViewerErrorBoundary key={`${partId}-${resetKey}`}>
+      <PartViewerCanvas key={`${partId}-${resetKey}`}>
+        <ModelLoader key={`${partId}-${resetKey}`} partId={partId} />
       </PartViewerCanvas>
     </ViewerErrorBoundary>
   );

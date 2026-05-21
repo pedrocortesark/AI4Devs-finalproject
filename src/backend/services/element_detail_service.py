@@ -144,6 +144,7 @@ class ElementDetailService:
             'high_poly_url': element.get('high_poly_url'),
             'mid_poly_url': element.get('mid_poly_url'),
             'low_poly_url': element.get('low_poly_url'),
+            'mtl_url': element.get('mtl_url'),
             'bbox': element.get('bbox'),
             'validation_report': element.get('validation_report'),
             'rhino_metadata': element.get('rhino_metadata'),

@@ -114,6 +114,9 @@ export interface PartDetail {
   
   /** Presigned CDN URL for low-poly OBJ file (~500 tris), null if not generated yet */
   low_poly_url: string | null;
+
+  /** Companion MTL URL with per-material-group colors from Rhino layers */
+  mtl_url?: string | null;
   
   /** 3D bounding box for camera positioning */
   bbox: BoundingBox | null;

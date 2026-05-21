@@ -2,8 +2,8 @@
  * PartViewer3D Component
  *
  * 3D viewer for a single architectural piece inside the DetailsPanel.
- * Loads OBJ geometry (same pipeline as ElementMesh) and applies a solid
- * material color from the MATERIAL_COLORS dictionary.
+ * Loads OBJ geometry and applies Rhino layer colors from MTL when available,
+ * falling back to a solid material color from the MATERIAL_COLORS dictionary.
  *
  * Key design decisions:
  * - Uses OBJLoader (not useGLTF/GLB) — consistent with the main scene pipeline
@@ -27,6 +27,8 @@ import { MATERIAL_COLORS, DEFAULT_MATERIAL } from '@/constants/materials';
 interface PartViewer3DProps {
   /** Presigned OBJ URL — null shows "geometry not available" state */
   url: string | null;
+  /** Companion MTL URL for Rhino layer colors */
+  mtlUrl?: string | null;
   /** Material name from MATERIAL_COLORS dict (e.g. "Montjuïc") */
   materialType?: string | null;
 }
@@ -50,36 +52,116 @@ function resolveMaterialColor(materialType?: string | null): string {
 // ─── Sub-component: OBJMesh ───────────────────────────────────────────────────
 
 /**
- * Loads and renders an OBJ file with a solid MeshStandardMaterial.
+ * Loads and renders an OBJ file with Rhino MTL colors when available.
  * Suspends via useLoader while loading (handled by parent Suspense).
  */
-function OBJMesh({ url, colorHex }: { url: string; colorHex: string }) {
+function OBJMesh({ url, mtlUrl, colorHex }: { url: string; mtlUrl?: string | null; colorHex: string }) {
   const scene = useLoader(OBJLoader, url);
 
   const clone = useMemo(() => scene.clone(true), [scene]);
 
-  // Apply solid material color (override Rhino materials for detail inspection)
+  // Apply MTL Kd colors when available; otherwise use solid material color fallback.
   useEffect(() => {
-    const material = new MeshStandardMaterial({
+    const fallbackMaterial = new MeshStandardMaterial({
       color: new Color(colorHex),
       metalness: 0.15,
       roughness: 0.7,
       flatShading: false,
+      emissive: new Color('#000000'),
+      emissiveIntensity: 0,
     });
 
-    clone.traverse((child: any) => {
-      if (child.isMesh) {
-        child.material = material;
+    const normalizeName = (value: string | undefined | null) =>
+      (value || '').trim().replace(/^\"|\"$/g, '');
+
+    const applyFallback = () => {
+      clone.traverse((child: any) => {
+        if (child.isMesh) {
+          child.material = fallbackMaterial;
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.geometry && !child.geometry.attributes.normal) {
+            child.geometry.computeVertexNormals();
+          }
+        }
+      });
+    };
+
+    const applyMtlColors = (colorMap: Record<string, string>) => {
+      const neutralGray = '#A0A0A0';
+      clone.traverse((child: any) => {
+        if (!child.isMesh || !child.material) {
+          return;
+        }
+
+        const meshName = normalizeName(child.name);
+        const applyToMaterial = (material: any) => {
+          const materialName = normalizeName(material?.name);
+          const resolvedColor = colorMap[materialName] || colorMap[meshName] || neutralGray;
+
+          if (material?.color?.set) {
+            material.color.set(resolvedColor);
+          } else {
+            child.material = fallbackMaterial.clone();
+            child.material.color.set(resolvedColor);
+          }
+
+          material.side = 2;
+          if (material?.emissive?.set) {
+            material.emissive.set('#000000');
+            material.emissiveIntensity = 0;
+          }
+          material.wireframe = false;
+          material.needsUpdate = true;
+        };
+
+        if (Array.isArray(child.material)) {
+          child.material.forEach((material: any) => applyToMaterial(material));
+        } else {
+          applyToMaterial(child.material);
+        }
+
         child.castShadow = true;
         child.receiveShadow = true;
         if (child.geometry && !child.geometry.attributes.normal) {
           child.geometry.computeVertexNormals();
         }
-      }
-    });
+      });
+    };
 
-    return () => material.dispose();
-  }, [clone, colorHex]);
+    if (mtlUrl) {
+      fetch(mtlUrl)
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`MTL HTTP ${res.status}`);
+          }
+          return res.text();
+        })
+        .then((mtlText) => {
+          const colorMap: Record<string, string> = {};
+          let currentMaterial = '';
+          for (const line of mtlText.split('\n')) {
+            const tokens = line.trim().split(/\s+/);
+            if (tokens[0] === 'newmtl' && tokens[1]) {
+              currentMaterial = normalizeName(tokens[1]);
+            } else if (tokens[0] === 'Kd' && currentMaterial && tokens.length >= 4) {
+              const r = Math.round(parseFloat(tokens[1]) * 255);
+              const g = Math.round(parseFloat(tokens[2]) * 255);
+              const b = Math.round(parseFloat(tokens[3]) * 255);
+              colorMap[currentMaterial] = `rgb(${r},${g},${b})`;
+            }
+          }
+          applyMtlColors(colorMap);
+        })
+        .catch(() => {
+          applyFallback();
+        });
+    } else {
+      applyFallback();
+    }
+
+    return () => fallbackMaterial.dispose();
+  }, [clone, colorHex, mtlUrl]);
 
   // Auto-center the cloned scene at origin
   // try/catch: Three.js Object3D methods unavailable in jsdom test environment
@@ -155,13 +237,14 @@ function NoGeometryFallback() {
  *   bbox={partData.bbox}
  * />
  */
-export function PartViewer3D({ url, materialType }: PartViewer3DProps) {
+export function PartViewer3D({ url, mtlUrl = null, materialType }: PartViewer3DProps) {
   if (!url) {
     return <NoGeometryFallback />;
   }
 
   const colorHex = resolveMaterialColor(materialType);
   const sanitizedUrl = url.replace(/\?$/, '');
+  const sanitizedMtlUrl = mtlUrl ? mtlUrl.replace(/\?$/, '') : null;
 
   return (
     <div
@@ -199,7 +282,7 @@ export function PartViewer3D({ url, materialType }: PartViewer3DProps) {
         {/* Model — Bounds auto-fits camera to loaded geometry */}
         <Bounds fit clip observe margin={1.1}>
           <Suspense fallback={<LoadingFallback />}>
-            <OBJMesh url={sanitizedUrl} colorHex={colorHex} />
+            <OBJMesh url={sanitizedUrl} mtlUrl={sanitizedMtlUrl} colorHex={colorHex} />
           </Suspense>
         </Bounds>
       </Canvas>

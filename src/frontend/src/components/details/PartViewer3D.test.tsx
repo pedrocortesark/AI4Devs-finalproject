@@ -25,6 +25,7 @@ vi.mock('@react-three/fiber', () => ({
 
 vi.mock('@react-three/drei', () => ({
   OrbitControls: () => null,
+  Bounds: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Html: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
