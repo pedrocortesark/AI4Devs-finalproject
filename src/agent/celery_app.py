@@ -92,7 +92,7 @@ celery_app.conf.update(
 # Import tasks AFTER celery_app is fully initialized to avoid circular imports
 # This registers the @celery_app.task decorated functions with the Celery instance
 try:
-    from tasks import file_validation, geometry_processing  # noqa: F401
+    from tasks import file_validation, geometry_processing, embed_block  # noqa: F401
 except ImportError:
     # In test/dev context with full module paths
-    from src.agent.tasks import file_validation, geometry_processing  # noqa: F401
+    from src.agent.tasks import file_validation, geometry_processing, embed_block  # noqa: F401

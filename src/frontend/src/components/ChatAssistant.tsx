@@ -7,6 +7,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { askArchivist, type ChatSource } from '../services/chat.service';
+import { usePartsStore } from '@/stores/parts.store';
 
 interface Turn {
   question: string;
@@ -22,7 +23,18 @@ const SURFACE = '#2C2C2E';
 const TEXT = '#F2F2F7';
 const MUTED = '#8E8E93';
 
+function getDisplayedSources(question: string, sources: ChatSource[]): ChatSource[] {
+  const normalizedQuestion = question.toLowerCase();
+  const exactMatch = sources.find((source) => {
+    if (!source.iso_code) return false;
+    return normalizedQuestion.includes(source.iso_code.toLowerCase());
+  });
+
+  return exactMatch ? [exactMatch] : sources;
+}
+
 export function ChatAssistant() {
+  const selectPart = usePartsStore((state) => state.selectPart);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,6 +74,10 @@ export function ChatAssistant() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSourceClick(source: ChatSource) {
+    selectPart(source.block_id);
   }
 
   if (!open) {
@@ -125,11 +141,24 @@ export function ChatAssistant() {
                 {t.answer}
                 {t.sources && t.sources.length > 0 && (
                   <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {t.sources.map((s) => (
-                      <span key={s.block_id} title={`similitud ${s.similarity}`}
-                        style={{ fontSize: 10, background: '#3A3A3C', color: MUTED, padding: '2px 6px', borderRadius: 6 }}>
+                    {getDisplayedSources(t.question, t.sources).map((s) => (
+                      <button
+                        key={s.block_id}
+                        type="button"
+                        onClick={() => handleSourceClick(s)}
+                        title={`Seleccionar pieza (${s.iso_code ?? s.block_id.slice(0, 8)}) · similitud ${s.similarity}`}
+                        style={{
+                          fontSize: 10,
+                          background: '#3A3A3C',
+                          color: MUTED,
+                          padding: '2px 6px',
+                          borderRadius: 6,
+                          border: `1px solid ${MUTED}`,
+                          cursor: 'pointer',
+                        }}
+                      >
                         {s.iso_code ?? s.block_id.slice(0, 8)}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 )}

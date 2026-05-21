@@ -27,6 +27,10 @@ TASK_RETRY_DELAY_SECONDS = 30  # Base delay (exponential backoff applied in task
 TASK_HEALTH_CHECK = "agent.tasks.health_check"
 TASK_VALIDATE_FILE = "agent.tasks.validate_file"
 TASK_REGISTER_3DM_BLOCKS = "agent.tasks.register_3dm_blocks"
+# RAG: single-block embedding upsert. Auto-fired by validate_file after a
+# successful validation so The Archivist can find newly-ingested pieces
+# immediately (no manual backfill required for the demo flow).
+TASK_EMBED_BLOCK = "agent.tasks.embed_block"
 
 # Validation Patterns
 # ISO-19650 nomenclature:  [PREFIX]-[ZONE/CODE]-[TYPE]-[ID]

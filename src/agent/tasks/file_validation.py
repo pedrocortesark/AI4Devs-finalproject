@@ -13,6 +13,7 @@ try:
         TASK_VALIDATE_FILE,
         TASK_REGISTER_3DM_BLOCKS,
         TASK_GENERATE_LOW_POLY_GLB,
+        TASK_EMBED_BLOCK,
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
     )
@@ -26,6 +27,7 @@ except ImportError:
         TASK_VALIDATE_FILE,
         TASK_REGISTER_3DM_BLOCKS,
         TASK_GENERATE_LOW_POLY_GLB,
+        TASK_EMBED_BLOCK,
         TASK_MAX_RETRIES,
         TASK_RETRY_DELAY_SECONDS,
     )
@@ -342,6 +344,13 @@ def validate_file(self, part_id: str, s3_key: str, iso_code: str = None):
         if is_valid:
             celery_app.send_task(TASK_GENERATE_LOW_POLY_GLB, args=[part_id])
             logger.info("validate_file.geometry_task_enqueued", part_id=part_id)
+
+            # Step 9b: Fire-and-forget RAG embedding so The Archivist can find
+            # this piece immediately (no manual backfill required). Soft-fail:
+            # if embed_block errors, the bulk infra/generate_embeddings.py
+            # backfill remains the safety net.
+            celery_app.send_task(TASK_EMBED_BLOCK, args=[part_id])
+            logger.info("validate_file.embed_task_enqueued", part_id=part_id)
 
         logger.info(
             "validate_file.completed",

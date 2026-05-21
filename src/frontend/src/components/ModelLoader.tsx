@@ -12,9 +12,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Html } from '@react-three/drei';
-import { useLoader } from '@react-three/fiber';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { useGLTF, Html } from '@react-three/drei';
 import { Group, Box3, Vector3 } from 'three';
 import { BBoxProxy } from './Dashboard/BBoxProxy';
 import { getPartDetail } from '@/services/upload.service';
@@ -37,11 +35,9 @@ export const ModelLoader: React.FC<ModelLoaderProps> = ({
   targetSize = MODEL_LOADER_DEFAULTS.TARGET_SIZE,
 }) => {
   const [partData, setPartData] = useState<PartDetail | null>(null);
-  const [modelLoadedTick, setModelLoadedTick] = useState(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
   const groupRef = useRef<Group>(null);
-  const renderUrl = partData?.high_poly_url || partData?.low_poly_url || null;
 
   /**
    * Effect 1: Fetch part detail from backend
@@ -88,14 +84,10 @@ export const ModelLoader: React.FC<ModelLoaderProps> = ({
    * Effect 2: Auto-center and auto-scale model after load
    */
   useEffect(() => {
-    if (!groupRef.current || !partData?.low_poly_url || modelLoadedTick === 0) return;
+    if (!groupRef.current || !partData?.low_poly_url) return;
 
     try {
       const group = groupRef.current;
-      // Reset transform before recomputing to avoid accumulating offsets when navigating parts
-      group.position.set(0, 0, 0);
-      group.scale.set(1, 1, 1);
-
       const bbox = new Box3().setFromObject(group);
       const size = new Vector3();
       bbox.getSize(size);
@@ -111,7 +103,7 @@ export const ModelLoader: React.FC<ModelLoaderProps> = ({
       if (autoScale) {
         const maxDimension = Math.max(size.x, size.y, size.z);
         if (maxDimension > 0) {
-          const scale = (targetSize * 0.85) / maxDimension;
+          const scale = targetSize / maxDimension;
           group.scale.setScalar(scale);
         }
       }
@@ -122,7 +114,7 @@ export const ModelLoader: React.FC<ModelLoaderProps> = ({
         console.warn('[ModelLoader] Auto-center/scale skipped (test environment):', err);
       }
     }
-  }, [partData, autoCenter, autoScale, targetSize, modelLoadedTick]);
+  }, [partData, autoCenter, autoScale, targetSize]);
 
   /**
    * Conditional rendering: error → loading → no URL → GLB
@@ -156,12 +148,8 @@ export const ModelLoader: React.FC<ModelLoaderProps> = ({
 
   // Case 2: low_poly_url exists → Load GLB
   return (
-    <group ref={groupRef} data-testid="model-loader" rotation={[-Math.PI / 2, 0, 0]}>
-      <OBJModel
-        url={renderUrl}
-        mtlUrl={partData.mtl_url || null}
-        onReady={() => setModelLoadedTick((prev) => prev + 1)}
-      />
+    <group ref={groupRef} data-testid="model-loader">
+      <GLBModel url={partData.low_poly_url} />
     </group>
   );
 };
@@ -181,119 +169,39 @@ export const ModelLoader: React.FC<ModelLoaderProps> = ({
  * @returns Three.js primitive object rendered in the scene
  * @throws Error if URL is invalid or scene fails to load
  */
-const OBJModel: React.FC<{ url: string; mtlUrl: string | null; onReady?: () => void }> = ({ url, mtlUrl, onReady }) => {
+const GLBModel: React.FC<{ url: string }> = ({ url }) => {
   // Validate URL before attempting load (throw early)
   if (!url || typeof url !== 'string' || url.trim() === '') {
     const msg = `[GLBModel] Invalid URL: ${url}`;
     console.error(msg);
     throw new Error(msg);
   }
-
-  // Remove trailing '?' from URLs (legacy data compatibility)
+  
+  // BUG FIX: Remove trailing '?' from URLs (database has invalid query strings)
+  // URLs like "https://...glb?" cause useGLTF cache issues
   const sanitizedUrl = url.replace(/\?$/, '');
-  const sanitizedMtlUrl = mtlUrl ? mtlUrl.replace(/\?$/, '') : null;
-  const objScene = useLoader(OBJLoader, sanitizedUrl);
-  if (!objScene || !objScene.isObject3D) {
-    const msg = `[OBJModel] Invalid OBJ scene for URL: ${sanitizedUrl}`;
-    console.error(msg, { objScene });
+  
+  // Load model - useGLTF suspends until loaded
+  // IMPORTANT: useGLTF is a hook, cannot be inside try/catch or conditionals
+  const gltf = useGLTF(sanitizedUrl);
+  
+  // CRITICAL: Validate scene exists BEFORE attempting to render
+  // R3F will crash with "Cannot read 'testid'" if we pass undefined to <primitive>
+  const scene = gltf?.scene;
+  if (!scene) {
+    const msg = `[GLBModel] Scene missing for URL: ${sanitizedUrl}`;
+    console.error(msg, { gltf });
     throw new Error(msg);
   }
-
-  const scene = objScene.clone(true);
-
-  useEffect(() => {
-    const normalizeName = (value: string | undefined | null) =>
-      (value || '').trim().replace(/^\"|\"$/g, '');
-
-    const applyToMaterial = (mat: any, baseColor: string) => {
-      if (mat?.color?.set) {
-        mat.color.set(baseColor);
-      }
-      mat.side = 2;
-      mat.needsUpdate = true;
-    };
-
-    const applyVisualProps = (child: any, baseColor: string) => {
-      if (Array.isArray(child.material)) {
-        child.material.forEach((mat: any) => applyToMaterial(mat, baseColor));
-      } else if (child.material) {
-        applyToMaterial(child.material, baseColor);
-      }
-      child.castShadow = true;
-      child.receiveShadow = true;
-      if (child.geometry && !child.geometry.attributes.normal) {
-        child.geometry.computeVertexNormals();
-      }
-    };
-
-    const applyMTLColors = (targetScene: any, colorMap: Record<string, string>) => {
-      const neutralGray = '#A0A0A0';
-      targetScene.traverse((child: any) => {
-        if (!child.isMesh || !child.material) {
-          return;
-        }
-        const meshName = normalizeName(child.name);
-        if (Array.isArray(child.material)) {
-          child.material.forEach((mat: any) => {
-            const matName = normalizeName(mat?.name);
-            applyToMaterial(mat, colorMap[matName] || colorMap[meshName] || neutralGray);
-          });
-          child.castShadow = true;
-          child.receiveShadow = true;
-          if (child.geometry && !child.geometry.attributes.normal) {
-            child.geometry.computeVertexNormals();
-          }
-        } else {
-          const matName = normalizeName(child.material?.name);
-          applyVisualProps(child, colorMap[matName] || colorMap[meshName] || neutralGray);
-        }
-      });
-    };
-
-    if (sanitizedMtlUrl) {
-      fetch(sanitizedMtlUrl)
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`MTL HTTP ${res.status}`);
-          }
-          return res.text();
-        })
-        .then((mtlText) => {
-          const colorMap: Record<string, string> = {};
-          let currentMat = '';
-          for (const line of mtlText.split('\n')) {
-            const tokens = line.trim().split(/\s+/);
-            if (tokens[0] === 'newmtl' && tokens[1]) {
-              currentMat = normalizeName(tokens[1]);
-            } else if (tokens[0] === 'Kd' && currentMat && tokens.length >= 4) {
-              const r = Math.round(parseFloat(tokens[1]) * 255);
-              const g = Math.round(parseFloat(tokens[2]) * 255);
-              const b = Math.round(parseFloat(tokens[3]) * 255);
-              colorMap[currentMat] = `rgb(${r},${g},${b})`;
-            }
-          }
-          applyMTLColors(scene, colorMap);
-        })
-        .catch((err) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[ModelLoader] Failed to apply Kd colors from MTL:', err);
-          }
-        })
-        .finally(() => {
-          onReady?.();
-        });
-      return;
-    }
-
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-    onReady?.();
-  }, [scene, sanitizedMtlUrl, onReady]);
-
+  
+  // Final safety check: ensure scene is a valid Three.js Object3D
+  if (!scene.isObject3D) {
+    const msg = `[GLBModel] Scene is not a valid Three.js Object3D: ${sanitizedUrl}`;
+    console.error(msg, { scene });
+    throw new Error(msg);
+  }
+  
+  // Safe to render - scene is guaranteed to be a valid THREE.Object3D
   return <primitive object={scene} />;
 };
 
