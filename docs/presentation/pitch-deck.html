@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SF-PM · Pitch Deck</title>
+<style>
+  /* ─── Design System (mismo que la app) ────────────────────────────── */
+  :root {
+    --bg-card: #1C1C1E;
+    --bg-surface: #2C2C2E;
+    --bg-elevated: #3A3A3C;
+    --border-subtle: rgba(255,255,255,0.08);
+    --border-mid: rgba(255,255,255,0.14);
+    --text-primary: rgba(255,255,255,0.92);
+    --text-secondary: rgba(255,255,255,0.5);
+    --text-tertiary: rgba(255,255,255,0.3);
+    --blue: #007AFF;
+    --green: #34C759;
+    --yellow: #FF9F0A;
+    --red: #FF453A;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
+    --font-mono: "SF Mono", "Fira Code", "Roboto Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-feature-settings: "ss01","cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── Slide chrome ─────────────────────────────────────────────────── */
+  .deck { position: relative; width: 100vw; height: 100vh; }
+  .slide {
+    position: absolute; inset: 0;
+    padding: 64px 96px;
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none;
+    transition: opacity .35s ease-out;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
+  .brand {
+    position: fixed; top: 24px; left: 32px;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-tertiary);
+    z-index: 10;
+  }
+  .brand .dot { color: var(--blue); }
+  .counter {
+    position: fixed; bottom: 22px; right: 32px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-tertiary);
+    z-index: 10; user-select: none;
+  }
+  .nav-hint {
+    position: fixed; bottom: 22px; left: 32px;
+    font-size: 12px; color: var(--text-tertiary);
+    z-index: 10; user-select: none;
+  }
+  .nav-hint kbd {
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 2px 6px; border-radius: 4px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+
+  /* ─── Typography ────────────────────────────────────────────────────── */
+  .eyebrow {
+    font-size: 13px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 24px;
+  }
+  h1 { font-size: 88px; font-weight: 700; line-height: 1.02; letter-spacing: -0.03em; }
+  h2 { font-size: 56px; font-weight: 700; line-height: 1.05; letter-spacing: -0.025em; }
+  h3 { font-size: 32px; font-weight: 600; line-height: 1.15; letter-spacing: -0.015em; }
+  .lead { font-size: 24px; color: var(--text-secondary); line-height: 1.5; max-width: 980px; }
+  .accent { color: var(--blue); }
+  .muted { color: var(--text-secondary); }
+  .mono { font-family: var(--font-mono); }
+
+  /* ─── Common helpers ────────────────────────────────────────────────── */
+  .stretch { flex: 1; }
+  .row { display: flex; gap: 24px; }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 32px;
+  }
+  .card.big { padding: 40px; }
+  .card-title {
+    font-size: 22px; font-weight: 600;
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .card-emoji { font-size: 28px; }
+  .card-body { font-size: 16px; color: var(--text-secondary); line-height: 1.6; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 9999px;
+    background: rgba(0,122,255,0.12);
+    color: var(--blue);
+    font-size: 13px; font-weight: 600;
+    border: 1px solid rgba(0,122,255,0.3);
+  }
+  .pill.green { background: rgba(52,199,89,0.12); color: var(--green); border-color: rgba(52,199,89,0.3); }
+  .bullets { list-style: none; padding: 0; }
+  .bullets li {
+    font-size: 18px; color: var(--text-primary);
+    padding: 12px 0 12px 28px; position: relative;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .bullets li:last-child { border-bottom: none; }
+  .bullets li::before {
+    content: "→"; position: absolute; left: 0;
+    color: var(--blue); font-weight: 700;
+  }
+  .bullets.muted li { color: var(--text-secondary); }
+
+  /* ─── Slide 1 — Hook ─────────────────────────────────────────────────── */
+  .hero {
+    justify-content: center;
+    background:
+      radial-gradient(1200px 600px at 20% 0%, rgba(0,122,255,0.10), transparent 50%),
+      radial-gradient(900px 500px at 100% 100%, rgba(255,159,10,0.06), transparent 50%);
+  }
+  .hero .stripe {
+    width: 64px; height: 4px; background: var(--blue);
+    border-radius: 2px; margin-bottom: 32px;
+  }
+  .hero h1 { max-width: 1100px; }
+  .hero .tagline {
+    font-size: 28px; color: var(--text-secondary);
+    line-height: 1.4; margin-top: 32px; max-width: 900px;
+    font-weight: 400;
+  }
+  .hero .meta {
+    margin-top: 56px;
+    display: flex; gap: 32px; align-items: center;
+    font-size: 14px; color: var(--text-tertiary);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .hero .meta b { color: var(--text-secondary); font-weight: 600; }
+
+  /* ─── Slide 2 — Problema ─────────────────────────────────────────────── */
+  .pain-list {
+    margin-top: 40px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+    max-width: 1100px;
+  }
+  .pain-item {
+    padding: 24px; border-radius: 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--red);
+    font-size: 18px;
+  }
+  .pain-quote {
+    margin-top: auto; padding-top: 40px;
+    font-style: italic; font-size: 22px; color: var(--text-secondary);
+    max-width: 900px; line-height: 1.5;
+  }
+
+  /* ─── Slide 3 — Solution ─────────────────────────────────────────────── */
+  .duo {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
+    margin-top: 40px;
+  }
+  .duo .card { padding: 36px; min-height: 360px; display: flex; flex-direction: column; }
+  .duo .role {
+    font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--blue); margin-bottom: 10px;
+  }
+  .duo .name { font-size: 38px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 14px; }
+  .duo .desc { font-size: 17px; color: var(--text-secondary); line-height: 1.55; margin-bottom: auto; }
+  .duo .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .duo .tag {
+    font-family: var(--font-mono); font-size: 12px;
+    padding: 4px 10px; border-radius: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+
+  /* ─── Slide 4 — Architecture ─────────────────────────────────────────── */
+  .arch-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .arch-wrap svg { width: 100%; max-width: 1400px; height: auto; }
+
+  /* ─── Slide 5/6 — diagrams ───────────────────────────────────────────── */
+  .diagram-slide { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; flex: 1; align-items: center; }
+  .diagram-slide svg { width: 100%; height: auto; }
+
+  /* ─── Slide 7 — app parts ────────────────────────────────────────────── */
+  .parts { margin-top: 32px; }
+  .parts .card { padding: 24px; }
+  .parts .num {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--blue); letter-spacing: 0.1em;
+  }
+  .parts h3 { font-size: 22px; margin: 8px 0 10px; }
+  .parts .desc { font-size: 14px; color: var(--text-secondary); line-height: 1.55; }
+
+  /* ─── Slide 8 — numbers ──────────────────────────────────────────────── */
+  .metrics { margin-top: 48px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+  .metric .num {
+    font-size: 88px; font-weight: 700; line-height: 1;
+    letter-spacing: -0.04em;
+    background: linear-gradient(180deg, var(--text-primary), var(--text-secondary));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .metric .label {
+    margin-top: 12px;
+    font-size: 14px; color: var(--text-secondary);
+    letter-spacing: 0.04em;
+  }
+  .metric .sub { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+
+  /* ─── Slide 9 — iceberg ──────────────────────────────────────────────── */
+  .iceberg-grid {
+    margin-top: 32px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    max-width: 1200px;
+  }
+  .ice-card {
+    padding: 22px; border-radius: 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-top: 2px solid var(--blue);
+  }
+  .ice-card .ice-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .ice-card .ice-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+  .iceberg-hint {
+    margin-top: 36px; font-size: 18px; color: var(--text-secondary);
+    max-width: 1100px; line-height: 1.55;
+  }
+
+  /* ─── Slide 10 — closing ─────────────────────────────────────────────── */
+  .closing { justify-content: center; }
+  .closing h2 { font-size: 64px; max-width: 1100px; }
+  .closing .signoff {
+    margin-top: 32px; font-size: 22px; color: var(--text-secondary);
+    max-width: 900px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="brand">SF<span class="dot">·</span>PM</div>
+<div class="nav-hint"><kbd>←</kbd> <kbd>→</kbd> para navegar · <kbd>F</kbd> fullscreen</div>
+<div class="counter" id="counter">1 / 10</div>
+
+<div class="deck" id="deck">
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 1 — HOOK
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide hero active">
+    <div class="stripe"></div>
+    <div class="eyebrow">Sagrada Família Parts Manager</div>
+    <h1>Un inventario<br>que se gestiona <span class="accent">casi solo</span>.</h1>
+    <div class="tagline">
+      Subes un archivo CAD, dos ayudantes con IA hacen el trabajo aburrido
+      y tú le haces preguntas en lenguaje normal. Lo que veis hoy es solo
+      la punta del iceberg.
+    </div>
+    <div class="meta">
+      <span><b>289</b> piezas ya dentro</span>
+      <span><b>2</b> ayudantes con IA</span>
+      <span><b>0</b> campos a mano</span>
+      <span style="margin-left:auto">Demo · 2026-05-22</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 2 — PROBLEMA
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">El punto de partida</div>
+    <h2>El inventario invisible.</h2>
+    <div class="lead" style="margin-top:18px">
+      Cuando los datos viven dentro de archivos CAD y hojas de cálculo,
+      nadie sabe muy bien qué hay, dónde está, ni en qué estado.
+    </div>
+    <div class="pain-list">
+      <div class="pain-item"><b>Archivos opacos</b>: la información existe, pero solo si la abres y la miras a mano.</div>
+      <div class="pain-item"><b>Clasificación manual</b>: cada pieza nueva pide tiempo de alguien que sepa.</div>
+      <div class="pain-item"><b>Sin manera de preguntar</b>: ningún sistema responde "¿qué tenemos de esto?".</div>
+      <div class="pain-item"><b>Sin estado en vivo</b>: validado, en taller, terminado… nadie lo sabe a la vez.</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 3 — SOLUCIÓN
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">La idea</div>
+    <h2>Dos ayudantes, una herramienta.</h2>
+    <div class="lead" style="margin-top:18px">
+      Uno mete las cosas dentro y las ordena. El otro contesta cuando preguntas.
+      Entre los dos, el inventario se gestiona casi solo.
+    </div>
+    <div class="duo">
+      <div class="card">
+        <div class="role">Cuando entra una pieza</div>
+        <div class="name">🤖 El Bibliotecario</div>
+        <div class="desc">
+          Recibe el archivo, mira la geometría, clasifica la pieza, rellena los datos
+          y deja un informe de lo que ha hecho. Como un becario que nunca se cansa
+          y siempre apunta lo que decide.
+        </div>
+        <div class="tags">
+          <span class="tag">valida</span>
+          <span class="tag">clasifica</span>
+          <span class="tag">informa</span>
+          <span class="tag">trazable</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="role">Cuando preguntas algo</div>
+        <div class="name">📚 El Archivista</div>
+        <div class="desc">
+          Habla con el inventario por ti. Le preguntas en castellano, busca en todo
+          lo que hay dentro y te contesta citando exactamente qué piezas usó.
+          No se inventa cosas: si no lo sabe, lo dice.
+        </div>
+        <div class="tags">
+          <span class="tag">lenguaje natural</span>
+          <span class="tag">cita fuentes</span>
+          <span class="tag">no alucina</span>
+          <span class="tag">auditable</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 4 — ARQUITECTURA
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">Cómo encaja todo</div>
+    <h2>Un flujo, dos cerebros.</h2>
+    <div class="arch-wrap">
+      <svg viewBox="0 0 1400 520" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#007AFF"/>
+          </marker>
+          <linearGradient id="gAi" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stop-color="#007AFF" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="#007AFF" stop-opacity="0.05"/>
+          </linearGradient>
+        </defs>
+
+        <!-- ── Row 1: UI ── -->
+        <g>
+          <rect x="40"   y="40" width="240" height="92" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="160"  y="74" text-anchor="middle" fill="#ffffffeb" font-size="20" font-weight="600" font-family="-apple-system,SF Pro Display,Inter">Lo que ves</text>
+          <text x="160"  y="100" text-anchor="middle" fill="#ffffff80" font-size="13">La web · canvas 3D · chat</text>
+
+          <rect x="320"  y="40" width="260" height="92" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="450"  y="74" text-anchor="middle" fill="#ffffffeb" font-size="20" font-weight="600">El intermediario</text>
+          <text x="450"  y="100" text-anchor="middle" fill="#ffffff80" font-size="13">API · subir · consultar · preguntar</text>
+
+          <rect x="620"  y="40" width="220" height="92" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="730"  y="74" text-anchor="middle" fill="#ffffffeb" font-size="20" font-weight="600">La cola de trabajo</text>
+          <text x="730"  y="100" text-anchor="middle" fill="#ffffff80" font-size="13">Las tareas pesadas, en segundo plano</text>
+
+          <rect x="880"  y="40" width="260" height="92" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="1010" y="74" text-anchor="middle" fill="#ffffffeb" font-size="20" font-weight="600">El operario</text>
+          <text x="1010" y="100" text-anchor="middle" fill="#ffffff80" font-size="13">El que ejecuta a los dos ayudantes</text>
+        </g>
+
+        <!-- ── Arrows row 1 ── -->
+        <line x1="280" y1="86" x2="320" y2="86" stroke="#007AFF" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="580" y1="86" x2="620" y2="86" stroke="#007AFF" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="840" y1="86" x2="880" y2="86" stroke="#007AFF" stroke-width="2" marker-end="url(#arr)"/>
+
+        <!-- ── Row 2: AI layers (highlighted) ── -->
+        <rect x="40"  y="220" width="540" height="200" rx="18" fill="url(#gAi)" stroke="#007AFF" stroke-width="2"/>
+        <text x="62"  y="250" fill="#007AFF" font-size="12" font-weight="700" letter-spacing="2">CUANDO ENTRA UNA PIEZA</text>
+        <text x="62"  y="290" fill="#ffffffeb" font-size="26" font-weight="700">🤖 El Bibliotecario</text>
+        <text x="62"  y="320" fill="#ffffff80" font-size="14">Mira · valida · clasifica · enriquece · firma el informe</text>
+        <text x="62"  y="360" fill="#ffffff80" font-size="14">→ pieza lista para verse, filtrarse y consultarse</text>
+        <text x="62"  y="395" fill="#34C759" font-size="13" font-weight="600">289 / 289 piezas pasaron por aquí</text>
+
+        <rect x="600" y="220" width="540" height="200" rx="18" fill="url(#gAi)" stroke="#007AFF" stroke-width="2"/>
+        <text x="622" y="250" fill="#007AFF" font-size="12" font-weight="700" letter-spacing="2">CUANDO PREGUNTAS</text>
+        <text x="622" y="290" fill="#ffffffeb" font-size="26" font-weight="700">📚 El Archivista</text>
+        <text x="622" y="320" fill="#ffffff80" font-size="14">Entiende la pregunta · busca en el inventario · responde</text>
+        <text x="622" y="360" fill="#ffffff80" font-size="14">→ respuesta + las piezas exactas que ha usado</text>
+        <text x="622" y="395" fill="#34C759" font-size="13" font-weight="600">Si no lo sabe, lo dice. Sin inventos.</text>
+
+        <!-- ── Row 3: Data layer ── -->
+        <rect x="40"   y="460" width="1100" height="40" rx="10" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+        <text x="590"  y="486" text-anchor="middle" fill="#ffffffeb" font-size="15" font-weight="600">
+          La base de datos: dónde vive todo (piezas, archivos, búsquedas y avisos en vivo)
+        </text>
+
+        <!-- ── Connectors AI → DB ── -->
+        <line x1="310" y1="420" x2="310" y2="460" stroke="#007AFF" stroke-width="2" marker-end="url(#arr)" stroke-dasharray="4 4"/>
+        <line x1="870" y1="420" x2="870" y2="460" stroke="#007AFF" stroke-width="2" marker-end="url(#arr)" stroke-dasharray="4 4"/>
+
+        <!-- ── Worker → Bibliotecario ── -->
+        <line x1="1010" y1="132" x2="1010" y2="180" stroke="#007AFF" stroke-width="2"/>
+        <line x1="1010" y1="180" x2="310"  y2="180" stroke="#007AFF" stroke-width="2"/>
+        <line x1="310"  y1="180" x2="310"  y2="220" stroke="#007AFF" stroke-width="2" marker-end="url(#arr)"/>
+
+        <!-- ── API → Archivista (chat) ── -->
+        <line x1="450"  y1="132" x2="450"  y2="200" stroke="#007AFF" stroke-width="2" stroke-dasharray="4 4"/>
+        <line x1="450"  y1="200" x2="870"  y2="200" stroke="#007AFF" stroke-width="2" stroke-dasharray="4 4"/>
+        <line x1="870"  y1="200" x2="870"  y2="220" stroke="#007AFF" stroke-width="2" marker-end="url(#arr)" stroke-dasharray="4 4"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 5 — EL BIBLIOTECARIO
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">Cuando entra una pieza</div>
+    <h2>🤖 El Bibliotecario.</h2>
+    <div class="diagram-slide">
+      <!-- StateGraph diagram -->
+      <svg viewBox="0 0 700 540" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#007AFF"/>
+          </marker>
+          <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#FF453A"/>
+          </marker>
+        </defs>
+        <!-- nodes -->
+        <g font-family="-apple-system,SF Pro Display,Inter" font-size="14">
+          <rect x="240" y="20"  width="220" height="56" rx="14" fill="#2C2C2E" stroke="#007AFF" stroke-width="2"/>
+          <text x="350" y="55"  text-anchor="middle" fill="#fff" font-weight="600">1 · Mira la geometría</text>
+
+          <rect x="240" y="100" width="220" height="56" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="350" y="135" text-anchor="middle" fill="#fff" font-weight="600">2 · Comprueba que es válida</text>
+
+          <rect x="240" y="200" width="220" height="56" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="350" y="235" text-anchor="middle" fill="#fff" font-weight="600">3 · Decide qué es</text>
+          <text x="350" y="252" text-anchor="middle" fill="#ffffff66" font-size="11">capitel, columna, base…</text>
+
+          <rect x="240" y="290" width="220" height="56" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="350" y="325" text-anchor="middle" fill="#fff" font-weight="600">4 · Rellena los datos</text>
+
+          <rect x="240" y="370" width="220" height="56" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="350" y="405" text-anchor="middle" fill="#fff" font-weight="600">5 · Firma el informe</text>
+
+          <rect x="100" y="460" width="220" height="56" rx="14" fill="rgba(52,199,89,0.12)" stroke="#34C759" stroke-width="2"/>
+          <text x="210" y="495" text-anchor="middle" fill="#34C759" font-weight="700">6 · Lista para usarse ✓</text>
+
+          <rect x="380" y="460" width="220" height="56" rx="14" fill="rgba(255,69,58,0.12)" stroke="#FF453A" stroke-width="2"/>
+          <text x="490" y="495" text-anchor="middle" fill="#FF453A" font-weight="700">7 · Rechazada con motivo ✕</text>
+        </g>
+        <!-- edges -->
+        <line x1="350" y1="76"  x2="350" y2="100" stroke="#007AFF" stroke-width="2" marker-end="url(#arr2)"/>
+        <line x1="350" y1="156" x2="350" y2="200" stroke="#007AFF" stroke-width="2" marker-end="url(#arr2)"/>
+        <line x1="350" y1="256" x2="350" y2="290" stroke="#007AFF" stroke-width="2" marker-end="url(#arr2)"/>
+        <line x1="350" y1="346" x2="350" y2="370" stroke="#007AFF" stroke-width="2" marker-end="url(#arr2)"/>
+        <line x1="350" y1="426" x2="210" y2="460" stroke="#007AFF" stroke-width="2" marker-end="url(#arr2)"/>
+        <!-- rejection edge from ValidateGeometry -->
+        <path d="M 460 128 Q 620 128 620 488 L 600 488" fill="none" stroke="#FF453A" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrR)"/>
+        <text x="635" y="280" fill="#FF453A" font-size="11" text-anchor="start" transform="rotate(90 635 280)">si algo no cuadra</text>
+      </svg>
+
+      <!-- bullets -->
+      <div>
+        <h3 style="margin-bottom:24px">Qué ganas tú</h3>
+        <ul class="bullets">
+          <li><b>Decide solo</b>: lo que hoy hace una persona pieza a pieza, lo hace en segundos y sin distraerse.</li>
+          <li><b>Hoy valida, mañana clasifica más</b>: con el catálogo actual el peso real está en validar; cuando las tipologías se diversifiquen, el mismo motor afina la clasificación sin tocar nada.</li>
+          <li><b>Cuenta lo que importa</b>: distingue piezas reales de geometría interna del archivo — sin falsos positivos.</li>
+          <li><b>Auditable por diseño</b>: cada decisión viene con su motivo y queda registrada paso a paso.</li>
+          <li><b>No duplica</b>: si subes el mismo archivo dos veces, lo sabe.</li>
+          <li class="muted">Ya ha procesado las 289 piezas que veréis ahora — sin que nadie tocara un campo.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 6 — EL ARCHIVISTA
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">Cuando preguntas algo</div>
+    <h2>📚 El Archivista.</h2>
+    <div class="diagram-slide">
+      <!-- RAG pipeline -->
+      <svg viewBox="0 0 700 520" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#007AFF"/>
+          </marker>
+        </defs>
+        <g font-family="-apple-system,SF Pro Display,Inter" font-size="14">
+          <rect x="180" y="20"  width="340" height="60" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="350" y="55"  text-anchor="middle" fill="#fff" font-weight="600">Tú escribes la pregunta</text>
+
+          <rect x="180" y="110" width="160" height="60" rx="14" fill="#2C2C2E" stroke="#007AFF" stroke-width="2"/>
+          <text x="260" y="138" text-anchor="middle" fill="#fff" font-weight="600">¿Hay un código?</text>
+          <text x="260" y="156" text-anchor="middle" fill="#ffffff80" font-size="11">va directo a esa pieza</text>
+
+          <rect x="360" y="110" width="160" height="60" rx="14" fill="#2C2C2E" stroke="#007AFF" stroke-width="2"/>
+          <text x="440" y="138" text-anchor="middle" fill="#fff" font-weight="600">¿Es una idea?</text>
+          <text x="440" y="156" text-anchor="middle" fill="#ffffff80" font-size="11">busca por significado</text>
+
+          <rect x="180" y="200" width="340" height="62" rx="14" fill="rgba(0,122,255,0.10)" stroke="#007AFF" stroke-width="2"/>
+          <text x="350" y="228" text-anchor="middle" fill="#fff" font-weight="700">Encuentra las piezas relevantes</text>
+          <text x="350" y="248" text-anchor="middle" fill="#ffffff80" font-size="12">las más parecidas a lo que preguntas</text>
+
+          <rect x="180" y="292" width="340" height="60" rx="14" fill="#2C2C2E" stroke="rgba(255,255,255,0.14)"/>
+          <text x="350" y="320" text-anchor="middle" fill="#fff" font-weight="600">Lee solo esas piezas, nada más</text>
+          <text x="350" y="340" text-anchor="middle" fill="#ffffff80" font-size="11">prohibido inventarse cosas</text>
+
+          <rect x="180" y="382" width="340" height="60" rx="14" fill="#2C2C2E" stroke="#007AFF" stroke-width="2"/>
+          <text x="350" y="410" text-anchor="middle" fill="#fff" font-weight="600">Redacta la respuesta</text>
+
+          <rect x="180" y="462" width="340" height="40" rx="10" fill="rgba(52,199,89,0.12)" stroke="#34C759" stroke-width="2"/>
+          <text x="350" y="487" text-anchor="middle" fill="#34C759" font-weight="700">Respuesta + piezas citadas</text>
+        </g>
+        <!-- edges -->
+        <line x1="260" y1="80"  x2="260" y2="110" stroke="#007AFF" stroke-width="2" marker-end="url(#arr3)"/>
+        <line x1="440" y1="80"  x2="440" y2="110" stroke="#007AFF" stroke-width="2" marker-end="url(#arr3)"/>
+        <line x1="260" y1="170" x2="320" y2="200" stroke="#007AFF" stroke-width="2" marker-end="url(#arr3)"/>
+        <line x1="440" y1="170" x2="380" y2="200" stroke="#007AFF" stroke-width="2" marker-end="url(#arr3)"/>
+        <line x1="350" y1="262" x2="350" y2="292" stroke="#007AFF" stroke-width="2" marker-end="url(#arr3)"/>
+        <line x1="350" y1="352" x2="350" y2="382" stroke="#007AFF" stroke-width="2" marker-end="url(#arr3)"/>
+        <line x1="350" y1="442" x2="350" y2="462" stroke="#007AFF" stroke-width="2" marker-end="url(#arr3)"/>
+      </svg>
+
+      <div>
+        <h3 style="margin-bottom:24px">Qué ganas tú</h3>
+        <ul class="bullets">
+          <li><b>Más rápido que un filtro</b>: en vez de componer un filtro en 5 pasos, escribes la pregunta en castellano y listo.</li>
+          <li><b>Sabe el código o sabe la idea</b>: igual le pides una pieza concreta que "todos los capiteles del tramo 1".</li>
+          <li><b>Cita lo que usa</b>: cada respuesta enseña en qué piezas se ha basado. Puedes verificar.</li>
+          <li><b>Si no lo sabe, lo dice</b>: no se inventa nada. La diferencia entre demo bonita y herramienta de verdad.</li>
+          <li><b>Genera informes, no solo respuestas</b>: "estado del tramo 2", "qué falta este mes" — la salida puede ser un reporte completo.</li>
+          <li class="muted">Y todo esto sin escribir consultas, sin abrir hojas de cálculo, sin componer filtros.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 7 — APP PARTS
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">La aplicación</div>
+    <h2>Las cuatro caras de la herramienta.</h2>
+    <div class="lead" style="margin-top:14px">
+      Cada parte es una manera distinta de mirar lo mismo: el inventario.
+    </div>
+    <div class="grid-4 parts" style="margin-top:32px">
+      <div class="card">
+        <div class="num">01 · SUBIR</div>
+        <h3>Arrastra y suelta</h3>
+        <div class="desc">Sueltas el archivo, se sube directo y se procesa. Funciona igual con un .3dm pequeño que con uno grande.</div>
+      </div>
+      <div class="card">
+        <div class="num">02 · VER</div>
+        <h3>Inventario en 3D</h3>
+        <div class="desc">289 piezas en una escena navegable. Click, zoom, filtros por estado, material o tipo.</div>
+      </div>
+      <div class="card">
+        <div class="num">03 · DETALLE</div>
+        <h3>La ficha de cada pieza</h3>
+        <div class="desc">Visor 3D propio, datos y el informe del Bibliotecario. El visor está pensado para crecer: dimensionado con clicks, comparativas, anotaciones.</div>
+      </div>
+      <div class="card">
+        <div class="num">04 · CHAT</div>
+        <h3>Habla con el inventario</h3>
+        <div class="desc">Un botón abajo a la derecha. Le preguntas. Te contesta. Te enseña en qué se basó.</div>
+      </div>
+    </div>
+    <div style="margin-top:32px">
+      <span class="pill green">Cualquier cambio se ve al instante, sin recargar</span>
+      <span class="pill" style="margin-left:10px">Diseño coherente en toda la app</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 8 — CIFRAS
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">Lo que ya funciona</div>
+    <h2>Esto no es maqueta.</h2>
+    <div class="metrics">
+      <div class="metric">
+        <div class="num">289</div>
+        <div class="label">piezas reales dentro</div>
+        <div class="sub">todas validadas y clasificadas</div>
+      </div>
+      <div class="metric">
+        <div class="num">100%</div>
+        <div class="label">clasificación automática</div>
+        <div class="sub">cero campos rellenados a mano</div>
+      </div>
+      <div class="metric">
+        <div class="num">3×</div>
+        <div class="label">niveles de detalle 3D</div>
+        <div class="sub">por pieza, para que cargue rápido</div>
+      </div>
+      <div class="metric">
+        <div class="num">∞</div>
+        <div class="label">preguntas que puedes hacer</div>
+        <div class="sub">en lenguaje natural</div>
+      </div>
+    </div>
+    <div style="margin-top:32px">
+      <span class="pill green">Datos curados internamente · integridad bajo nuestro control</span>
+    </div>
+    <div style="margin-top:24px; font-size:18px; color:var(--text-secondary); max-width:1100px; line-height:1.55">
+      Cada una de esas 289 piezas tiene su informe, su clasificación con motivo,
+      sus medidas y sus tres versiones 3D. <b style="color:var(--text-primary)">La IA hace el trabajo</b>,
+      pero los datos los curamos nosotros — esa es la diferencia entre "un catálogo automático"
+      y un catálogo en el que se puede confiar.
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 9 — LA PUNTA DEL ICEBERG
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide">
+    <div class="eyebrow">Lo que puede venir</div>
+    <h2>Esto es solo la <span class="accent">punta del iceberg</span>.</h2>
+    <div class="lead" style="margin-top:14px; max-width:1100px">
+      Una vez que el inventario está vivo, los siguientes pasos son fáciles. Algunos ejemplos
+      de lo que puede construirse encima de lo que veis hoy:
+    </div>
+    <div class="iceberg-grid">
+      <div class="ice-card">
+        <div class="ice-title">Dimensionado con clicks</div>
+        <div class="ice-desc">Cotas medidas en el propio visor con dos clicks. Adiós a las discusiones eternas sobre medidas.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">Informes automáticos</div>
+        <div class="ice-desc">"Estado del tramo 2", "qué falta este mes": el Archivista no solo contesta, también genera reportes.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">De proyecto a obra completa</div>
+        <div class="ice-desc">Que la herramienta hable también con producción, fabricación y montaje: planos, geometrías, info de industriales.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">Busca por foto</div>
+        <div class="ice-desc">"Encuéntrame piezas parecidas a esta foto del taller." Misma IA, otro tipo de pregunta.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">Detección de duplicados</div>
+        <div class="ice-desc">"Esta pieza nueva se parece a una que ya tenéis del tramo 3." Avisa antes de tallar dos veces lo mismo.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">App de taller</div>
+        <div class="ice-desc">Móvil/tablet para el operario: escanea, consulta y actualiza estado in situ. Sin volver al ordenador.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">Histórico por pieza</div>
+        <div class="ice-desc">Quién la tocó, cuándo, qué cambió. Auditoría completa sin esfuerzo extra.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">Estimaciones automáticas</div>
+        <div class="ice-desc">Tiempo y material para piezas nuevas, basado en lo que ya habéis hecho antes.</div>
+      </div>
+      <div class="ice-card">
+        <div class="ice-title">… lo que se os ocurra</div>
+        <div class="ice-desc">La base está. Cada idea nueva ya no parte de cero — encaja encima.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SLIDE 10 — CIERRE
+       ═══════════════════════════════════════════════════════════════════ -->
+  <section class="slide closing">
+    <div class="stripe" style="width:64px; height:4px; background:var(--blue); border-radius:2px; margin-bottom:32px"></div>
+    <div class="eyebrow">Para cerrar</div>
+    <h2>Lo que habéis visto es <span class="accent">la base</span>.<br>Lo divertido es lo que se puede construir encima.</h2>
+    <div class="signoff">
+      Hoy: 289 piezas, dos agentes IA y una app que se entiende sola.<br>
+      Mañana: lo que decidamos juntos.
+    </div>
+    <div style="margin-top:64px; display:flex; gap:16px;">
+      <span class="pill">2026-05-22 · Demo SF-PM</span>
+      <span class="pill green">289 piezas · 2 agentes · ∞ posibilidades</span>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const counter = document.getElementById('counter');
+  let i = 0;
+  function show(n){
+    i = Math.max(0, Math.min(slides.length-1, n));
+    slides.forEach((s,idx) => s.classList.toggle('active', idx===i));
+    counter.textContent = `${i+1} / ${slides.length}`;
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(i+1); }
+    else if (e.key === 'ArrowLeft'  || e.key === 'PageUp')               { e.preventDefault(); show(i-1); }
+    else if (e.key === 'Home')                                            { show(0); }
+    else if (e.key === 'End')                                             { show(slides.length-1); }
+    else if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    }
+  });
+  // click on right half = next, left half = prev
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('a,button,kbd')) return;
+    show(e.clientX > window.innerWidth/2 ? i+1 : i-1);
+  });
+  show(0);
+</script>
+</body>
+</html>

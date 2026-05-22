@@ -158,6 +158,117 @@ def _is_total_inventory_question(question: str) -> bool:
     return has_how_many and has_piece_scope and has_total_scope
 
 
+PROPERTY_ALIASES: dict[str, tuple[str, ...]] = {
+    "resistencia": ("Resistencia",),
+    "material": ("Material", "SF_GEN_Material"),
+    "tramo": ("SF_PRO_Tram",),
+    "agrupacion": ("SF_ARC_Agrupacio1", "SF_ARC_Agrupacio1Tipus"),
+    "zona": ("SF_LOC_Zona",),
+    "eje": ("SF_LOC_Eix",),
+    "elemento": ("SF_GEN_NomElement",),
+    "subelemento": ("SF_GEN_NomSubElement",),
+    "tipo de pieza": ("SF_ARC_PeçaTipus",),
+    "filada": ("SF_ARC_Filada",),
+    "numeral": ("SF_ARC_Numeral",),
+    "grado estructural": ("SF_GEN_GrauEstructural",),
+}
+
+PROPERTY_ALIAS_VARIANTS: tuple[tuple[str, str], ...] = (
+    ("grado estructural", "grado estructural"),
+    ("tipo de pieza", "tipo de pieza"),
+    ("subelemento", "subelemento"),
+    ("elemento", "elemento"),
+    ("agrupacion", "agrupacion"),
+    ("agrupación", "agrupacion"),
+    ("resistencia", "resistencia"),
+    ("material", "material"),
+    ("tramo", "tramo"),
+    ("zona", "zona"),
+    ("eje", "eje"),
+    ("filada", "filada"),
+    ("numeral", "numeral"),
+)
+
+
+def _extract_property_filter(question: str) -> tuple[str, tuple[str, ...], str] | None:
+    """Extract generic property+value filters from natural-language questions.
+
+    Returns (canonical_property_name, rhino_metadata_keys, requested_value) or None.
+    """
+    q = _normalize_text(question)
+    patterns = (
+        r"\bcuant[ao]s?\s+piezas?\s+tienen?\s+(.+)$",
+        r"\bque\s+piezas?\s+tienen?\s+(.+)$",
+    )
+
+    phrase = None
+    for p in patterns:
+        m = re.search(p, q)
+        if m:
+            phrase = m.group(1).strip()
+            break
+    if not phrase:
+        return None
+
+    for alias_variant, canonical in PROPERTY_ALIAS_VARIANTS:
+        if phrase.startswith(alias_variant + " "):
+            value = phrase[len(alias_variant):].strip(" .?¿¡")
+            if not value:
+                return None
+            # Inventory stores tramo as zero-padded (01, 02...).
+            if canonical == "tramo" and value.isdigit() and len(value) <= 2:
+                value = f"{int(value):02d}"
+            keys = PROPERTY_ALIASES.get(canonical)
+            if not keys:
+                return None
+            return canonical, keys, value
+
+    return None
+
+
+def _build_property_where_clause(keys: tuple[str, ...], value: str) -> tuple[str, list[str]]:
+    """Build SQL WHERE clause + params for a property/value match across keys."""
+    value_upper = value.strip().upper()
+    value_like = f"%{value_upper}%"
+    conditions: list[str] = []
+    params: list[str] = []
+    short_token = len(value_upper) <= 3
+
+    for key in keys:
+        if short_token:
+            conditions.append(
+                f"UPPER(TRIM(COALESCE(b.rhino_metadata->>'{key}', ''))) = %s"
+            )
+            params.append(value_upper)
+            conditions.append(
+                f"UPPER(TRIM(COALESCE(b.rhino_metadata->>'{key}', ''))) LIKE %s"
+            )
+            params.append(value_upper + " (%")
+        else:
+            conditions.append(
+                f"UPPER(TRIM(COALESCE(b.rhino_metadata->>'{key}', ''))) LIKE %s"
+            )
+            params.append(value_like)
+
+    return "(" + " OR ".join(conditions) + ")", params
+
+
+def _extract_resistance_terms(question: str) -> list[str]:
+    """Extract requested resistance tokens (e.g. 'C' from 'resistencia C')."""
+    q = _normalize_text(question)
+    terms: set[str] = set()
+    for m in re.finditer(r"\bresistencia\s+([a-z0-9()/.\-]+)", q):
+        token = m.group(1).strip().upper()
+        if token:
+            terms.add(token)
+    return sorted(terms)
+
+
+def _is_resistance_question(question: str) -> bool:
+    """Detect questions about resistance values."""
+    return "resistencia" in _normalize_text(question)
+
+
 @router.post("/ask", response_model=ChatAskResponse)
 @limiter.limit("15/minute")
 async def ask(request: Request, body: ChatAskRequest) -> ChatAskResponse:
@@ -190,6 +301,8 @@ async def ask(request: Request, body: ChatAskRequest) -> ChatAskResponse:
     # Deterministic filters detected in the question.
     tram_filters = _extract_tram_filters(body.question)
     material_terms = _extract_material_terms(body.question)
+    resistance_terms = _extract_resistance_terms(body.question)
+    generic_property_filter = _extract_property_filter(body.question)
 
     # 1) Deterministic inventory intents (counts/aggregates) +
     # 2) semantic retrieval fallback when needed.
@@ -205,6 +318,52 @@ async def ask(request: Request, body: ChatAskRequest) -> ChatAskResponse:
                 return ChatAskResponse(
                     answer=f"En el inventario hay {total} piezas.",
                     sources=[],
+                    used_context=True,
+                )
+
+            # Generic "property + value" questions over full inventory.
+            if generic_property_filter is not None:
+                prop_name, prop_keys, prop_value = generic_property_filter
+                where_clause, params = _build_property_where_clause(prop_keys, prop_value)
+
+                cur.execute(
+                    f"SELECT COUNT(*)::int AS total FROM blocks b WHERE {where_clause}",
+                    params,
+                )
+                total = int((cur.fetchone() or {"total": 0}).get("total") or 0)
+
+                cur.execute(
+                    f"SELECT id AS block_id, iso_code FROM blocks b "
+                    f"WHERE {where_clause} ORDER BY iso_code LIMIT %s",
+                    [*params, max(body.top_k, 6)],
+                )
+                rows = cur.fetchall()
+                sources = [
+                    ChatSource(
+                        block_id=str(r["block_id"]),
+                        iso_code=r.get("iso_code"),
+                        similarity=1.0,
+                    )
+                    for r in rows
+                ]
+
+                if total == 0:
+                    return ChatAskResponse(
+                        answer=(
+                            f"No hay piezas con {prop_name} {prop_value} en el inventario actual."
+                        ),
+                        sources=[],
+                        used_context=True,
+                    )
+
+                sample_codes = [s.iso_code for s in sources if s.iso_code][:6]
+                sample_text = f" Ejemplos: {', '.join(sample_codes)}." if sample_codes else ""
+                return ChatAskResponse(
+                    answer=(
+                        f"Hay {total} piezas con {prop_name} {prop_value} en el inventario."
+                        f"{sample_text}"
+                    ),
+                    sources=sources,
                     used_context=True,
                 )
 
@@ -321,6 +480,54 @@ async def ask(request: Request, body: ChatAskRequest) -> ChatAskResponse:
                 return ChatAskResponse(
                     answer=f"En el inventario actual hay {total} paneles.",
                     sources=[],
+                    used_context=True,
+                )
+
+            # Resistance count questions over full inventory.
+            if _is_resistance_question(body.question) and resistance_terms:
+                cur.execute(
+                    "SELECT COUNT(*)::int AS total "
+                    "FROM blocks b "
+                    "WHERE EXISTS ("
+                    "  SELECT 1 FROM unnest(%s::text[]) t(term) "
+                    "  WHERE "
+                    "    UPPER(TRIM(COALESCE(b.rhino_metadata->>'Resistencia', ''))) = t.term "
+                    "    OR UPPER(TRIM(COALESCE(b.rhino_metadata->>'Resistencia', ''))) LIKE t.term || ' (%%'"
+                    ")",
+                    (resistance_terms,),
+                )
+                total = int((cur.fetchone() or {"total": 0}).get("total") or 0)
+
+                cur.execute(
+                    "SELECT id AS block_id, iso_code "
+                    "FROM blocks b "
+                    "WHERE EXISTS ("
+                    "  SELECT 1 FROM unnest(%s::text[]) t(term) "
+                    "  WHERE "
+                    "    UPPER(TRIM(COALESCE(b.rhino_metadata->>'Resistencia', ''))) = t.term "
+                    "    OR UPPER(TRIM(COALESCE(b.rhino_metadata->>'Resistencia', ''))) LIKE t.term || ' (%%'"
+                    ") "
+                    "ORDER BY iso_code LIMIT %s",
+                    (resistance_terms, max(body.top_k, 6)),
+                )
+                rows = cur.fetchall()
+                sources = [
+                    ChatSource(
+                        block_id=str(r["block_id"]),
+                        iso_code=r.get("iso_code"),
+                        similarity=1.0,
+                    )
+                    for r in rows
+                ]
+                human_terms = " o ".join(resistance_terms)
+                sample_codes = [s.iso_code for s in sources if s.iso_code][:6]
+                sample_text = f" Ejemplos: {', '.join(sample_codes)}." if sample_codes else ""
+                return ChatAskResponse(
+                    answer=(
+                        f"Hay {total} piezas con resistencia {human_terms} en el inventario."
+                        f"{sample_text}"
+                    ),
+                    sources=sources,
                     used_context=True,
                 )
 

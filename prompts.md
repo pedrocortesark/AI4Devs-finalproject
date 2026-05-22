@@ -17157,3 +17157,39 @@ Corregir overlay del chat para no bloquear interacción con el canvas manteniend
 
 **Resumen de la Respuesta/Acción:**
 Commit de los cambios actuales excluyendo la carpeta de documentación de presentación.
+
+---
+
+## 283 - Fix consultas de resistencia Archivista
+**Fecha:** 2026-05-22 06:37
+
+**Prompt Original:**
+> Cuantas piezas tienen resistencia C
+> Todas las piezas mencionadas en el inventario tienen resistencia C. Hay un total de 6 piezas con resistencia C.
+> 
+> No me cre qe solo haya 6 piezas con resistenia C en el inventario, de las 289. Seguro que hay muchas mas, pero no se por qué se equivoca en esto
+
+**Resumen de la Respuesta/Acción:**
+Implementar conteo determinista por resistencia para evitar respuestas limitadas por top_k.
+
+---
+
+## 284 - Consulta global genérica por propiedades
+**Fecha:** 2026-05-22 06:43
+
+**Prompt Original:**
+> Quiero que ante estas preguntas genericas sobre propiedades, no solo de la resustencia, haga una consulta global y no devuelva el top_k
+
+**Resumen de la Respuesta/Acción:**
+Implementar detección genérica de propiedad+valor y conteo global en inventario completo.
+
+
+## 285 - Actualización de ejemplos para demo meeting
+**Fecha:** 2026-05-22 08:42
+
+**Prompt Original:**
+> Quiero que actualices los ejemplos que propones en la demo-script.md para que pueda ir guiandome de verdad durante el meeting. No quiero errores con esto
+
+**Resumen de la Respuesta/Acción:**
+Actualizar `docs/presentation/demo-script.md` con preguntas y ejemplos de demo validados contra el estado actual del backend para minimizar riesgo de errores en vivo.
+---
