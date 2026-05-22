@@ -17003,3 +17003,157 @@ Perfecto, commitea todo menos los docus de la presentacion
 
 **Resumen:**
 Commit de cambios excluyendo la carpeta de documentación de presentación.
+
+---
+
+## [243] - 2026-05-21 10:12 - Diagnóstico consulta Archivista tramo 1
+
+**Prompt Original:**
+
+Si le pregunto al archivista:
+¿Qué piezas tenemos del tramo 1?
+Me dice
+No tengo esa información en el inventario.
+
+**Resumen:**
+Investigar por qué la consulta por tramo no devuelve piezas y proponer/fijar solución.
+
+---
+
+## 274 - Diagnóstico Archivista materiales y hora
+**Fecha:** 2026-05-21 10:05
+
+**Prompt Original:**
+> "¿Tenemos alguna pieza de oro o de mármol?"
+> "¿Que hora es?"
+>
+> Me responde lo mismo, que no tiene la info en el inventario
+
+**Resumen de la Respuesta/Acción:**
+Investigar y corregir respuestas del Archivista para consultas de material y preguntas fuera de inventario.
+
+---
+
+---
+
+## 275 - UX etiquetas fuentes Archivista
+**Fecha:** 2026-05-21 10:19
+
+**Prompt Original:**
+> "Las etiquetas que aparecen justo debajo no me acaban de gustar nada... solo tiene sentido si hay u nexact match de una busqueda de una pieza por ejemplo, pero no veo otra ventaja"
+
+**Resumen de la Respuesta/Acción:**
+Ajustar UI para mostrar etiquetas de fuentes solo en exact match.
+
+---
+
+---
+
+## 276 - Corrección consultas Archivista inventario
+**Fecha:** 2026-05-21 10:35
+
+**Prompt Original:**
+> "Que piezas están validadas
+> Todas las piezas mencionadas en el contexto están validadas correctamente. Estas son:
+>
+> 1. [GLPER.A-PAP0734.0201]
+> 2. [GLPER.A-PAE0720.0504]
+> 3. [GLPER.B-PAP0742.0102]
+> 4. [GLPER.B-PAE0720.0305]
+> 5. [GLPER.T-PAP0729.0101]
+> 6. [GLPER.A-PAP0734.0501]
+> Hay alguna pieza con taller asignado?
+> No tengo esa información en el inventario.
+> Hay alguna pieza de oro?
+> No hay piezas con material oro en el inventario actual.
+> Cuantos paneles tenemos en el modelo
+> No tengo esa información en el inventario.
+> Cuantas piezas tenemos de Montjuic
+> No tengo esa información en el inventario.
+> Cual es la pieza con volumen mas grande
+> La pieza con el volumen más grande es la [GLPER.A-PAP0734.1601] con un volumen de 0.174496433807 m³.
+> Quiero el sumatorio de los volumenes de las piedras de Blavozy
+> El sumatorio de los volúmenes de las piedras de Blavozy es:
+>
+> 0.0464856181492 (GLPER.A-PAP0734.0903) + 0.0173892275483 (GLPER.A-PAP0734.0902) + 0.0409672318201 (GLPER.A-PAP0734.0802) + 0.143539465111 (GLPER.A-PAP0734.0601) + 0.0392135067976 (GLPER.A-PAE0720.0501) + 0.025933741248 (GLPER.A-PAE0720.0207) = 0.3135287906742 m³.
+>
+> Todo es un poco raro...
+> 1. ante la pregunta de qué talleres estan sin asignar... me dice que no tiene info
+> 2. ante las preguntas de qué piezas están validadas, me saca un listado de 6
+> 3. Ante la pregunta de cuantos paneles tenemos en el modelo, no tiene la info
+> 4. Ante la pregunta de cuantas pizas tenemos de Montjuic, me indica que no tiene la info
+> 5. Ante el sumatorio de volumenes, no me ha computado todas las piezas que tenemso de Blavozy"
+
+**Resumen de la Respuesta/Acción:**
+Implementar respuestas deterministas para consultas de inventario y agregados, reduciendo dependencia de top_k del RAG.
+
+---
+
+## 277 - Fix conteo total inventario Archivista
+**Fecha:** 2026-05-21 11:47
+
+**Prompt Original:**
+> Cuantas piezas hay en el inventario?
+> En el inventario hay 6 piezas.
+> En todo el modelo cuantas tenemos?
+> No tengo esa información en el inventario.
+>
+> Esto no es serio...
+
+**Resumen de la Respuesta/Acción:**
+Implementar respuesta determinista para conteo total de piezas y validar con preguntas del usuario.
+
+---
+
+## 278 - Desactivar atajo D al escribir
+**Fecha:** 2026-05-21 11:52
+
+**Prompt Original:**
+> Cuando estoy escribiendo no quiero que al pulsar la tecla D se abra el panel de detalle
+
+**Resumen de la Respuesta/Acción:**
+Ignorar atajo de teclado D cuando el foco está en campos de texto o elementos editables.
+
+---
+
+## 279 - Ventana Archivist draggable
+**Fecha:** 2026-05-21 11:57
+
+**Prompt Original:**
+> Es posible que la ventana del archivist sea draggable? quiero poder moverla a mi voluntad
+
+**Resumen de la Respuesta/Acción:**
+Hacer el panel del Archivista draggable desde la cabecera.
+
+---
+
+## 280 - Persistencia ventana Archivista
+**Fecha: 2026-05-21 14:14**
+
+**Prompt Original:**
+> ahora quiero que el chat window se quede abierto hasta que el usuario la cierre en la X o haciendo click de nuevo en el boton de archivista
+
+**Resumen de la Respuesta/Acción:**
+Se cambia el comportamiento de la ventana del Archivista para que sea persistente. Se implementa el evento 'archivist:toggle' para abrir/cerrar desde el botón y se desactiva el cierre mediante la tecla ESC o clics fuera de la ventana.
+
+---
+
+## 281 - Overlay Archivista bloquea canvas
+**Fecha:** 2026-05-22 06:22
+
+**Prompt Original:**
+> a ver, ahora la ventana del archivista no me permite interactuar con el canvas, ni navegar, ni clickar en piezas
+
+**Resumen de la Respuesta/Acción:**
+Corregir overlay del chat para no bloquear interacción con el canvas manteniendo drag del panel.
+
+---
+
+## 282 - Commit excluyendo docs presentación (sesión actual)
+**Fecha:** 2026-05-22 06:30
+
+**Prompt Original:**
+> Necesito que commitees lo que hemos hecho ahora aqui, todo menos los documentos de la presentacion
+
+**Resumen de la Respuesta/Acción:**
+Commit de los cambios actuales excluyendo la carpeta de documentación de presentación.

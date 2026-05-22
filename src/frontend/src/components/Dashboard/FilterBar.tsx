@@ -114,7 +114,7 @@ export function FilterBar({ selectedId, showDetailsPanel, onShowDetails }: Filte
   const { parts, filters, setFilters, clearFilters, getFilteredParts } = usePartsStore();
 
   const openArchivistPanel = () => {
-    window.dispatchEvent(new CustomEvent('archivist:open'));
+    window.dispatchEvent(new CustomEvent('archivist:toggle'));
   };
 
   // Derive filter options dynamically from loaded parts (unique non-null values, sorted)
@@ -179,7 +179,7 @@ export function FilterBar({ selectedId, showDetailsPanel, onShowDetails }: Filte
       <button
         className={styles.archivistButton}
         onClick={openArchivistPanel}
-        title="Abrir El Archivista"
+        title="Abrir o cerrar El Archivista"
       >
         💬 Archivista
       </button>

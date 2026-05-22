@@ -41,6 +41,17 @@ const Dashboard3D: React.FC<Dashboard3DProps> = ({
   // Toggle details panel with 'D' key (CAD-style)
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget = !!target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      );
+
+      if (isTypingTarget) {
+        return;
+      }
+
       if (event.key === 'd' || event.key === 'D') {
         setShowDetailsPanel((prev) => (selectedId ? !prev : false));
       }
